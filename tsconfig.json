@@ -7,7 +7,9 @@
         "./*"
       ]
     }
+   
   },
+  "module": "esnext",
   "include": [
     "**/*.ts",
     "**/*.tsx",

@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "pro-recrute-app",
+    "name": "Pro Recrute GBG",
     "slug": "pro-recrute-app",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -28,7 +28,11 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
+          "image": "./assets/images/logo.png",
+          "dark": {
+            "image": "./assets/images/logo-gbg-white.png",
+            "backgroundColor": "#000000"
+          },
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
