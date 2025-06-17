@@ -115,5 +115,32 @@ export const logoutUser = async () => {
     throw error; // Re-throw the error for UI to handle if needed
   }
 };
+/**
+ * Récupère toutes les offres d'emploi depuis l'API.
+ * @returns {Promise<Array>} Un tableau d'objets offre.
+ */
+export const getOffres = async () => {
+  try {
+    const response = await api.get('/offres'); // URL mise à jour
+    return response.data;
+  } catch (error) {
+    console.error("Échec de l'appel API getOffres:", error.response?.data || error.message);
+    throw error;
+  }
+};
 
+/**
+ * Récupère une offre d'emploi spécifique par son ID.
+ * @param {string} offreId - L'ID de l'offre à récupérer.
+ * @returns {Promise<object>} L'objet offre.
+ */
+export const getOffreById = async (offreId) => {
+  try {
+    const response = await api.get(`/offres/${offreId}`); // URL mise à jour
+    return response.data;
+  } catch (error) {
+    console.error(`Échec de l'appel API getOffreById pour l'ID ${offreId}:`, error.response?.data || error.message);
+    throw error;
+  }
+};
 export default api;

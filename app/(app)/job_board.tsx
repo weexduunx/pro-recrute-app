@@ -1,56 +1,90 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Platform } from 'react-native';
-import { useAuth } from '../../components/AuthProvider'; // Adjust path
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Platform, ActivityIndicator } from 'react-native';
+import { useAuth } from '../../components/AuthProvider';
+import { getOffres } from '../../utils/api'; // Importer la nouvelle fonction getOffres
+import { router } from 'expo-router'; // Pour la navigation vers les détails et la déconnexion
 
 /**
- * Authenticated Job Board Screen:
- * Displays job offers for logged-in users.
- * This can be the main tab for authenticated users.
- * Includes a logout button in the header.
+ * Écran du Tableau d'Offres (Job Board) authentifié:
+ * Affiche les offres d'emploi récupérées depuis l'API pour les utilisateurs connectés.
+ * Permet la navigation vers les détails de l'offre.
  */
 export default function AuthenticatedJobBoardScreen() {
-  const { user, logout, loading } = useAuth(); // Get user and logout function from context
+  const { user, logout, loading: authLoading } = useAuth();
+  const [offres, setOffres] = useState([]); // Renommé de jobOffers à offres
+  const [loadingOffres, setLoadingOffres] = useState(true);
+  const [errorOffres, setErrorOffres] = useState<string | null>(null);
 
-  // Mock Job Offers (replace with real data fetched from your Laravel API)
-  const jobOffers = [
-    { id: '1', title: 'Senior React Native Developer', company: 'Tech Solutions Inc.', location: 'Remote', description: 'Leverage your expertise to build cutting-edge mobile applications.' },
-    { id: '2', title: 'Laravel Backend Engineer', company: 'Web Innovations', location: 'Dakar, Senegal', description: 'Design, develop, and maintain robust backend systems with Laravel.' },
-    { id: '3', title: 'UI/UX Designer (Mobile)', company: 'Creative Apps', location: 'Casablanca, Morocco', description: 'Create intuitive and visually appealing user interfaces for mobile apps.' },
-    { id: '4', title: 'DevOps Specialist', company: 'CloudWorks', location: 'London, UK', description: 'Automate and streamline our operations and development processes.' },
-    { id: '5', title: 'Junior Data Analyst', company: 'Data Insights', location: 'Paris, France', description: 'Analyze large datasets to provide actionable insights.' },
-    { id: '6', title: 'Marketing Manager', company: 'Brand Builders', location: 'New York, USA', description: 'Develop and execute marketing strategies to expand our reach.' },
-    { id: '7', 'title': 'Customer Support Agent', company: 'Helpful Hands', location: 'Remote', description: 'Provide excellent customer service and support to our users.' },
-  ];
+  useEffect(() => {
+    async function fetchOffres() { // Renommé de fetchJobs à fetchOffres
+      try {
+        setLoadingOffres(true);
+        setErrorOffres(null);
+        const fetchedOffres = await getOffres(); // Appel à la nouvelle fonction
+        setOffres(fetchedOffres);
+      } catch (err: any) {
+        console.error("Échec de la récupération des offres:", err);
+        setErrorOffres(err.message || "Impossible de charger les offres d'emploi.");
+      } finally {
+        setLoadingOffres(false);
+      }
+    }
+    fetchOffres();
+  }, []); // Le tableau de dépendances vide signifie que cela s'exécute une seule fois au montage
+
+  const handleOffrePress = (offreId: string) => { // Renommé de handleJobPress à handleOffrePress
+    // Naviguer vers l'écran des détails de l'offre, en passant l'ID de l'offre comme paramètre
+    router.push(`/(app)/job_details?id=${offreId}`);
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>GBG PRO</Text>
+        {/* <Text style={styles.headerTitle}>Offres d'emploi</Text> */}
         {user && <Text style={styles.welcomeText}>Bienvenue, {user.name}!</Text>}
         <TouchableOpacity
           style={styles.logoutButton}
           onPress={logout}
-          disabled={loading}
+          disabled={authLoading}
         >
-          <Text style={styles.logoutButtonText}>Logout</Text>
+          <Text style={styles.logoutButtonText}>Déconnexion</Text>
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContainer}>
-        <Text style={styles.sectionTitle}>Available Job Offers</Text>
-        {jobOffers.map(job => (
-          <View key={job.id} style={styles.jobCard}>
-            <Text style={styles.jobTitle}>{job.title}</Text>
-            <Text style={styles.jobCompany}>{job.company} - {job.location}</Text>
-            <Text style={styles.jobDescription}>{job.description.substring(0, 100)}...</Text>
-            <TouchableOpacity style={styles.applyButton}>
-              <Text style={styles.applyButtonText}>Apply Now</Text>
+      {loadingOffres ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#0f8e35" />
+          <Text style={styles.loadingText}>Récupération des offres d'emploi...</Text>
+        </View>
+      ) : errorOffres ? (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>Erreur: {errorOffres}</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={() => fetchOffres()}>
+            <Text style={styles.retryButtonText}>Réessayer</Text>
+          </TouchableOpacity>
+        </View>
+      ) : offres.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyText}>Aucune offre d'emploi disponible pour le moment.</Text>
+        </View>
+      ) : (
+        <ScrollView contentContainerStyle={styles.scrollContainer}>
+          <Text style={styles.sectionTitle}>Offres disponibles</Text>
+          {offres.map(offre => (
+            <TouchableOpacity key={offre.id} style={styles.offreCard} onPress={() => handleOffrePress(offre.id)}>
+              {/* Utilisation des noms de colonnes de votre migration */}
+              <Text style={styles.offreTitle}>{offre.poste?.titre_poste || 'Poste non spécifié'}</Text>
+              <Text style={styles.offreCompany}>{offre.demande?.entreprise?.nom_entreprise || 'Entreprise non spécifiée'} - {offre.lieux}</Text>
+              <Text style={styles.offreContractType}>{offre.typeContrat?.libelle_type_contrat || 'Contrat non spécifié'}</Text>
+              <Text style={styles.offreDescription}>{offre.description.substring(0, 100)}...</Text>
+              <View style={styles.readMoreButton}>
+                <Text style={styles.readMoreButtonText}>Voir les détails</Text>
+              </View>
             </TouchableOpacity>
-          </View>
-        ))}
-
-        <Text style={styles.footerText}>More jobs coming soon!</Text>
-      </ScrollView>
+          ))}
+          <Text style={styles.footerText}>Fin des annonces.</Text>
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 }
@@ -59,7 +93,7 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: '#F3F4F6',
-    paddingTop: Platform.OS === 'android' ? 25 : 0, // Android status bar height
+    paddingTop: Platform.OS === 'android' ? 25 : 0,
   },
   header: {
     flexDirection: 'row',
@@ -67,7 +101,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 24,
     paddingVertical: 16,
-    backgroundColor: '#091e60', // Primary Dark Blue
+    backgroundColor: '#091e60', // Bleu foncé primaire
     width: '100%',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -78,17 +112,17 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#FFFFFF', // White text
+    color: '#FFFFFF', // Texte blanc
   },
   welcomeText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#D1D5DB', // Light gray for welcome text
-    flexShrink: 1, // Allow text to shrink
+    color: '#D1D5DB', // Gris clair pour le texte de bienvenue
+    flexShrink: 1,
     marginHorizontal: 10,
   },
   logoutButton: {
-    backgroundColor: '#0f8e35', // Secondary Green
+    backgroundColor: '#0f8e35', // Vert secondaire
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 8,
@@ -103,17 +137,64 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F3F4F6',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#4B5563',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+    backgroundColor: '#F3F4F6',
+  },
+  errorText: {
+    fontSize: 18,
+    color: '#EF4444',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  retryButton: {
+    backgroundColor: '#091e60',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+    backgroundColor: '#F3F4F6',
+  },
+  emptyText: {
+    fontSize: 18,
+    color: '#6B7280',
+    textAlign: 'center',
+  },
   scrollContainer: {
     padding: 24,
-    paddingTop: 20, // Adjusted padding as header handles top
+    paddingTop: 20,
   },
   sectionTitle: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#091e60', // Primary Dark Blue
+    color: '#091e60',
     marginBottom: 20,
   },
-  jobCard: {
+  offreCard: { // Renommé de jobCard à offreCard
     backgroundColor: '#FFFFFF',
     padding: 20,
     borderRadius: 12,
@@ -124,39 +205,38 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
-  jobTitle: {
+  offreTitle: { // Renommé de jobTitle à offreTitle
     fontSize: 20,
     fontWeight: '700',
     color: '#091e60',
     marginBottom: 8,
   },
-  jobCompany: {
+  offreCompany: { // Renommé de jobCompany à offreCompany
     fontSize: 16,
     color: '#374151',
-    marginBottom: 8,
+    marginBottom: 5,
   },
-  jobDescription: {
+  offreContractType: { // Nouveau style pour le type de contrat
+    fontSize: 14,
+    color: '#6B7280',
+    marginBottom: 10,
+    fontStyle: 'italic',
+  },
+  offreDescription: { // Renommé de jobDescription à offreDescription
     fontSize: 14,
     color: '#6B7280',
     lineHeight: 20,
     marginBottom: 12,
   },
-  applyButton: {
-    backgroundColor: '#0f8e35', // Secondary Green
-    paddingVertical: 10,
-    paddingHorizontal: 18,
-    borderRadius: 8,
+  readMoreButton: {
+    marginTop: 10,
     alignSelf: 'flex-start',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-    elevation: 2,
   },
-  applyButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
+  readMoreButtonText: {
+    color: '#0f8e35',
+    fontSize: 14,
     fontWeight: '600',
+    textDecorationLine: 'underline',
   },
   footerText: {
     fontSize: 16,
