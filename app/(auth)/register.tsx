@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, TextInput, ActivityIndicator, Platform, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator, Platform, Image } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context'; // <-- CHANGEMENT ICI
 import { router } from 'expo-router';
 import { registerUser } from '../../utils/api';
 import { useAuth } from '../../components/AuthProvider';
 
 /**
- * Registration Screen:
- * Provides a UI for user registration.
- * Sends registration data to the Laravel API and handles state.
- * Now includes your logo.
+ * Écran d'inscription :
+ * Fournit une interface utilisateur pour l'inscription de l'utilisateur.
+ * Envoie les données d'inscription à l'API Laravel et gère l'état.
+ * Inclut maintenant votre logo.
  */
 export default function RegisterScreen() {
   const [name, setName] = useState('');
@@ -19,38 +20,35 @@ export default function RegisterScreen() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  const { login } = useAuth(); // We'll log the user in automatically after successful registration
+  const { login } = useAuth();
 
   const handleRegister = async () => {
     setLoading(true);
     setError(null);
     setSuccess(null);
 
-    // Basic client-side validation
     if (!name || !email || !password || !passwordConfirmation) {
-      setError('Please fill in all fields.');
+      setError('Veuillez remplir tous les champs.');
       setLoading(false);
       return;
     }
     if (password !== passwordConfirmation) {
-      setError('Passwords do not match.');
+      setError('Les mots de passe ne correspondent pas.');
       setLoading(false);
       return;
     }
 
     try {
-      // Call the registerUser API function
       const response = await registerUser(name, email, password, passwordConfirmation);
-      setSuccess('Registration successful! Logging you in...');
-      // Automatically logs in the user after successful registration
+      setSuccess('Inscription réussie ! Connexion en cours...');
       await login(email, password);
     } catch (err: any) {
-      console.error("Registration error:", err.response ? err.response.data : err.message);
+      console.error("Erreur d'inscription :", err.response ? err.response.data : err.message);
       if (err.response && err.response.data && err.response.data.errors) {
         const firstError = Object.values(err.response.data.errors)[0] as string[];
-        setError(firstError[0] || 'Registration failed. Please try again.');
+        setError(firstError[0] || "L'inscription a échoué. Veuillez réessayer.");
       } else {
-        setError(err.response?.data?.message || 'Registration failed. Please check your details.');
+        setError(err.response?.data?.message || "L'inscription a échoué. Veuillez vérifier vos coordonnées.");
       }
     } finally {
       setLoading(false);
@@ -60,21 +58,20 @@ export default function RegisterScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
-        {/* Add Logo */}
         <Image
-          source={require('../../assets/images/logo.png')} // Path to your logo
+          source={require('../../assets/images/logo.png')}
           style={styles.logo}
           resizeMode="contain"
         />
-        <Text style={styles.title}>Create Your Account</Text>
-        <Text style={styles.subtitle}>Join JobBoard today!</Text>
+        <Text style={styles.title}>Créer votre compte</Text>
+        <Text style={styles.subtitle}>Rejoignez GBG aujourd'hui !</Text>
 
         {error && <Text style={styles.errorText}>{error}</Text>}
         {success && <Text style={styles.successText}>{success}</Text>}
 
         <TextInput
           style={styles.input}
-          placeholder="Full Name"
+          placeholder="Nom complet"
           placeholderTextColor="#9CA3AF"
           value={name}
           onChangeText={setName}
@@ -83,7 +80,7 @@ export default function RegisterScreen() {
         />
         <TextInput
           style={styles.input}
-          placeholder="Email Address"
+          placeholder="Adresse e-mail"
           placeholderTextColor="#9CA3AF"
           value={email}
           onChangeText={setEmail}
@@ -95,7 +92,7 @@ export default function RegisterScreen() {
         />
         <TextInput
           style={styles.input}
-          placeholder="Password"
+          placeholder="Mot de passe"
           placeholderTextColor="#9CA3AF"
           value={password}
           onChangeText={setPassword}
@@ -106,7 +103,7 @@ export default function RegisterScreen() {
         />
         <TextInput
           style={styles.input}
-          placeholder="Confirm Password"
+          placeholder="Confirmer le mot de passe"
           placeholderTextColor="#9CA3AF"
           value={passwordConfirmation}
           onChangeText={setPasswordConfirmation}
@@ -124,12 +121,12 @@ export default function RegisterScreen() {
           {loading ? (
             <ActivityIndicator color="#FFFFFF" />
           ) : (
-            <Text style={styles.registerButtonText}>Register</Text>
+            <Text style={styles.registerButtonText}>S'inscrire</Text>
           )}
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()} disabled={loading}>
-          <Text style={styles.backButtonText}>Back to Sign In</Text>
+          <Text style={styles.backButtonText}>Retour à la connexion</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -140,7 +137,7 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: '#F3F4F6',
-    paddingTop: Platform.OS === 'android' ? 25 : 0,
+    // RETIRÉ : paddingTop: Platform.OS === 'android' ? 25 : 0,
   },
   container: {
     flex: 1,
@@ -149,17 +146,15 @@ const styles = StyleSheet.create({
     padding: 24,
     backgroundColor: '#F3F4F6',
   },
-  // Logo specific styles for login/register
   logo: {
-    width: '60%', // Adjust based on how large you want it
-    height: 100, // Adjust based on your logo's aspect ratio
+    width: '60%',
+    height: 70,
     marginBottom: 30,
-    tintColor: '#091e60', // Optional: apply primary color to logo if it's monochromatic
   },
   title: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#091e60', // Primary Dark Blue
+    color: '#091e60',
     marginBottom: 12,
     textAlign: 'center',
   },
@@ -201,7 +196,7 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   registerButton: {
-    backgroundColor: '#0f8e35', // Secondary Green
+    backgroundColor: '#0f8e35', // Vert secondaire
     paddingVertical: 14,
     paddingHorizontal: 24,
     borderRadius: 8,
@@ -227,11 +222,11 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 20,
     borderRadius: 8,
-    borderColor: '#091e60', // Primary Dark Blue border
+    borderColor: '#091e60', // Bordure bleu foncé primaire
     borderWidth: 1,
   },
   backButtonText: {
-    color: '#091e60', // Primary Dark Blue
+    color: '#091e60', // Bleu foncé primaire
     fontSize: 16,
     fontWeight: '600',
   },

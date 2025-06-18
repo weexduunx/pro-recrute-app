@@ -17,9 +17,7 @@ export default function AuthLayout() {
         headerShown: false, // Keeping headers hidden as per previous setup, but style is ready if enabled
       }}
     >
-      {/* The login screen, which is `app/(auth)/index.tsx` */}
       <Stack.Screen name="index" options={{ title: 'Sign In' }} />
-      {/* The registration screen, `app/(auth)/register.tsx` */}
       <Stack.Screen name="register" options={{ title: 'Register' }} />
     </Stack>
   );

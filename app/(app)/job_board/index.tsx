@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Platform, ActivityIndicator } from 'react-native';
-import { useAuth } from '../../components/AuthProvider';
-import { getOffres } from '../../utils/api'; // Importer la nouvelle fonction getOffres
-import { router } from 'expo-router'; // Pour la navigation vers les détails et la déconnexion
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity,  Platform, ActivityIndicator } from 'react-native';
+import { useAuth } from '../../../components/AuthProvider'; // <-- CHEMIN AJUSTÉ
+import { getOffres } from '../../../utils/api'; // <-- CHEMIN AJUSTÉ
+import { router } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 /**
  * Écran du Tableau d'Offres (Job Board) authentifié:
@@ -11,16 +12,16 @@ import { router } from 'expo-router'; // Pour la navigation vers les détails et
  */
 export default function AuthenticatedJobBoardScreen() {
   const { user, logout, loading: authLoading } = useAuth();
-  const [offres, setOffres] = useState([]); // Renommé de jobOffers à offres
+  const [offres, setOffres] = useState([]);
   const [loadingOffres, setLoadingOffres] = useState(true);
   const [errorOffres, setErrorOffres] = useState<string | null>(null);
 
   useEffect(() => {
-    async function fetchOffres() { // Renommé de fetchJobs à fetchOffres
+    async function fetchOffres() {
       try {
         setLoadingOffres(true);
         setErrorOffres(null);
-        const fetchedOffres = await getOffres(); // Appel à la nouvelle fonction
+        const fetchedOffres = await getOffres();
         setOffres(fetchedOffres);
       } catch (err: any) {
         console.error("Échec de la récupération des offres:", err);
@@ -30,18 +31,17 @@ export default function AuthenticatedJobBoardScreen() {
       }
     }
     fetchOffres();
-  }, []); // Le tableau de dépendances vide signifie que cela s'exécute une seule fois au montage
+  }, []);
 
-  const handleOffrePress = (offreId: string) => { // Renommé de handleJobPress à handleOffrePress
-    // Naviguer vers l'écran des détails de l'offre, en passant l'ID de l'offre comme paramètre
-    router.push(`/(app)/job_details?id=${offreId}`);
+  const handleOffrePress = (offreId: string) => {
+    // Naviguer vers l'écran des détails de l'offre, maintenant dans le même dossier de pile
+    router.push(`/job_board/job_details?id=${offreId}`); // <-- CHEMIN AJUSTÉ
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.header}>
-        {/* <Text style={styles.headerTitle}>Offres d'emploi</Text> */}
-        {user && <Text style={styles.welcomeText}>Bienvenue, {user.name}!</Text>}
+        <Text style={styles.headerTitle}>Offres d'emploi</Text>
         <TouchableOpacity
           style={styles.logoutButton}
           onPress={logout}
@@ -72,7 +72,6 @@ export default function AuthenticatedJobBoardScreen() {
           <Text style={styles.sectionTitle}>Offres disponibles</Text>
           {offres.map(offre => (
             <TouchableOpacity key={offre.id} style={styles.offreCard} onPress={() => handleOffrePress(offre.id)}>
-              {/* Utilisation des noms de colonnes de votre migration */}
               <Text style={styles.offreTitle}>{offre.poste?.titre_poste || 'Poste non spécifié'}</Text>
               <Text style={styles.offreCompany}>{offre.demande?.entreprise?.nom_entreprise || 'Entreprise non spécifiée'} - {offre.lieux}</Text>
               <Text style={styles.offreContractType}>{offre.typeContrat?.libelle_type_contrat || 'Contrat non spécifié'}</Text>
@@ -93,7 +92,6 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: '#F3F4F6',
-    paddingTop: Platform.OS === 'android' ? 25 : 0,
   },
   header: {
     flexDirection: 'row',
@@ -101,7 +99,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 24,
     paddingVertical: 16,
-    backgroundColor: '#091e60', // Bleu foncé primaire
+    backgroundColor: '#091e60',
     width: '100%',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -112,17 +110,17 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#FFFFFF', // Texte blanc
+    color: '#FFFFFF',
   },
   welcomeText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#D1D5DB', // Gris clair pour le texte de bienvenue
+    color: '#D1D5DB',
     flexShrink: 1,
     marginHorizontal: 10,
   },
   logoutButton: {
-    backgroundColor: '#0f8e35', // Vert secondaire
+    backgroundColor: '#0f8e35',
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 8,
@@ -194,7 +192,7 @@ const styles = StyleSheet.create({
     color: '#091e60',
     marginBottom: 20,
   },
-  offreCard: { // Renommé de jobCard à offreCard
+  offreCard: {
     backgroundColor: '#FFFFFF',
     padding: 20,
     borderRadius: 12,
@@ -205,24 +203,24 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
-  offreTitle: { // Renommé de jobTitle à offreTitle
+  offreTitle: {
     fontSize: 20,
     fontWeight: '700',
     color: '#091e60',
     marginBottom: 8,
   },
-  offreCompany: { // Renommé de jobCompany à offreCompany
+  offreCompany: {
     fontSize: 16,
     color: '#374151',
     marginBottom: 5,
   },
-  offreContractType: { // Nouveau style pour le type de contrat
+  offreContractType: {
     fontSize: 14,
     color: '#6B7280',
     marginBottom: 10,
     fontStyle: 'italic',
   },
-  offreDescription: { // Renommé de jobDescription à offreDescription
+  offreDescription: {
     fontSize: 14,
     color: '#6B7280',
     lineHeight: 20,

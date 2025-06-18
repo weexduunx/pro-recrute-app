@@ -1,22 +1,24 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, SafeAreaView, TouchableOpacity, Platform } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
-import { getOffreById } from '../../utils/api'; // Importer la nouvelle fonction getOffreById
-import { router } from 'expo-router';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, Platform } from 'react-native';
+import { useLocalSearchParams, router } from 'expo-router';
+import { getOffreById } from '../../../utils/api'; // <-- CHEMIN AJUSTÉ
+import { SafeAreaView } from 'react-native-safe-area-context';
+import AntDesign from '@expo/vector-icons/AntDesign';
 
 /**
  * Écran des Détails de l'Offre:
  * Affiche les détails complets d'une offre d'emploi spécifique.
  * Récupère les données de l'offre via l'ID passé dans les paramètres de la route.
+ * Fait maintenant partie de la pile de navigation de l'onglet "Offres d'emploi".
  */
-export default function OffreDetailsScreen() { // Renommé de JobDetailsScreen
+export default function OffreDetailsScreen() {
   const { id } = useLocalSearchParams();
-  const [offre, setOffre] = useState(null); // Renommé de job à offre
+  const [offre, setOffre] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    async function fetchOffreDetails() { // Renommé de fetchJobDetails
+    async function fetchOffreDetails() {
       if (!id) {
         setError("Aucun ID d'offre fourni.");
         setLoading(false);
@@ -24,7 +26,7 @@ export default function OffreDetailsScreen() { // Renommé de JobDetailsScreen
       }
       try {
         setLoading(true);
-        const fetchedOffre = await getOffreById(id); // Appel à la nouvelle fonction
+        const fetchedOffre = await getOffreById(id);
         setOffre(fetchedOffre);
       } catch (err: any) {
         console.error("Échec de la récupération des détails de l'offre:", err);
@@ -77,13 +79,12 @@ export default function OffreDetailsScreen() { // Renommé de JobDetailsScreen
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backIcon}>
-          <Text style={{ color: '#FFFFFF', fontSize: 18, fontWeight: 'bold' }}>{'< Retour'}</Text>
+          <AntDesign name="back" size={24} color="white" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Détails de l'offre</Text>
         <View style={styles.placeholderRight} />
       </View>
       <ScrollView contentContainerStyle={styles.scrollContainer}>
-        {/* Utilisation des noms de colonnes et des relations chargés */}
         <Text style={styles.offreTitle}>{offre.poste?.titre_poste || 'Poste non spécifié'}</Text>
         <Text style={styles.offreCompany}>{offre.demande?.entreprise?.nom_entreprise || 'Entreprise non spécifiée'}</Text>
         <Text style={styles.offreLocation}>{offre.lieux}</Text>
@@ -125,8 +126,7 @@ export default function OffreDetailsScreen() { // Renommé de JobDetailsScreen
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#F3F4F6', // Gris clair
-    paddingTop: Platform.OS === 'android' ? 25 : 0, // Hauteur de la barre de statut Android
+    backgroundColor: '#F3F4F6',
   },
   loadingContainer: {
     flex: 1,
@@ -167,7 +167,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#091e60', // Bleu foncé primaire
+    backgroundColor: '#091e60',
     paddingHorizontal: 15,
     paddingVertical: 15,
     paddingTop: Platform.OS === 'android' ? 25 : 15,
@@ -186,29 +186,29 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   placeholderRight: {
-    width: 60, // Équilibrer l'espace du bouton de retour
+    width: 60,
   },
   scrollContainer: {
     padding: 24,
   },
-  offreTitle: { // Renommé
+  offreTitle: {
     fontSize: 26,
     fontWeight: 'bold',
     color: '#091e60',
     marginBottom: 10,
   },
-  offreCompany: { // Renommé
+  offreCompany: {
     fontSize: 20,
     fontWeight: '600',
     color: '#374151',
     marginBottom: 5,
   },
-  offreLocation: { // Renommé
+  offreLocation: {
     fontSize: 18,
     color: '#4B5563',
     marginBottom: 15,
   },
-  offreInfo: { // Renommé
+  offreInfo: {
     fontSize: 16,
     color: '#6B7280',
     marginBottom: 5,
@@ -224,14 +224,14 @@ const styles = StyleSheet.create({
     color: '#091e60',
     marginBottom: 15,
   },
-  offreDescription: { // Renommé
+  offreDescription: {
     fontSize: 16,
     color: '#374151',
     lineHeight: 24,
-    marginBottom: 15, // Réduit pour laisser de la place au profil recherché
+    marginBottom: 15,
   },
   applyButton: {
-    backgroundColor: '#0f8e35', // Vert secondaire
+    backgroundColor: '#0f8e35',
     paddingVertical: 15,
     borderRadius: 10,
     alignItems: 'center',
@@ -241,7 +241,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 4,
     elevation: 3,
-    marginTop: 20, // Ajouter un peu d'espace au-dessus du bouton
+    marginTop: 20,
   },
   applyButtonText: {
     color: '#FFFFFF',
