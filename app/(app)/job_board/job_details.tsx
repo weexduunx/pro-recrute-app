@@ -1,21 +1,19 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, Platform } from 'react-native';
-import { useLocalSearchParams, router } from 'expo-router';
-import { getOffreById } from '../../../utils/api'; // <-- CHEMIN AJUSTÉ
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, Platform, Alert } from 'react-native';
+import { useLocalSearchParams, router  } from 'expo-router';
+import { getOffreById, applyForOffre } from '../../../utils/api'; // Importer applyForOffre
 import { SafeAreaView } from 'react-native-safe-area-context';
-import AntDesign from '@expo/vector-icons/AntDesign';
-
 /**
  * Écran des Détails de l'Offre:
  * Affiche les détails complets d'une offre d'emploi spécifique.
- * Récupère les données de l'offre via l'ID passé dans les paramètres de la route.
- * Fait maintenant partie de la pile de navigation de l'onglet "Offres d'emploi".
+ * Inclut un bouton pour postuler à l'offre.
  */
 export default function OffreDetailsScreen() {
   const { id } = useLocalSearchParams();
   const [offre, setOffre] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [applying, setApplying] = useState(false); // État pour le bouton de candidature
 
   useEffect(() => {
     async function fetchOffreDetails() {
@@ -37,6 +35,23 @@ export default function OffreDetailsScreen() {
     }
     fetchOffreDetails();
   }, [id]);
+
+  const handleApply = async () => {
+    if (!offre || applying) return; // Ne rien faire si pas d'offre ou si déjà en cours
+    setApplying(true);
+    try {
+      // Envoyer l'ID de l'offre à laquelle l'utilisateur postule
+      const response = await applyForOffre(offre.id); // Vous pouvez ajouter { motivation_letter: '...' } si vous avez un champ
+      Alert.alert("Candidature soumise", response.message || "Votre candidature a été soumise avec succès !");
+      // Optionnel: router.back() pour revenir à la liste des offres, ou rafraîchir le dashboard
+    } catch (err: any) {
+      console.error("Échec de la candidature:", err.response?.data || err.message);
+      Alert.alert("Erreur de candidature", err.response?.data?.message || "Impossible de postuler à cette offre. Veuillez réessayer.");
+    } finally {
+      setApplying(false);
+    }
+  };
+
 
   if (loading) {
     return (
@@ -79,7 +94,7 @@ export default function OffreDetailsScreen() {
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backIcon}>
-          <AntDesign name="back" size={24} color="white" />
+          <Text style={{ color: '#FFFFFF', fontSize: 18, fontWeight: 'bold' }}>{'< Retour'}</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Détails de l'offre</Text>
         <View style={styles.placeholderRight} />
@@ -115,8 +130,16 @@ export default function OffreDetailsScreen() {
         <Text style={styles.sectionHeading}>Profil recherché</Text>
         <Text style={styles.offreDescription}>{offre.profil_recherche}</Text>
 
-        <TouchableOpacity style={styles.applyButton}>
-          <Text style={styles.applyButtonText}>Postuler à cette offre</Text>
+        <TouchableOpacity
+          style={[styles.applyButton, applying && styles.applyButtonDisabled]}
+          onPress={handleApply}
+          disabled={applying}
+        >
+          {applying ? (
+            <ActivityIndicator color="#FFFFFF" />
+          ) : (
+            <Text style={styles.applyButtonText}>Postuler à cette offre</Text>
+          )}
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
@@ -231,7 +254,7 @@ const styles = StyleSheet.create({
     marginBottom: 15,
   },
   applyButton: {
-    backgroundColor: '#0f8e35',
+    backgroundColor: '#0f8e35', // Vert secondaire
     paddingVertical: 15,
     borderRadius: 10,
     alignItems: 'center',
@@ -247,5 +270,8 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 18,
     fontWeight: 'bold',
+  },
+  applyButtonDisabled: {
+    opacity: 0.6,
   },
 });

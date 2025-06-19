@@ -14,7 +14,6 @@ const api = axios.create({
   },
 });
 
-// Intercepteur de requête: Attache automatiquement le jeton d'authentification
 api.interceptors.request.use(
   async (config) => {
     const token = await AsyncStorage.getItem('user_token');
@@ -30,7 +29,6 @@ api.interceptors.request.use(
   }
 );
 
-// Intercepteur de réponse: Gère l'expiration du jeton ou les requêtes 401 Non autorisé
 api.interceptors.response.use(
   (response) => {
     console.log('Réponse reçue de:', response.config.url, 'Statut:', response.status, 'Données:', response.data); // Débogage
@@ -119,29 +117,9 @@ export const getOffreById = async (offreId) => {
   }
 };
 
-/**
- * [NOUVEAU] Récupère les candidatures de l'utilisateur connecté.
- * @returns {Promise<Array>} Un tableau d'objets candidature.
- */
-export const getUserApplications = async () => {
-  try {
-    // API Route à implémenter dans Laravel (ex: GET /api/user/applications)
-    const response = await api.get('/user/applications');
-    return response.data;
-  } catch (error) {
-    console.error("Échec de l'appel API getUserApplications:", error.response?.data || error.message);
-    throw error;
-  }
-};
 
-/**
- * [NOUVEAU] Met à jour le profil de l'utilisateur connecté.
- * @param {object} profileData - Les données du profil à mettre à jour (ex: {name: 'Nouveau Nom'}).
- * @returns {Promise<object>} L'objet utilisateur mis à jour.
- */
 export const updateUserProfile = async (profileData) => {
   try {
-    // API Route à implémenter dans Laravel (ex: PUT /api/user/profile)
     const response = await api.put('/user/profile', profileData);
     return response.data;
   } catch (error) {
@@ -150,34 +128,90 @@ export const updateUserProfile = async (profileData) => {
   }
 };
 
-/**
- * [NOUVEAU] Télécharge un fichier (CV) pour l'utilisateur connecté.
- * @param {string} userId - L'ID de l'utilisateur.
- * @param {object} fileAsset - L'objet fichier retourné par expo-document-picker.
- * @returns {Promise<object>} La réponse de l'API.
- */
-export const uploadCv = async (userId, fileAsset) => {
+export const uploadCv = async (fileAsset) => {
   try {
     const formData = new FormData();
-    // Le 'uri' de fileAsset est le chemin local du fichier
-    // Le 'name' est le nom du fichier
-    // Le 'mimeType' est le type du fichier (ex: application/pdf)
     formData.append('cv_file', {
       uri: fileAsset.uri,
       name: fileAsset.name,
-      type: fileAsset.mimeType || 'application/octet-stream', // Fallback type
+      type: fileAsset.mimeType || 'application/octet-stream',
     });
 
-    // API Route à implémenter dans Laravel (ex: POST /api/user/upload-cv)
     const response = await api.post('/user/upload-cv', formData, {
       headers: {
-        'Content-Type': 'multipart/form-data', // Indispensable pour l'upload de fichier
+        'Content-Type': 'multipart/form-data',
       },
     });
     console.log("Appel API uploadCv réussi:", response.data);
     return response.data;
   } catch (error) {
     console.error("Échec de l'appel API uploadCv:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+/**
+ * [NOUVEAU] Récupère les informations du CV parsé de l'utilisateur connecté.
+ * @returns {Promise<object|null>} L'objet CV parsé ou null si non trouvé.
+ */
+export const getParsedCvData = async () => {
+  try {
+    const response = await api.get('/user/parsed-cv'); // Laravel: GET /api/user/parsed-cv
+    return response.data;
+  } catch (error) {
+    if (error.response?.status === 404) {
+      console.log("Aucune donnée de CV parsée trouvée.");
+      return null;
+    }
+    console.error("Échec de l'appel API getParsedCvData:", error.response?.data || error.message);
+    throw error;
+  }
+};
+/**
+ * [NOUVEAU] Récupère les candidatures de l'utilisateur connecté.
+ * @returns {Promise<Array>} Un tableau d'objets candidature.
+ */
+export const getUserApplications = async () => {
+  try {
+    const response = await api.get('/user/applications'); // Laravel: GET /api/user/applications
+    return response.data;
+  } catch (error) {
+    console.error("Échec de l'appel API getUserApplications:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+/**
+ * [NOUVEAU] Soumet une candidature pour une offre spécifique.
+ * @param {string} offreId - L'ID de l'offre à laquelle postuler.
+ * @param {object} [data] - Données additionnelles (ex: { motivation_letter: '...' }).
+ * @returns {Promise<object>} La réponse de l'API avec la candidature soumise.
+ */
+export const applyForOffre = async (offreId, data = {}) => {
+  try {
+    const response = await api.post(`/offres/${offreId}/apply`, data); // Laravel: POST /api/offres/{offre}/apply
+    return response.data;
+  } catch (error) {
+    console.error(`Échec de l'appel API applyForOffre pour l'offre ${offreId}:`, error.response?.data || error.message);
+    throw error;
+  }
+};
+
+/**
+ * [MODIFIÉ] Envoie le code d'autorisation OAuth (reçu de WebBrowser) à votre backend Laravel.
+ * @param {string} provider - Le nom du fournisseur ('google', 'linkedin').
+ * @param {string} code - Le code d'autorisation reçu du fournisseur OAuth.
+ * @returns {Promise<object>} - L'objet utilisateur et le jeton Sanctum.
+ */
+export const socialLoginCallback = async (provider, code) => { // idToken remplacé par code
+  try {
+    // Laravel attend le 'code' dans les paramètres de requête GET pour le flux Socialite classique
+    const response = await axios.get(`${API_URL}/auth/${provider}/callback?code=${code}`);
+    const { token, user } = response.data;
+    await AsyncStorage.setItem('user_token', token);
+    return { user, token };
+  } catch (error) {
+    console.error(`Échec de l'échange de jeton Socialite pour ${provider}:`, error.response?.data || error.message);
     throw error;
   }
 };

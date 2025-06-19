@@ -1,78 +1,101 @@
-import React, { useState, useEffect } from 'react'; // Ajout de useState et useEffect pour la gestion des données
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, Platform, ScrollView, ActivityIndicator, Alert, TextInput } from 'react-native'; // Ajout de TextInput pour le profil
+import React, { useState, useEffect, useCallback } from 'react'; // Ajout de useCallback
+import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, Platform, ScrollView, ActivityIndicator, Alert, TextInput } from 'react-native';
 import { useAuth } from '../../components/AuthProvider';
-import { FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons'; // Importation d'icônes
-import * as DocumentPicker from 'expo-document-picker'; // Pour l'upload de CV
-import { getUserApplications, updateUserProfile, uploadCv } from '../../utils/api'; // Fonctions API à créer ou mettre à jour
+import { FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
+import * as DocumentPicker from 'expo-document-picker';
+import { getUserApplications, updateUserProfile, uploadCv, getParsedCvData } from '../../utils/api'; // Importer getParsedCvData
 
 /**
  * Écran du Tableau de bord de l'utilisateur :
  * Affiche le contenu pertinent pour l'utilisateur authentifié avec une UI/UX moderne.
- * Sections pour les candidatures, le profil et la gestion du CV.
+ * Gère les candidatures, le profil, la gestion du CV et affiche les données du CV parsé.
  */
 export default function DashboardScreen() {
   const { user, logout, loading: authLoading } = useAuth();
-  const [applications, setApplications] = useState([]); // Pour stocker les candidatures de l'utilisateur
-  const [loadingApplications, setLoadingApplications] = useState(false);
-  const [profileEditMode, setProfileEditMode] = useState(false); // Pour le mode édition du profil
-  const [editableName, setEditableName] = useState(user?.name || ''); // Nom éditable
-  const [cvFileName, setCvFileName] = useState<string | null>(null); // Nom du fichier CV
+  const [applications, setApplications] = useState([]);
+  const [loadingApplications, setLoadingApplications] = useState(true);
+  const [profileEditMode, setProfileEditMode] = useState(false);
+  const [editableName, setEditableName] = useState(user?.name || '');
+  const [cvFileName, setCvFileName] = useState<string | null>(null);
   const [uploadingCv, setUploadingCv] = useState(false);
   const [cvUploadError, setCvUploadError] = useState<string | null>(null);
   const [profileUpdateError, setProfileUpdateError] = useState<string | null>(null);
+  const [parsedCv, setParsedCv] = useState<any>(null); // NOUVEAU : Pour stocker les données du CV parsé
+  const [loadingParsedCv, setLoadingParsedCv] = useState(true);
 
-  // Charger les candidatures de l'utilisateur au montage du composant
-  useEffect(() => {
-    async function loadApplications() {
-      if (user) {
-        setLoadingApplications(true);
-        try {
-          // Ceci est une fonction API à implémenter :
-          // const fetchedApplications = await getUserApplications(user.id);
-          // setApplications(fetchedApplications);
-          // Données mock pour l'instant
-          setApplications([
-            { id: 'app1', offre_title: 'Développeur React Native Senior', status: 'En attente' },
-            { id: 'app2', offre_title: 'Ingénieur Backend Laravel', status: 'Rejeté' },
-            { id: 'app3', offre_title: 'Designer UI/UX Mobile', status: 'Approuvé' },
-          ]);
-        } catch (error: any) {
-          console.error("Erreur de chargement des candidatures:", error);
-          // Gérer l'erreur
-        } finally {
-          setLoadingApplications(false);
-        }
+  // Fonction pour charger les candidatures (utilisée aussi après une soumission)
+  const loadApplications = useCallback(async () => {
+    if (user) {
+      setLoadingApplications(true);
+      try {
+        const fetchedApplications = await getUserApplications();
+        setApplications(fetchedApplications);
+      } catch (error: any) {
+        console.error("Erreur de chargement des candidatures:", error);
+      } finally {
+        setLoadingApplications(false);
       }
+    } else {
+      setApplications([]);
+      setLoadingApplications(false);
     }
-    loadApplications();
   }, [user]);
 
-  // Gérer l'upload de CV
+  // Fonction pour charger les données du CV parsé
+  const loadParsedCv = useCallback(async () => {
+    if (user) {
+      setLoadingParsedCv(true);
+      try {
+        const data = await getParsedCvData();
+        setParsedCv(data);
+        if (data && data.last_parsed_file) {
+          setCvFileName(data.last_parsed_file);
+        } else {
+          setCvFileName(null);
+        }
+      } catch (error: any) {
+        console.error("Erreur de chargement du CV parsé:", error);
+      } finally {
+        setLoadingParsedCv(false);
+      }
+    } else {
+      setParsedCv(null);
+      setCvFileName(null);
+      setLoadingParsedCv(false);
+    }
+  }, [user]);
+
+  // Chargement initial des candidatures et du CV parsé
+  useEffect(() => {
+    loadApplications();
+    loadParsedCv();
+  }, [user, loadApplications, loadParsedCv]);
+
+
   const pickDocument = async () => {
     try {
       setUploadingCv(true);
       setCvUploadError(null);
       const result = await DocumentPicker.getDocumentAsync({
-        type: 'application/pdf', // Limiter aux fichiers PDF
-        copyToCacheDirectory: true, // Copier le fichier dans le cache pour accès
+        type: 'application/pdf',
+        copyToCacheDirectory: true,
       });
 
       if (result.canceled === false && result.assets && result.assets.length > 0) {
         const pickedAsset = result.assets[0];
         setCvFileName(pickedAsset.name);
-        console.log('CV sélectionné:', pickedAsset);
-
-        // Appeler la fonction API pour l'upload (à implémenter)
-        // const uploadResponse = await uploadCv(user.id, pickedAsset);
-        // console.log('Réponse upload CV:', uploadResponse);
-        Alert.alert("Succès", "CV sélectionné et simulation d'upload."); // Simuler le succès
+        
+        const uploadResponse = await uploadCv(pickedAsset);
+        Alert.alert("Succès", `CV "${pickedAsset.name}" téléchargé avec succès !`);
+        // Après l'upload, rafraîchir les données du CV parsé
+        await loadParsedCv(); // NOUVEAU : Recharger les données du CV parsé
       } else {
         console.log('Sélection de CV annulée ou échouée.');
         setCvFileName(null);
       }
     } catch (err: any) {
       console.error("Erreur de sélection/upload CV:", err);
-      setCvUploadError("Échec de l'upload du CV. Veuillez réessayer.");
+      setCvUploadError(err.response?.data?.message || "Échec de l'upload du CV. Veuillez réessayer.");
     } finally {
       setUploadingCv(false);
     }
@@ -80,26 +103,24 @@ export default function DashboardScreen() {
 
   const handleProfileSave = async () => {
     setProfileUpdateError(null);
-    // Ceci est une fonction API à implémenter :
-    // try {
-    //   await updateUserProfile(user.id, { name: editableName });
-    //   Alert.alert("Profil mis à jour", "Votre nom a été mis à jour.");
-    //   setProfileEditMode(false);
-    //   // Optionnel: Mettre à jour l'objet user dans AuthProvider si nécessaire
-    // } catch (error: any) {
-    //   console.error("Erreur de mise à jour du profil:", error);
-    //   setProfileUpdateError("Échec de la mise à jour du profil.");
-    // }
-    Alert.alert("Profil mis à jour", `Simulation: Nom mis à jour en "${editableName}".`);
-    setProfileEditMode(false); // Sortir du mode édition après simulation
-    setProfileUpdateError(null);
+    try {
+      if (user && user.name !== editableName) {
+        const updatedUser = await updateUserProfile({ name: editableName });
+        Alert.alert("Profil mis à jour", "Votre nom a été mis à jour avec succès !");
+        // Si le nom est mis à jour dans le backend, le user dans AuthProvider devrait idéalement être rafraîchi.
+        // Pour l'instant, on se base sur la simulation ou sur le prochain rechargement complet de l'app.
+      }
+      setProfileEditMode(false);
+    } catch (error: any) {
+      console.error("Erreur de mise à jour du profil:", error);
+      setProfileUpdateError(error.response?.data?.message || "Échec de la mise à jour du profil.");
+    }
   };
-
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Tableau de bord</Text>
+        <Text style={styles.headerTitle}>Mon Tableau de bord</Text>
         <TouchableOpacity
           style={styles.logoutButton}
           onPress={logout}
@@ -127,13 +148,13 @@ export default function DashboardScreen() {
           ) : applications.length > 0 ? (
             applications.map(app => (
               <View key={app.id} style={styles.applicationItem}>
-                <Text style={styles.applicationTitle}>{app.offre_title}</Text>
+                <Text style={styles.applicationTitle}>{app.offre?.poste?.titre_poste || 'Titre de l\'offre inconnu'}</Text>
                 <Text style={styles.applicationStatus}>Statut:
                   <Text style={[
                     styles.statusText,
-                    app.status === 'En attente' && styles.statusPending,
-                    app.status === 'Approuvé' && styles.statusApproved,
-                    app.status === 'Rejeté' && styles.statusRejected,
+                    app.status === 'pending' && styles.statusPending,
+                    app.status === 'approved' && styles.statusApproved,
+                    app.status === 'rejected' && styles.statusRejected,
                   ]}> {app.status}</Text>
                 </Text>
               </View>
@@ -213,6 +234,63 @@ export default function DashboardScreen() {
             Votre CV sera utilisé pour vous recommander des offres.
           </Text>
         </View>
+
+        {/* NOUVEAU : Section Mon CV Parsé */}
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <FontAwesome5 name="file-alt" size={20} color="#091e60" style={styles.cardIcon} />
+            <Text style={styles.cardTitle}>Mon CV Parsé</Text>
+          </View>
+          {loadingParsedCv ? (
+            <ActivityIndicator size="small" color="#0f8e35" />
+          ) : parsedCv ? (
+            <View>
+              <Text style={styles.parsedCvLabel}>Nom complet: <Text style={styles.parsedCvText}>{parsedCv.full_name}</Text></Text>
+              <Text style={styles.parsedCvLabel}>Email: <Text style={styles.parsedCvText}>{parsedCv.email}</Text></Text>
+              {parsedCv.phone && <Text style={styles.parsedCvLabel}>Téléphone: <Text style={styles.parsedCvText}>{parsedCv.phone}</Text></Text>}
+              {parsedCv.summary && (
+                <>
+                  <Text style={styles.parsedCvSectionTitle}>Résumé</Text>
+                  <Text style={styles.parsedCvText}>{parsedCv.summary}</Text>
+                </>
+              )}
+              {parsedCv.skills && parsedCv.skills.length > 0 && (
+                <>
+                  <Text style={styles.parsedCvSectionTitle}>Compétences</Text>
+                  <Text style={styles.parsedCvText}>{parsedCv.skills.join(', ')}</Text>
+                </>
+              )}
+              {parsedCv.experience && parsedCv.experience.length > 0 && (
+                <>
+                  <Text style={styles.parsedCvSectionTitle}>Expérience Professionnelle</Text>
+                  {parsedCv.experience.map((exp: any, index: number) => (
+                    <View key={index} style={styles.parsedCvItem}>
+                      <Text style={styles.parsedCvText}><Text style={styles.parsedCvLabel}>Poste:</Text> {exp.title}</Text>
+                      <Text style={styles.parsedCvText}><Text style={styles.parsedCvLabel}>Entreprise:</Text> {exp.company}</Text>
+                      <Text style={styles.parsedCvText}><Text style={styles.parsedCvLabel}>Période:</Text> {exp.years}</Text>
+                      {exp.description && <Text style={styles.parsedCvText}><Text style={styles.parsedCvLabel}>Description:</Text> {exp.description}</Text>}
+                    </View>
+                  ))}
+                </>
+              )}
+              {parsedCv.education && parsedCv.education.length > 0 && (
+                <>
+                  <Text style={styles.parsedCvSectionTitle}>Formation</Text>
+                  {parsedCv.education.map((edu: any, index: number) => (
+                    <View key={index} style={styles.parsedCvItem}>
+                      <Text style={styles.parsedCvText}><Text style={styles.parsedCvLabel}>Diplôme:</Text> {edu.degree}</Text>
+                      <Text style={styles.parsedCvText}><Text style={styles.parsedCvLabel}>Institution:</Text> {edu.institution}</Text>
+                      <Text style={styles.parsedCvText}><Text style={styles.parsedCvLabel}>Année:</Text> {edu.year}</Text>
+                    </View>
+                  ))}
+                </>
+              )}
+            </View>
+          ) : (
+            <Text style={styles.emptyStateText}>Aucune donnée de CV parsée trouvée. Veuillez télécharger un CV.</Text>
+          )}
+        </View>
+
       </ScrollView>
     </SafeAreaView>
   );
@@ -221,8 +299,8 @@ export default function DashboardScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#F3F4F6', // Couleur de fond principale
-    paddingTop: Platform.OS === 'android' ? 25 : 0, // Padding pour la barre de statut Android
+    backgroundColor: '#F3F4F6',
+    paddingTop: Platform.OS === 'android' ? 25 : 0,
   },
   header: {
     flexDirection: 'row',
@@ -230,7 +308,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 24,
     paddingVertical: 16,
-    backgroundColor: '#091e60', // Bleu foncé primaire
+    backgroundColor: '#091e60',
     width: '100%',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -241,10 +319,10 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#FFFFFF', // Texte blanc
+    color: '#FFFFFF',
   },
   logoutButton: {
-    backgroundColor: '#0f8e35', // Vert secondaire
+    backgroundColor: '#0f8e35',
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 8,
@@ -261,7 +339,7 @@ const styles = StyleSheet.create({
   },
   scrollContainer: {
     padding: 24,
-    paddingBottom: 40, // Espace en bas pour le défilement
+    paddingBottom: 40,
   },
   card: {
     backgroundColor: '#FFFFFF',
@@ -279,7 +357,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 15,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB', // Gris clair
+    borderBottomColor: '#E5E7EB',
     paddingBottom: 10,
   },
   cardIcon: {
@@ -288,17 +366,17 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#091e60', // Bleu foncé primaire
+    color: '#091e60',
   },
   cardSubtitle: {
     fontSize: 16,
-    color: '#4B5563', // Gris foncé
+    color: '#4B5563',
     marginTop: 5,
     marginBottom: 15,
   },
   // Styles pour Mes Candidatures
   applicationItem: {
-    backgroundColor: '#F9FAFB', // Très léger gris
+    backgroundColor: '#F9FAFB',
     borderRadius: 8,
     padding: 15,
     marginBottom: 10,
@@ -319,13 +397,13 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   statusPending: {
-    color: '#F59E0B', // Jaune
+    color: '#F59E0B',
   },
   statusApproved: {
-    color: '#10B981', // Émeraude
+    color: '#10B981',
   },
   statusRejected: {
-    color: '#EF4444', // Rouge
+    color: '#EF4444',
   },
   emptyStateText: {
     fontSize: 14,
@@ -335,7 +413,7 @@ const styles = StyleSheet.create({
   },
   viewAllButton: {
     marginTop: 15,
-    backgroundColor: '#0f8e35', // Vert secondaire
+    backgroundColor: '#0f8e35',
     paddingVertical: 10,
     paddingHorizontal: 15,
     borderRadius: 8,
@@ -385,10 +463,10 @@ const styles = StyleSheet.create({
     marginHorizontal: 5,
   },
   profileSaveButton: {
-    backgroundColor: '#0f8e35', // Vert secondaire
+    backgroundColor: '#0f8e35',
   },
   profileCancelButton: {
-    backgroundColor: '#6B7280', // Gris moyen
+    backgroundColor: '#6B7280',
   },
   profileButtonText: {
     color: '#FFFFFF',
@@ -397,7 +475,7 @@ const styles = StyleSheet.create({
   },
   editProfileButton: {
     marginTop: 15,
-    backgroundColor: '#091e60', // Bleu foncé primaire
+    backgroundColor: '#091e60',
     paddingVertical: 10,
     paddingHorizontal: 15,
     borderRadius: 8,
@@ -421,12 +499,12 @@ const styles = StyleSheet.create({
     color: '#091e60',
   },
   uploadCvButton: {
-    backgroundColor: '#091e60', // Bleu foncé primaire
+    backgroundColor: '#091e60',
     paddingVertical: 12,
     paddingHorizontal: 15,
     borderRadius: 8,
     alignItems: 'center',
-    flexDirection: 'row', // Pour aligner l'icône et le texte
+    flexDirection: 'row',
     justifyContent: 'center',
     marginTop: 10,
   },
@@ -434,10 +512,10 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
-    marginLeft: 10, // Espace entre icône et texte
+    marginLeft: 10,
   },
   buttonIcon: {
-    // Style pour l'icône, si nécessaire
+    // Style pour l'icône
   },
   buttonDisabled: {
     opacity: 0.6,
@@ -449,10 +527,35 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontStyle: 'italic',
   },
-  errorText: {
-    color: '#EF4444',
+  // NOUVEAU : Styles pour Mon CV Parsé
+  parsedCvLabel: {
     fontSize: 14,
+    color: '#4B5563',
+    fontWeight: '600',
+    marginTop: 8,
+  },
+  parsedCvText: {
+    fontSize: 16,
+    color: '#1F2937',
+    marginBottom: 5,
+    lineHeight: 22,
+  },
+  parsedCvSectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#091e60',
+    marginTop: 15,
     marginBottom: 10,
-    textAlign: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: '#D1D5DB',
+    paddingBottom: 5,
+  },
+  parsedCvItem: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
 });
