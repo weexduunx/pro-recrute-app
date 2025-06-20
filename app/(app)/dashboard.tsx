@@ -1,14 +1,17 @@
-import React, { useState, useEffect, useCallback } from 'react'; // Ajout de useCallback
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, Platform, ScrollView, ActivityIndicator, Alert, TextInput } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Platform, ScrollView, ActivityIndicator, Alert, TextInput } from 'react-native';
 import { useAuth } from '../../components/AuthProvider';
 import { FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
-import { getUserApplications, updateUserProfile, uploadCv, getParsedCvData } from '../../utils/api'; // Importer getParsedCvData
+import { getUserApplications, updateUserProfile, uploadCv, getParsedCvData, getRecommendedOffres } from '../../utils/api'; // Importer getRecommendedOffres
+import { router } from 'expo-router'; // Pour la navigation vers les détails d'une offre recommandée
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 /**
  * Écran du Tableau de bord de l'utilisateur :
  * Affiche le contenu pertinent pour l'utilisateur authentifié avec une UI/UX moderne.
  * Gère les candidatures, le profil, la gestion du CV et affiche les données du CV parsé.
+ * Inclut maintenant une section pour les offres recommandées.
  */
 export default function DashboardScreen() {
   const { user, logout, loading: authLoading } = useAuth();
@@ -20,10 +23,11 @@ export default function DashboardScreen() {
   const [uploadingCv, setUploadingCv] = useState(false);
   const [cvUploadError, setCvUploadError] = useState<string | null>(null);
   const [profileUpdateError, setProfileUpdateError] = useState<string | null>(null);
-  const [parsedCv, setParsedCv] = useState<any>(null); // NOUVEAU : Pour stocker les données du CV parsé
+  const [parsedCv, setParsedCv] = useState<any>(null);
   const [loadingParsedCv, setLoadingParsedCv] = useState(true);
+  const [recommendedOffres, setRecommendedOffres] = useState([]); // NOUVEAU : Pour les offres recommandées
+  const [loadingRecommendations, setLoadingRecommendations] = useState(true);
 
-  // Fonction pour charger les candidatures (utilisée aussi après une soumission)
   const loadApplications = useCallback(async () => {
     if (user) {
       setLoadingApplications(true);
@@ -41,7 +45,6 @@ export default function DashboardScreen() {
     }
   }, [user]);
 
-  // Fonction pour charger les données du CV parsé
   const loadParsedCv = useCallback(async () => {
     if (user) {
       setLoadingParsedCv(true);
@@ -65,11 +68,31 @@ export default function DashboardScreen() {
     }
   }, [user]);
 
-  // Chargement initial des candidatures et du CV parsé
+  // NOUVEAU : Fonction pour charger les offres recommandées
+  const loadRecommendations = useCallback(async () => {
+    if (user) {
+      setLoadingRecommendations(true);
+      try {
+        const fetchedRecommendations = await getRecommendedOffres();
+        setRecommendedOffres(fetchedRecommendations);
+      } catch (error: any) {
+        console.error("Erreur de chargement des recommandations:", error);
+      } finally {
+        setLoadingRecommendations(false);
+      }
+    } else {
+      setRecommendedOffres([]);
+      setLoadingRecommendations(false);
+    }
+  }, [user]);
+
+
+  // Chargement initial des candidatures, du CV parsé et des recommandations
   useEffect(() => {
     loadApplications();
     loadParsedCv();
-  }, [user, loadApplications, loadParsedCv]);
+    loadRecommendations(); // NOUVEAU : Charger les recommandations au montage
+  }, [user, loadApplications, loadParsedCv, loadRecommendations]);
 
 
   const pickDocument = async () => {
@@ -87,8 +110,8 @@ export default function DashboardScreen() {
         
         const uploadResponse = await uploadCv(pickedAsset);
         Alert.alert("Succès", `CV "${pickedAsset.name}" téléchargé avec succès !`);
-        // Après l'upload, rafraîchir les données du CV parsé
-        await loadParsedCv(); // NOUVEAU : Recharger les données du CV parsé
+        await loadParsedCv(); // Recharger les données du CV parsé après l'upload
+        await loadRecommendations(); // NOUVEAU : Recharger les recommandations après l'upload du CV
       } else {
         console.log('Sélection de CV annulée ou échouée.');
         setCvFileName(null);
@@ -107,8 +130,6 @@ export default function DashboardScreen() {
       if (user && user.name !== editableName) {
         const updatedUser = await updateUserProfile({ name: editableName });
         Alert.alert("Profil mis à jour", "Votre nom a été mis à jour avec succès !");
-        // Si le nom est mis à jour dans le backend, le user dans AuthProvider devrait idéalement être rafraîchi.
-        // Pour l'instant, on se base sur la simulation ou sur le prochain rechargement complet de l'app.
       }
       setProfileEditMode(false);
     } catch (error: any) {
@@ -117,10 +138,15 @@ export default function DashboardScreen() {
     }
   };
 
+  const handleRecommendedOffrePress = (offreId: string) => {
+    router.push(`/(app)/job_board/job_details?id=${offreId}`);
+  };
+
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Mon Tableau de bord</Text>
+        <Text style={styles.headerTitle}>Tableau de bord</Text>
         <TouchableOpacity
           style={styles.logoutButton}
           onPress={logout}
@@ -235,7 +261,7 @@ export default function DashboardScreen() {
           </Text>
         </View>
 
-        {/* NOUVEAU : Section Mon CV Parsé */}
+        {/* Section Mon CV Parsé */}
         <View style={styles.card}>
           <View style={styles.cardHeader}>
             <FontAwesome5 name="file-alt" size={20} color="#091e60" style={styles.cardIcon} />
@@ -288,6 +314,27 @@ export default function DashboardScreen() {
             </View>
           ) : (
             <Text style={styles.emptyStateText}>Aucune donnée de CV parsée trouvée. Veuillez télécharger un CV.</Text>
+          )}
+        </View>
+
+        {/* NOUVEAU : Section Offres Recommandées */}
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <FontAwesome5 name="lightbulb" size={20} color="#091e60" style={styles.cardIcon} />
+            <Text style={styles.cardTitle}>Offres Recommandées</Text>
+          </View>
+          {loadingRecommendations ? (
+            <ActivityIndicator size="small" color="#0f8e35" />
+          ) : recommendedOffres.length > 0 ? (
+            recommendedOffres.map((offre: any) => (
+              <TouchableOpacity key={offre.id} style={styles.recommendedOffreItem} onPress={() => handleRecommendedOffrePress(offre.id)}>
+                <Text style={styles.recommendedOffreTitle}>{offre.poste?.titre_poste || 'Poste non spécifié'}</Text>
+                <Text style={styles.recommendedOffreCompany}>{offre.demande?.entreprise?.nom_entreprise || 'Entreprise non spécifiée'} - {offre.lieux}</Text>
+                <Text style={styles.recommendedOffreMatch}>Score de correspondance: {offre.match_score}</Text>
+              </TouchableOpacity>
+            ))
+          ) : (
+            <Text style={styles.emptyStateText}>Pas de recommandations pour le moment. Téléchargez votre CV pour en obtenir !</Text>
           )}
         </View>
 
@@ -527,7 +574,13 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontStyle: 'italic',
   },
-  // NOUVEAU : Styles pour Mon CV Parsé
+  errorText: {
+    color: '#EF4444',
+    fontSize: 14,
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  // Styles pour Mon CV Parsé
   parsedCvLabel: {
     fontSize: 14,
     color: '#4B5563',
@@ -557,5 +610,36 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     borderWidth: 1,
     borderColor: '#E5E7EB',
+  },
+  // NOUVEAU : Styles pour Offres Recommandées
+  recommendedOffreItem: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 8,
+    padding: 15,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#D1FAE5', // Vert très clair pour les recommandations
+    shadowColor: '#0f8e35', // Ombre verte subtile
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  recommendedOffreTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#091e60',
+    marginBottom: 5,
+  },
+  recommendedOffreCompany: {
+    fontSize: 14,
+    color: '#4B5563',
+    marginBottom: 5,
+  },
+  recommendedOffreMatch: {
+    fontSize: 12,
+    color: '#0f8e35',
+    fontWeight: 'bold',
+    marginTop: 5,
   },
 });

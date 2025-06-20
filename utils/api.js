@@ -216,4 +216,18 @@ export const socialLoginCallback = async (provider, code) => { // idToken rempla
   }
 };
 
+/**
+ * [NOUVEAU] Récupère les offres recommandées pour l'utilisateur connecté.
+ * @returns {Promise<Array>} Un tableau d'objets offre recommandés.
+ */
+export const getRecommendedOffres = async () => {
+  try {
+    const response = await api.get('/offres/recommendations'); // Laravel: GET /api/offres/recommendations
+    return response.data;
+  } catch (error) {
+    console.error("Échec de l'appel API getRecommendedOffres:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
 export default api;
