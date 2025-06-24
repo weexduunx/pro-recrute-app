@@ -1,84 +1,102 @@
-import React from 'react';
-import { Tabs, Stack } from 'expo-router'; // Importer Stack également
-import { FontAwesome5 } from '@expo/vector-icons';
-import FontAwesome from '@expo/vector-icons/FontAwesome';
+import React from "react";
+import { Drawer } from "expo-router/drawer";
+import { useAuth } from "../../components/AuthProvider";
+import { FontAwesome5 } from "@expo/vector-icons";
+import FontAwesome from "@expo/vector-icons/FontAwesome";
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
-/**
- * Layout des onglets authentifiés :
- * Définit la structure de navigation par onglets pour les utilisateurs connectés.
- * L'onglet "Offres d'emploi" inclut maintenant sa propre pile de navigation imbriquée.
- */
-export default function AppTabsLayout() {
+export default function AppLayout() {
+  const { isAuthenticated } = useAuth();
+
+  if (!isAuthenticated) return null;
+
   return (
-    <Tabs
-      screenOptions={{
-        headerShown: false, // Masquer l'en-tête sur les écrans d'onglets
-        tabBarActiveTintColor: '#0f8e35', // Vert secondaire pour l'onglet actif
-        tabBarInactiveTintColor: '#6B7280', // Gris pour l'onglet inactif
-        tabBarStyle: {
-          backgroundColor: '#091e60', // Arrière-plan bleu foncé primaire pour la barre d'onglets
-          borderTopWidth: 1,
-          borderTopColor: '#091e60', // Faire correspondre la couleur de la bordure à l'arrière-plan
-          paddingBottom: 4, // Ajuster le rembourrage
-          paddingTop: 4,
-          paddingLeft: 6,
-          paddingRight: 6,
-          height: 80,
-        },
-        tabBarLabelStyle: {
-          fontSize: 12,
-          fontWeight: '600',
-          color: '#FFFFFF', // Texte blanc pour les étiquettes quelle que soit l'état actif pour le contraste
-        },
-        tabBarIconStyle: {
-          marginTop: 4,
-        }
-      }}
-    >
-      <Tabs.Screen
-        name="job_board" // Ce nom fait maintenant référence au dossier app/(app)/job_board/_layout.tsx
-        options={{
-          title: 'Offres d\'emploi', // Titre de l'onglet
-          tabBarIcon: ({ color, focused }) => (
-            <FontAwesome name="briefcase" size={22} color={focused ? '#0f8e35' : '#D1D5DB'} />
-          ),
-          headerShown: false, // L'en-tête sera géré par le _layout.tsx imbriqué
-        }}
-      />
-      
-      <Tabs.Screen
-        name="actualites" // Nom de l'onglet "Actualités"
-        options={{
-          title: 'Actualités', // Titre de l'onglet
-          tabBarIcon: ({ color, focused }) => (
-            <FontAwesome name="newspaper-o" size={22} color={focused ? '#0f8e35' : '#D1D5DB'} /> // Icône journal
-          ),
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <Drawer
+        screenOptions={{
           headerShown: false,
+          drawerActiveTintColor: "#0f8e35",
+          drawerInactiveTintColor: "#6B7280",
+          drawerStyle: {
+            backgroundColor: "#091e60",
+            borderRightWidth: 1,
+            borderRightColor: "#091e60",
+            paddingTop: 20,
+            paddingBottom: 20,
+          },
+          drawerLabelStyle: {
+            fontSize: 16,
+            fontWeight: "600",
+            color: "#FFFFFF",
+          },
+          drawerContentStyle: {
+            backgroundColor: "#091e60",
+          },
+          drawerType: "front",
+          drawerPosition: "left", // Position du drawer à gauche
+          drawerHideStatusBarOnOpen: true, // Masquer la barre d'état lorsque le drawer est ouvert
+          drawerStatusBarAnimation: "fade", // Animation de la barre d'état lors de l'ouverture du drawer
+          drawerIconStyle: {
+            marginTop: 4,
+          },
         }}
-      />
-
-      <Tabs.Screen
-        name="dashboard" // Correspond à app/(app)/dashboard.tsx
-        options={{
-          title: 'Tableau de bord',
-          tabBarIcon: ({ color, focused }) => (
-            <FontAwesome5 name="user" size={22} color={focused ? '#0f8e35' : '#D1D5DB'} />
-          ),
-          headerShown: false,
-        }}
-      />
-
-      <Tabs.Screen
-        name="settings" // Correspond à app/(app)/dashboard.tsx
-        options={{
-          title: 'Paramétres',
-          tabBarIcon: ({ color, focused }) => (
-            <FontAwesome5 name="cog" size={22} color={focused ? '#0f8e35' : '#D1D5DB'} />
-          ),
-          headerShown: false,
-        }}
-      />
-      
-    </Tabs>
+      >
+        <Drawer.Screen
+          name="home"
+          options={{
+            drawerLabel: "Accueil",
+            drawerIcon: ({ color }) => (
+              <FontAwesome5 name="home" size={22} color={color} />
+            ),
+          }}
+        />
+        <Drawer.Screen
+          name="profile-details"
+          options={{
+            drawerLabel: "Mon Profil",
+            drawerIcon: ({ color, size }) => (
+              <FontAwesome5 name="user-circle" size={size} color={color} />
+            ),
+            headerShown: false,
+          }}
+        />
+        <Drawer.Screen
+          name="job_board"
+          options={{
+            drawerLabel: "Offres d'emploi",
+            drawerIcon: ({ color }) => (
+              <FontAwesome name="briefcase" size={22} color={color} />
+            ),
+          }}
+        />
+        <Drawer.Screen
+          name="actualites"
+          options={{
+            drawerLabel: "Actualités",
+            drawerIcon: ({ color }) => (
+              <FontAwesome name="newspaper-o" size={22} color={color} />
+            ),
+          }}
+        />
+        <Drawer.Screen
+          name="dashboard"
+          options={{
+            drawerLabel: "Tableau de bord",
+            drawerIcon: ({ color }) => (
+              <FontAwesome name="dashboard" size={22} color={color} />
+            ),
+          }}
+        />
+        <Drawer.Screen
+          name="settings"
+          options={{
+            drawerLabel: "Paramètres",
+            drawerIcon: ({ color }) => (
+              <FontAwesome5 name="cog" size={22} color={color} />
+            ),
+          }}
+        />
+      </Drawer>
+    </GestureHandlerRootView>
   );
 }

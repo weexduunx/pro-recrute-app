@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity,  Platform, ActivityIndicator } from 'react-native';
-import { useAuth } from '../../../components/AuthProvider'; // <-- CHEMIN AJUSTÉ
-import { getOffres } from '../../../utils/api'; // <-- CHEMIN AJUSTÉ
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform,SafeAreaView, ActivityIndicator, Alert } from 'react-native';
+// import { SafeAreaView } from 'react-native-safe-area-context';
+import { useAuth } from '../../../components/AuthProvider';
+import { getOffres } from '../../../utils/api';
 import { router } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import CustomHeader from '../../../components/CustomHeader'; 
 
 /**
  * Écran du Tableau d'Offres (Job Board) authentifié:
@@ -34,22 +35,29 @@ export default function AuthenticatedJobBoardScreen() {
   }, []);
 
   const handleOffrePress = (offreId: string) => {
-    // Naviguer vers l'écran des détails de l'offre, maintenant dans le même dossier de pile
-    router.push(`/job_board/job_details?id=${offreId}`); // <-- CHEMIN AJUSTÉ
+    router.push(`/job_board/job_details?id=${offreId}`);
+  };
+
+  const handleMenuPress = () => {
+    Alert.alert("Menu", "Le menu hamburger a été pressé ! (À implémenter)");
+    // Ici, vous intégreriez la logique pour ouvrir un tiroir de navigation ou un modal de menu.
+  };
+
+  const handleAvatarPress = () => {
+    Alert.alert("Profil", "L'avatar de l'utilisateur a été pressé ! (À implémenter, ex: naviguer vers le profil)");
+    // Ici, vous navigeriez vers la page de profil ou afficheriez un menu déroulant du profil.
+    router.push('/(app)/dashboard'); // Exemple : naviguer vers le tableau de bord
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Offres d'emploi</Text>
-        <TouchableOpacity
-          style={styles.logoutButton}
-          onPress={logout}
-          disabled={authLoading}
-        >
-          <Text style={styles.logoutButtonText}>Déconnexion</Text>
-        </TouchableOpacity>
-      </View>
+      {/* Remplacer l'en-tête par CustomHeader */}
+      <CustomHeader
+        title="Offres d'emploi"
+        user={user}
+        onMenuPress={handleMenuPress}
+        onAvatarPress={handleAvatarPress}
+      />
 
       {loadingOffres ? (
         <View style={styles.loadingContainer}>
@@ -92,48 +100,6 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: '#F3F4F6',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-    backgroundColor: '#091e60',
-    width: '100%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  welcomeText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#D1D5DB',
-    flexShrink: 1,
-    marginHorizontal: 10,
-  },
-  logoutButton: {
-    backgroundColor: '#0f8e35',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  logoutButtonText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '600',
   },
   loadingContainer: {
     flex: 1,

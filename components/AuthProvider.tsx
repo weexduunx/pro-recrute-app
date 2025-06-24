@@ -79,9 +79,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           setToken(storedToken);
           const userData = await fetchUserProfile();
           setUser(userData);
-          router.replace("/(app)/job_board");
+          router.replace("/(app)/home");
         } else {
-          router.replace("/(auth)/");
+          router.replace("/(auth)");
         }
       } catch (err: any) {
         console.error(
@@ -92,7 +92,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         await AsyncStorage.removeItem("user_token");
         setUser(null);
         setToken(null);
-        router.replace("/(auth)/");
+        router.replace("/(auth)");
       } finally {
         setLoading(false);
         setIsAppReady(true);
@@ -116,7 +116,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       await AsyncStorage.setItem("user_token", receivedToken);
       setUser(loggedInUser);
       setToken(receivedToken);
-      router.replace("/(app)/job_board");
+      router.replace("/(app)/home");
     } catch (err: any) {
       console.error(
         "Échec de la connexion:",
@@ -159,7 +159,7 @@ const socialLogin = async (provider: string) => {
         const userData = await fetchUserProfile(); // Appelle ton backend /api/user avec le token
         setUser(userData);
         setToken(token);
-        router.replace("/(app)/job_board");
+        router.replace("/(app)/home");
       } else {
         setError("Connexion sociale échouée : " + (message || "Token manquant"));
         console.error("AuthProvider: socialLogin() → token manquant dans URL :", result.url);
@@ -186,7 +186,7 @@ const socialLogin = async (provider: string) => {
       await AsyncStorage.removeItem("user_token");
       setUser(null);
       setToken(null);
-      router.replace("/(auth)/");
+      router.replace("/(auth)");
     } catch (err: any) {
       console.error(
         "Échec de la déconnexion:",

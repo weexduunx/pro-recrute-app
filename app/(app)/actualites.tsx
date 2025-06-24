@@ -1,12 +1,12 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context'; // <-- CHANGEMENT ICI
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Platform, Alert } from 'react-native';
 import { useAuth } from '../../components/AuthProvider';
+import CustomHeader from '../../components/CustomHeader';
 
 /**
  * Écran Actualités :
  * Affiche une liste d'actualités ou de mises à jour pour les utilisateurs connectés.
- * Accessible via la barre d'onglets.
+ * Utilise le composant CustomHeader.
  */
 export default function ActualitesScreen() {
   const { user, logout, loading: authLoading } = useAuth();
@@ -17,18 +17,24 @@ export default function ActualitesScreen() {
     { id: 'n3', title: 'Top 10 des secteurs d\'emploi en croissance', date: '01/06/2025', content: 'Découvrez les secteurs qui recrutent le plus cette année et préparez votre carrière.' },
   ];
 
+  // Fonctions de gestion des pressions sur le menu/avatar
+  const handleMenuPress = () => {
+    Alert.alert("Menu", "Menu Actualités pressé ! (À implémenter)");
+  };
+
+  const handleAvatarPress = () => {
+    Alert.alert("Profil", "Avatar Actualités pressé ! (À implémenter, ex: naviguer vers le profil)");
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Actualités</Text>
-        <TouchableOpacity
-          style={styles.logoutButton}
-          onPress={logout}
-          disabled={authLoading}
-        >
-          <Text style={styles.logoutButtonText}>Déconnexion</Text>
-        </TouchableOpacity>
-      </View>
+      {/* Remplacer l'en-tête par CustomHeader */}
+      <CustomHeader
+        title="Actualités"
+        user={user}
+        onMenuPress={handleMenuPress}
+        onAvatarPress={handleAvatarPress}
+      />
 
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         <Text style={styles.sectionTitle}>Dernières Actualités</Text>
@@ -52,51 +58,9 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: '#F3F4F6',
-    // RETIRÉ : paddingTop: Platform.OS === 'android' ? 25 : 0,
+    // Le paddingTop pour Android est géré par SafeAreaView lui-même
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-    backgroundColor: '#091e60', // Primary Dark Blue
-    width: '100%',
-    // RETIRÉ : paddingTop: Platform.OS === 'android' ? 25 : 0,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#FFFFFF', // White text
-  },
-  welcomeText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#D1D5DB', // Light gray for welcome text
-    flexShrink: 1,
-    marginHorizontal: 10,
-  },
-  logoutButton: {
-    backgroundColor: '#0f8e35', // Secondary Green
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  logoutButtonText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '600',
-  },
+  // RETIRÉ L'EN-TÊTE D'ICI, il est maintenant dans CustomHeader.tsx
   scrollContainer: {
     padding: 24,
     paddingTop: 20,

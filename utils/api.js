@@ -230,4 +230,19 @@ export const getRecommendedOffres = async () => {
   }
 };
 
+/**
+ * [NOUVEAU] Met à jour les informations du CV parsé de l'utilisateur.
+ * @param {object} parsedCvData - Les données du CV parsé à mettre à jour.
+ * @returns {Promise<object>} L'objet CV parsé mis à jour.
+ */
+export const updateParsedCvData = async (parsedCvData) => {
+  try {
+    const response = await api.put('/user/parsed-cv', parsedCvData); // Laravel: PUT /api/user/parsed-cv
+    return response.data;
+  } catch (error) {
+    console.error("Échec de l'appel API updateParsedCvData:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
 export default api;
