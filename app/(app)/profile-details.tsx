@@ -11,6 +11,7 @@ import {
   TextInput,
   Dimensions, 
   Platform, 
+  Keyboard,
   StatusBar 
 } from 'react-native';
 import { useAuth } from '../../components/AuthProvider';
@@ -22,7 +23,7 @@ import { router } from 'expo-router';
 
 const { width } = Dimensions.get('window');
 
-// Interface pour les objets d'expérience et de formation
+// Interfaces pour les objets d'expérience et de formation
 interface ExperienceItem {
   title: string;
   organization: string;
@@ -35,6 +36,7 @@ interface EducationItem {
   name: string;
   dates: string;
 }
+
 
 export default function ProfileDetailsScreen() {
   const { user, logout, loading: authLoading } = useAuth();
@@ -55,14 +57,18 @@ export default function ProfileDetailsScreen() {
 
   // États pour les champs éditables du CV (ceux qui sont liés aux TextInputs)
   const [editableParsedCv, setEditableParsedCv] = useState({
-    full_name: '', email: '', phone: '', summary: '', skills: '',
-    experience: [], // Initialisé comme tableau d'objets pour l'édition dynamique
-    education: [],   // Initialisé comme tableau d'objets pour l'édition dynamique
+    full_name: '', email: '', phone: '', summary: '', skills: [] as string[],
+    experience: [] as ExperienceItem[],
+    education: [] as EducationItem[],
   });
 
-  // Pour les nouvelles entrées d'expérience/formation
-  const [newExperience, setNewExperience] = useState({ title: '', organization: '', dates: '', location: '', description: '' });
-  const [newEducation, setNewEducation] = useState({ name: '', dates: '' });
+    // État pour la nouvelle compétence saisie
+  const [newSkillText, setNewSkillText] = useState('');
+
+ 
+  // Pour les nouvelles entrées d'expérience/formation (utilisés dans les formulaires d'ajout)
+  const [newExperience, setNewExperience] = useState<ExperienceItem>({ title: '', organization: '', dates: '', location: '', description: '' });
+  const [newEducation, setNewEducation] = useState<EducationItem>({ name: '', dates: '' });
 
 
   const loadParsedCv = useCallback(async () => {
@@ -77,7 +83,7 @@ export default function ProfileDetailsScreen() {
           email: data?.email || '',
           phone: data?.phone || '',
           summary: data?.summary || '',
-          skills: data?.skills ? data.skills.join(', ') : '', // Compétences en string séparées par virgules
+          skills: Array.isArray(data?.skills) ? data.skills : [],
           experience: Array.isArray(data?.experience) ? data.experience : [], // Assurer que c'est un tableau
           education: Array.isArray(data?.education) ? data.education : [],   // Assurer que c'est un tableau
         });
@@ -118,39 +124,39 @@ export default function ProfileDetailsScreen() {
     }
   };
 
-  const handleCvSave = async () => { // Sauvegarde des données du CV saisies manuellement
+  const handleCvSave = async () => {
     setCvUpdateError(null);
     try {
-      let parsedSkills: string[] = [];
-      if (editableParsedCv.skills) {
-        parsedSkills = editableParsedCv.skills.split(',').map((s: string) => s.trim()).filter(Boolean);
-      }
-
-      // Valider que experience et education sont des tableaux d'objets valides
-      if (!Array.isArray(editableParsedCv.experience) || editableParsedCv.experience.some(item => typeof item !== 'object' || item === null)) {
-        throw new Error("Le format des expériences est invalide. Attendu : tableau d'objets.");
-      }
-      if (!Array.isArray(editableParsedCv.education) || editableParsedCv.education.some(item => typeof item !== 'object' || item === null)) {
-        throw new Error("Le format des formations est invalide. Attendu : tableau d'objets.");
-      }
-
+      // Les compétences sont déjà un tableau
+      // L'expérience et la formation sont déjà des tableaux d'objets grâce à l'édition dynamique
+      
       const dataToSave = {
         full_name: editableParsedCv.full_name,
         email: editableParsedCv.email,
         phone: editableParsedCv.phone,
         summary: editableParsedCv.summary,
-        skills: parsedSkills,
-        experience: editableParsedCv.experience, // Envoyer le tableau directement
-        education: editableParsedCv.education,   // Envoyer le tableau directement
+        skills: editableParsedCv.skills, // Envoyer le tableau directement
+        experience: editableParsedCv.experience,
+        education: editableParsedCv.education,
       };
 
-      const response = await updateParsedCvData(dataToSave); // Appel API
+      const response = await updateParsedCvData(dataToSave);
       Alert.alert("✅ Succès", response.message || "Informations du CV mises à jour !");
-      await loadParsedCv(); // Recharger les données pour les rafraîchir
+      await loadParsedCv();
       setCvEditMode(false);
     } catch (error: any) {
       console.error("Erreur de sauvegarde du CV:", error);
-      setCvUpdateError(error.message || error.response?.data?.message || "Échec de la mise à jour du CV.");
+      // Afficher l'erreur si elle vient de la validation du backend
+      if (error.response?.data?.errors) {
+        const backendErrors = error.response.data.errors;
+        let errorMessage = "Erreur de validation:\n";
+        for (const key in backendErrors) {
+          errorMessage += `- ${backendErrors[key][0]}\n`;
+        }
+        setCvUpdateError(errorMessage);
+      } else {
+        setCvUpdateError(error.message || error.response?.data?.message || "Échec de la mise à jour du CV.");
+      }
     }
   };
 
@@ -184,6 +190,25 @@ export default function ProfileDetailsScreen() {
 
   const handleMenuPress = () => { /* Géré par CustomHeader */ };
   const handleAvatarPress = () => { /* Géré par CustomHeader */ };
+
+    // NOUVEAU : Fonctions de gestion des compétences (tags)
+  const addSkill = () => {
+    if (newSkillText.trim() && !editableParsedCv.skills.includes(newSkillText.trim())) {
+      setEditableParsedCv({
+        ...editableParsedCv,
+        skills: [...editableParsedCv.skills, newSkillText.trim()],
+      });
+      setNewSkillText('');
+      Keyboard.dismiss(); // Ferme le clavier
+    }
+  };
+
+  const removeSkill = (skillToRemove: string) => {
+    setEditableParsedCv({
+      ...editableParsedCv,
+      skills: editableParsedCv.skills.filter((skill) => skill !== skillToRemove),
+    });
+  };
 
   // NOUVEAU : Fonctions d'ajout/suppression pour l'expérience et la formation
   const addExperience = () => {
@@ -455,25 +480,36 @@ export default function ProfileDetailsScreen() {
         />
       </View>
 
+      {/* NOUVEAU : Section Saisie des Compétences sous forme de tags */}
       <View style={styles.inputGroup}>
-        <Text style={styles.inputLabel}>Compétences (séparées par des virgules)</Text>
-        <TextInput
-          style={styles.modernInput}
-          value={editableParsedCv.skills}
-          onChangeText={(text) => setEditableParsedCv({ ...editableParsedCv, skills: text })}
-          placeholder="JavaScript, React, Node.js..."
-        />
+        <Text style={styles.inputLabel}>Compétences (Ajouter un tag à la fois)</Text>
+        <View style={styles.skillsInputContainer}>
+          <TextInput
+            style={[styles.modernInput, styles.skillTextInput]}
+            value={newSkillText}
+            onChangeText={setNewSkillText}
+            placeholder="Ajouter une compétence..."
+            onSubmitEditing={addSkill} // Ajoute la compétence quand on appuie sur Entrée
+            returnKeyType="done"
+          />
+          <TouchableOpacity style={styles.addSkillButton} onPress={addSkill}>
+            <AntDesign name="pluscircleo" size={20} color="#fff" />
+          </TouchableOpacity>
+        </View>
+        <View style={styles.skillsContainer}>
+          {editableParsedCv.skills.map((skill: string, index: number) => (
+            <TouchableOpacity key={index} style={styles.skillTag} onPress={() => removeSkill(skill)}>
+              <Text style={styles.skillText}>{skill} <AntDesign name="closecircleo" size={10} color="#047857" /></Text>
+            </TouchableOpacity>
+          ))}
+        </View>
       </View>
 
-      {/* Section Expérience */}
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Expérience Professionnelle</Text>
-        <TouchableOpacity style={styles.addEntryButton} onPress={addExperience}>
-          <AntDesign name="pluscircleo" size={20} color="#0f8e35" />
-        </TouchableOpacity>
-      </View>
+      {/* Rendu dynamique des entrées d'expérience */}
+      <Text style={styles.sectionTitle}>Expérience Professionnelle</Text> 
       {editableParsedCv.experience.map((exp: ExperienceItem, index: number) => (
         <View key={index} style={styles.editableItem}>
+          <Text style={styles.itemTitle}>Expérience #{index + 1}</Text> 
           <TextInput
             style={styles.modernInput}
             value={exp.title}
@@ -508,19 +544,20 @@ export default function ProfileDetailsScreen() {
           />
           <TouchableOpacity style={styles.removeEntryButton} onPress={() => removeExperience(index)}>
             <AntDesign name="minuscircleo" size={20} color="#EF4444" />
+            <Text style={styles.removeButtonText}>Supprimer cette expérience</Text>
           </TouchableOpacity>
         </View>
       ))}
+      <TouchableOpacity style={styles.addEntryButtonBig} onPress={addExperience}>
+        <AntDesign name="pluscircleo" size={20} color="#FFFFFF" />
+        <Text style={styles.addButtonText}>Ajouter une expérience</Text>
+      </TouchableOpacity>
 
-      {/* Section Formation */}
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Formation</Text>
-        <TouchableOpacity style={styles.addEntryButton} onPress={addEducation}>
-          <AntDesign name="pluscircleo" size={20} color="#0f8e35" />
-        </TouchableOpacity>
-      </View>
+      {/* Rendu dynamique des entrées de formation */}
+      <Text style={styles.sectionTitle}>Formation</Text> 
       {editableParsedCv.education.map((edu: EducationItem, index: number) => (
         <View key={index} style={styles.editableItem}>
+          <Text style={styles.itemTitle}>Formation #{index + 1}</Text> 
           <TextInput
             style={styles.modernInput}
             value={edu.name}
@@ -535,9 +572,15 @@ export default function ProfileDetailsScreen() {
           />
           <TouchableOpacity style={styles.removeEntryButton} onPress={() => removeEducation(index)}>
             <AntDesign name="minuscircleo" size={20} color="#EF4444" />
+            <Text style={styles.removeButtonText}>Supprimer cette formation</Text>
           </TouchableOpacity>
         </View>
       ))}
+      <TouchableOpacity style={styles.addEntryButtonBig} onPress={addEducation}>
+        <AntDesign name="pluscircleo" size={20} color="#FFFFFF" />
+        <Text style={styles.addButtonText}>Ajouter une formation</Text>
+      </TouchableOpacity>
+
 
       {cvUpdateError && (
         <View style={styles.errorContainer}>
@@ -646,31 +689,27 @@ export default function ProfileDetailsScreen() {
         </View>
       )}
 
-      {/* Nom du fichier CV téléchargé */}
-      {cvFileName && (
-        <View style={styles.cvSection}>
-          <Text style={styles.cvSectionTitle}>Fichier CV téléchargé</Text>
-          <View style={styles.currentFileContainer}>
-            <AntDesign name="filetext1" size={20} color="#10B981" />
-            <Text style={styles.currentFileName}>{cvFileName}</Text>
-          </View>
-        </View>
-      )}
-
-      {/* Bouton d'exportation du CV */}
-      <TouchableOpacity style={styles.exportCvButton} onPress={() => Alert.alert("Export CV", "Fonctionnalité d'exportation à implémenter.")}>
-        <FontAwesome5 name="file-download" size={18} color="#FFFFFF" />
-        <Text style={styles.exportCvButtonText}>Exporter le CV (PDF/Word)</Text>
-      </TouchableOpacity>
-
-      {/* Bouton pour passer en mode édition du CV si ce n'est pas déjà le cas */}
-      {!cvEditMode && (parsedCv || !loadingParsedCv) && ( // N'afficher le bouton que si le CV est chargé ou qu'il n'y a pas de données
-        <TouchableOpacity style={styles.editProfileButton} onPress={() => setCvEditMode(true)}>
-          <Text style={styles.editProfileButtonText}>
-            {parsedCv ? 'Modifier les données du CV' : 'Saisir les données du CV'}
-          </Text>
+    <View style={styles.cvButtonsRow}>
+  
+      {parsedCv && (
+        <TouchableOpacity 
+          style={[styles.button, styles.exportCvButton]} 
+          onPress={() => Alert.alert("Export CV", "Fonctionnalité d'exportation à implémenter.")}
+        >
+          <FontAwesome5 name="file-download" size={18} color="#FFFFFF" />
+          <Text style={styles.exportCvButtonText}>Exporter le CV</Text>
         </TouchableOpacity>
       )}
+
+      <TouchableOpacity 
+        style={[styles.button, styles.editCvButton]} 
+        onPress={() => setCvEditMode(true)}
+      >
+        <Text style={styles.editCvButtonText}>
+          {parsedCv ? 'Modifier le CV' : 'Saisir le CV'}
+        </Text>
+      </TouchableOpacity>
+    </View>
     </View>
   );
 
@@ -834,6 +873,9 @@ const styles = StyleSheet.create({
     minHeight: 100,
     textAlignVertical: 'top',
   },
+  textAreaSmall: { // Nouveau style pour les zones de texte plus petites
+    minHeight: 60,
+  },
   disabledInput: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -855,21 +897,12 @@ const styles = StyleSheet.create({
     gap: 12,
     marginTop: 8,
   },
-  button: {
-    flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    gap: 8,
-  },
+ 
   primaryButton: {
-    backgroundColor: '#0f8e35', // Vert pour sauvegarder
+    backgroundColor: '#0f8e35',
   },
   secondaryButton: {
-    backgroundColor: '#F3F4F6', // Gris clair pour annuler
+    backgroundColor: '#F3F4F6',
     borderWidth: 1,
     borderColor: '#E5E7EB',
   },
@@ -883,7 +916,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
   },
-  // Upload Section (dans CV Tab)
+  // Upload Section
   uploadSection: {
     marginBottom: 24,
     paddingBottom: 24,
@@ -906,7 +939,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   uploadButton: {
-    backgroundColor: '#091e60', // Bleu foncé pour upload
+    backgroundColor: '#091e60',
     paddingVertical: 14,
     paddingHorizontal: 20,
     borderRadius: 12,
@@ -923,7 +956,7 @@ const styles = StyleSheet.create({
   buttonDisabled: {
     opacity: 0.6,
   },
-  // CV Data Display/Edit
+  // CV Data Section
   cvDataSection: {
     // Styles already defined above
   },
@@ -973,16 +1006,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
+    marginTop: 10, // Ajouter un peu d'espace
   },
   skillTag: {
-    backgroundColor: '#ECFDF5',
+    backgroundColor: '#ECFDF5', // Fond vert clair
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
+    flexDirection: 'row', // Pour l'icône de suppression
+    alignItems: 'center',
+    gap: 4,
   },
   skillText: {
     fontSize: 12,
-    color: '#047857',
+    color: '#047857', // Texte vert foncé
     fontWeight: '500',
   },
   cvExperienceItem: {
@@ -1001,75 +1038,41 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E5E7EB',
   },
-  exportCvButton: {
-    backgroundColor: '#0f8e35',
-    paddingVertical: 14,
-    paddingHorizontal: 20,
+
+  // Styles pour les boutons d'ajout/suppression d'entrées (expérience/formation)
+  addEntryButton: {
+    // Ce style est maintenant fusionné dans addEntryButtonBig si le bouton est gros
+  },
+  addEntryButtonBig: { // Style pour le gros bouton d'ajout en bas de section
+    backgroundColor: '#0f8e35', // Vert pour l'ajout
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     borderRadius: 12,
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    flexDirection: 'row',
     gap: 8,
-    marginTop: 20,
+    marginTop: 15,
   },
-  exportCvButtonText: {
+  addButtonText: {
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
-  },
-  // Loading & Error States
-  loadingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 20,
-    gap: 8,
-  },
-  loadingText: {
-    fontSize: 14,
-    color: '#6B7280',
-  },
-  errorContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FEF2F2',
-    padding: 12,
-    borderRadius: 8,
-    gap: 8,
-  },
-  errorText: {
-    flex: 1,
-    fontSize: 14,
-    color: '#DC2626',
-  },
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: 32,
-    gap: 12,
-  },
-  emptyStateTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#9CA3AF',
-  },
-  emptyStateText: {
-    fontSize: 14,
-    color: '#6B7280',
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  // Styles pour les boutons d'ajout/suppression d'entrées (expérience/formation)
-  addEntryButton: {
-    padding: 8,
-    borderRadius: 8,
-    backgroundColor: '#EBF9F3', // Couleur de fond douce
   },
   removeEntryButton: {
     padding: 8,
     borderRadius: 8,
     backgroundColor: '#FEE2E2', // Rouge clair pour suppression
-    marginTop: 8, // Espace entre les champs
+    marginTop: 8,
     alignSelf: 'flex-end', // Aligner le bouton à droite de l'entrée
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  removeButtonText: {
+    color: '#EF4444',
+    fontSize: 12,
+    fontWeight: '500',
   },
   editableItem: {
     backgroundColor: '#FFFFFF',
@@ -1080,4 +1083,77 @@ const styles = StyleSheet.create({
     borderColor: '#E5E7EB',
     gap: 8, // Espacement entre les TextInput dans un item éditable
   },
+
+  // Conteneur pour aligner les boutons
+  cvButtonsRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 20,
+  },
+
+  // Style de base partagé par les deux boutons
+  button: {
+    flex: 1, // Prendre la même largeur
+    paddingVertical: 14,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+
+  // Bouton Export (vert)
+  exportCvButton: {
+    backgroundColor: '#0f8e35',
+  },
+  exportCvButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+
+  // Bouton Modifier/Saisir (bleu)
+  editCvButton: {
+    backgroundColor: '#091e60',
+  },
+  editCvButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  itemTitle:{
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 8,
+  },
+  errorContainer: {
+    marginBottom: 10,
+  },
+  errorText: {
+    color: 'red',
+    fontSize: 12,
+  },
+  skillsInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  
+  skillTextInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 8,
+  },
+  addSkillButton: {
+    backgroundColor: '#0f8e35',
+    padding: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
 });

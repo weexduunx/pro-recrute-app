@@ -257,10 +257,12 @@ export default function HomeScreen() {
     fetchOffersForSlider();
   }, []); // S'exécute une seule fois au montage
 
-  // LOGIQUE DE RÉCUPÉRATION DES RECOMMANDATIONS
+ // LOGIQUE DE RÉCUPÉRATION DES RECOMMANDATIONS
   useEffect(() => {
     async function fetchRecommendations() {
+      console.log('HomeScreen: Début fetchRecommendations. User:', user); // Log de débogage
       if (!user) { // Si pas d'utilisateur, pas de recommandations personnalisées
+        console.log('HomeScreen: Pas d\'utilisateur, pas de recommandations.');
         setRecommendedOffres([]);
         setLoadingRecommendations(false);
         return;
@@ -269,16 +271,17 @@ export default function HomeScreen() {
       try {
         setLoadingRecommendations(true);
         const fetchedRecommendations = await getRecommendedOffres(); // Appel à votre fonction API
-        setRecommendedOffres(fetchedRecommendations.slice(0, 5)); // Limiter à 5 recommandations
+        setRecommendedOffres(fetchedRecommendations.slice(0, 5));
+        console.log('HomeScreen: Recommandations récupérées:', fetchedRecommendations.length); // Log de débogage
       } catch (err: any) {
-        console.error("Erreur de chargement des recommandations:", err);
+        console.error("HomeScreen: Erreur de chargement des recommandations:", err);
         setErrorRecommendations("Impossible de charger les recommandations.");
       } finally {
         setLoadingRecommendations(false);
       }
     }
     fetchRecommendations();
-  }, [user]); // Recharger si l'objet utilisateur change (ex: après connexion/déconnexion/màj profil)
+  }, [user]); // Recharger si l'objet utilisateur change
 
   const handlePressOffre = (offreId: string) => {
     router.push(`/(app)/job_board/job_details?id=${offreId}`);
@@ -493,22 +496,22 @@ export default function HomeScreen() {
             </Text>
           </View>
         </View>
-
+        
         <Text style={styles.recommendationTitle} numberOfLines={2}>
           {item.poste?.titre_poste || "Poste non spécifié"}
         </Text>
-
+        
         <Text style={styles.recommendationCompany} numberOfLines={1}>
-          {item.demande?.entreprise?.libelleE || "Entreprise non spécifiée"}
+          {item.demande?.entreprise?.nom_entreprise || "Entreprise non spécifiée"}
         </Text>
-
+        
         <View style={styles.recommendationLocationContainer}>
           <EvilIcons name="location" size={20} color="#6B7280" />
           <Text style={styles.recommendationLocation} numberOfLines={1}>
             {item.lieux || "Lieu non spécifié"}
           </Text>
         </View>
-
+        
         <View style={styles.recommendationFooter}>
           <Text style={styles.recommendedText}>Recommandé pour vous</Text>
           <FontAwesome5 name="arrow-right" size={14} color="#F59E0B" />
@@ -516,6 +519,7 @@ export default function HomeScreen() {
       </LinearGradient>
     </TouchableOpacity>
   );
+
 
   return (
     <SafeAreaView style={styles.safeArea}>
