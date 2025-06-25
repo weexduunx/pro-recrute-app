@@ -282,7 +282,7 @@ export default function HomeScreen() {
     }
     fetchRecommendations();
   }, [user]); // Recharger si l'objet utilisateur change
-
+  
   const handlePressOffre = (offreId: string) => {
     router.push(`/(app)/job_board/job_details?id=${offreId}`);
   };
@@ -496,22 +496,22 @@ export default function HomeScreen() {
             </Text>
           </View>
         </View>
-        
+
         <Text style={styles.recommendationTitle} numberOfLines={2}>
           {item.poste?.titre_poste || "Poste non spécifié"}
         </Text>
-        
+
         <Text style={styles.recommendationCompany} numberOfLines={1}>
-          {item.demande?.entreprise?.nom_entreprise || "Entreprise non spécifiée"}
+          {item.demande?.entreprise?.libelleE || "Entreprise non spécifiée"}
         </Text>
-        
+
         <View style={styles.recommendationLocationContainer}>
           <EvilIcons name="location" size={20} color="#6B7280" />
           <Text style={styles.recommendationLocation} numberOfLines={1}>
             {item.lieux || "Lieu non spécifié"}
           </Text>
         </View>
-        
+
         <View style={styles.recommendationFooter}>
           <Text style={styles.recommendedText}>Recommandé pour vous</Text>
           <FontAwesome5 name="arrow-right" size={14} color="#F59E0B" />
@@ -519,7 +519,6 @@ export default function HomeScreen() {
       </LinearGradient>
     </TouchableOpacity>
   );
-
 
   return (
     <SafeAreaView style={styles.safeArea}>
