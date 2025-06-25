@@ -7,7 +7,7 @@ import { router } from 'expo-router';
 import { useAuth } from '../components/AuthProvider';
 import { StatusBar } from 'expo-status-bar';
 import AntDesign from '@expo/vector-icons/AntDesign';
-import UserAvatar from 'react-native-user-avatar'; 
+import UserAvatar from 'react-native-user-avatar';
 
 /**
  * Composant CustomHeader:
@@ -16,9 +16,7 @@ import UserAvatar from 'react-native-user-avatar';
  */
 export interface CustomHeaderProps {
   title: string;
-  user: any;
-  onAvatarPress: () => void;
-  onMenuPress: () => void;
+  user: any | null; // L'utilisateur connecté, peut être null si non connecté
 }
 
 
@@ -59,26 +57,30 @@ export default function CustomHeader({ title, user }: CustomHeaderProps) {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar style="light" backgroundColor="#091e60" translucent={false} />
+      <StatusBar style="light" />
 
       <View style={styles.headerContainer}>
         {/* Bouton du menu Hamburger */}
         <TouchableOpacity onPress={handleMenuPress} style={styles.menuButton}>
-          <FontAwesome5 name="bars" size={24} color="#FFFFFF" />
+          <FontAwesome5 name="bars" size={22} color="#FFFFFF" />
         </TouchableOpacity>
 
         {/* Titre de l'en-tête */}
         <Text style={styles.headerTitle}>{title}</Text>
 
         {/* Avatar du profil utilisateur (avec UserAvatar) */}
-        <TouchableOpacity onPress={handleAvatarPress} style={styles.avatarButton}>
+        <TouchableOpacity onPress={handleAvatarPress} >
           <UserAvatar
-            size={40} 
-            name={user?.name || ''} 
-            src={user?.profile_photo_path || undefined} 
+            size={50}
+            name={user?.name || ''}
+            src={user?.profile_photo_path || undefined}
             bgColor="#0f8e35"
-            textColor="#FFFFFF" 
-            borderRadius={20} 
+            bgColors={['#0f8e35', '#0f8e35', '#0f8e35']}
+            initials={user?.name ? user.name.split(' ').map(n => n[0]).join('') : ''}
+            style={{ borderWidth: 2, borderColor: '#FFFFFF' }}
+            textColor="#FFFFFF"
+            borderRadius={30}
+            
 
           />
         </TouchableOpacity>
@@ -145,13 +147,13 @@ const styles = StyleSheet.create({
   },
   avatarButton: {
     padding: 5,
-    width: 50, // Taille pour inclure la bordure
-    height: 50, // Taille pour inclure la bordure
+    width: 50, 
+    height: 50, 
     borderRadius: 25,
     borderWidth: 2,
-    borderColor: '#FFFFFF', // Bordure blanche
-    justifyContent: 'center', // Centrer l'avatar à l'intérieur
-    alignItems: 'center', // Centrer l'avatar à l'intérieur
+    borderColor: '#FFFFFF', 
+    justifyContent: 'center', 
+    alignItems: 'center', 
   },
 
   modalOverlay: {
@@ -187,6 +189,6 @@ const styles = StyleSheet.create({
   dropdownItemText: {
     fontSize: 16,
     color: '#091e60',
-    marginLeft: 8, 
+    marginLeft: 8,
   },
 });

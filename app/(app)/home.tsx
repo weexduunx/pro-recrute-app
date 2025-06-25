@@ -140,7 +140,7 @@ export default function HomeScreen() {
   const [loadingRecommendations, setLoadingRecommendations] = useState(true);
   const [errorRecommendations, setErrorRecommendations] = useState<string | null>(null);
 
-  // Animation d'entrée
+  //  Animation pour l'entrée de l'écran
   useEffect(() => {
     Animated.parallel([
       Animated.timing(fadeAnim, {
@@ -156,7 +156,7 @@ export default function HomeScreen() {
     ]).start();
   }, []);
 
-  // Données d'actualités avec gradients colorés
+  //  LOGIQUE DE RÉCUPÉRATION DES ACTUALITÉS
   const newsItems = [
     {
       id: "news1",
@@ -208,7 +208,7 @@ export default function HomeScreen() {
     },
   ];
 
-  // Données d'astuces avec icônes
+  // LOGIQUE D'ASTUCES POUR LA RECHERCHE D'EMPLOI
   const tipsItems = [
     {
       id: "tip1",
@@ -255,9 +255,9 @@ export default function HomeScreen() {
       }
     }
     fetchOffersForSlider();
-  }, []); // S'exécute une seule fois au montage
+  }, []); 
 
- // LOGIQUE DE RÉCUPÉRATION DES RECOMMANDATIONS
+  // LOGIQUE DE RÉCUPÉRATION DES RECOMMANDATIONS
   useEffect(() => {
     async function fetchRecommendations() {
       console.log('HomeScreen: Début fetchRecommendations. User:', user); // Log de débogage
@@ -282,7 +282,7 @@ export default function HomeScreen() {
     }
     fetchRecommendations();
   }, [user]); // Recharger si l'objet utilisateur change
-  
+
   const handlePressOffre = (offreId: string) => {
     router.push(`/(app)/job_board/job_details?id=${offreId}`);
   };
@@ -311,11 +311,10 @@ export default function HomeScreen() {
     Alert.alert("Navigation", "Vers l'article complet...");
   };
 
-  const formatDate = (date) => {
-    const options = { year: 'numeric', month: 'short', day: 'numeric' };
+  const formatDate = (date: Date) => {
+    const options: Intl.DateTimeFormatOptions = { year: 'numeric', month: 'short', day: 'numeric' };
     return date.toLocaleDateString('fr-FR', options);
   };
-  // Rendu des cartes spécifiques pour chaque type de slider
 
   // Rendu pour les offres d'emploi (carte de slider)
   const renderJobOffer = (item: any, index: number, onPress: (id: string) => void) => (
@@ -326,15 +325,12 @@ export default function HomeScreen() {
       activeOpacity={0.8}
     >
       <LinearGradient
-        colors={['#FFFFFF', '#F8FAFC']}
+        colors={['#effcf4', '#F8FAFC']}
         style={styles.cardGradient}
       >
         <View style={styles.jobCardHeader}>
           <View style={styles.jobIconContainer}>
-            <FontAwesome5 name="business-time" size={28} color="#4fbef9" style={styles.jobIcon} />
-          </View>
-          <View style={styles.jobBadge}>
-            <Text style={styles.jobBadgeText}>VEDETTE</Text>
+            <FontAwesome5 name="briefcase" size={20} color="#16A34A" style={styles.jobIcon} />
           </View>
         </View>
 
@@ -390,7 +386,7 @@ export default function HomeScreen() {
         <Image
           source={{ uri: item.image }}
           style={[
-            styles.image, 
+            styles.image,
             { opacity: isImageLoaded ? 1 : 0 }]}
           onLoad={() => setIsImageLoaded(true)}
           onError={() => {
@@ -549,120 +545,121 @@ export default function HomeScreen() {
               style={styles.welcomeGradient}
             >
               <Text style={styles.welcomeText}>
-                Bonjour {user?.name || 'Utilisateur'} ! 👋
+                Bonjour {user?.name || 'Utilisateur'} ! 👋 
               </Text>
               <Text style={styles.welcomeSubtext}>
-                Découvrez les opportunités qui vous attendent
+                Bienvenue sur l'app Pro Recrute de <Text style={{ fontWeight: "bold" }}>GBG</Text>, Là où le talent rencontre les opportunités
               </Text>
             </LinearGradient>
           </View>
 
-          {/* Section Offres Recommandées (Nouveau) */}
-          <View style={styles.sectionContainer}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Offres Recommandées</Text>
-              <TouchableOpacity style={styles.viewAllButton} onPress={() => router.push('/(app)/job_board')}>
-                <Text style={styles.viewAllText}>Voir tout</Text>
-              </TouchableOpacity>
+            {/* Section Offres Recommandées (Nouveau) */}
+            <View style={styles.sectionContainer}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Offres Recommandées</Text>
+                <TouchableOpacity style={styles.viewAllButton} onPress={() => router.push('/(app)/job_board')}>
+                  <Text style={styles.viewAllText}>Voir tout</Text>
+                </TouchableOpacity>
+              </View>
+
+              {loadingRecommendations ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="large" color="#0f8e35" />
+                  <Text style={styles.loadingText}>Chargement des recommandations...</Text>
+                </View>
+              ) : errorRecommendations ? (
+                <View style={styles.errorContainer}>
+                  <Text style={styles.errorIcon}>⚠️</Text>
+                  <Text style={styles.errorText}>{errorRecommendations}</Text>
+                </View>
+              ) : recommendedOffres.length > 0 ? (
+                <AutoSlider
+                  data={recommendedOffres}
+                  renderItem={renderRecommendation}
+                  onPress={handlePressOffre} // Utilise la même fonction de presse que pour les offres
+                  autoScrollInterval={5000}
+                />
+              ) : (
+                <View style={styles.emptyStateContainer}>
+                  <Text style={styles.emptyStateIcon}>💡</Text>
+                  <Text style={styles.emptyStateText}>
+                    Pas de recommandations pour le moment. Téléchargez votre CV pour en obtenir !
+                  </Text>
+                </View>
+              )}
             </View>
 
-            {loadingRecommendations ? (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#0f8e35" />
-                <Text style={styles.loadingText}>Chargement des recommandations...</Text>
+              {/* Section Offres d'emploi en vedette */}
+            <View style={styles.sectionContainer}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}> Offres en Vedette</Text>
+                <TouchableOpacity style={styles.viewAllButton} onPress={() => router.push('/(app)/job_board')}>
+                  <Text style={styles.viewAllText}>Voir tout</Text>
+                </TouchableOpacity>
               </View>
-            ) : errorRecommendations ? (
-              <View style={styles.errorContainer}>
-                <Text style={styles.errorIcon}>⚠️</Text>
-                <Text style={styles.errorText}>{errorRecommendations}</Text>
+
+              {loadingJobs ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="large" color="#0f8e35" />
+                  <Text style={styles.loadingText}>Chargement des offres...</Text>
+                </View>
+              ) : errorJobs ? (
+                <View style={styles.errorContainer}>
+                  <Text style={styles.errorIcon}>⚠️</Text>
+                  <Text style={styles.errorText}>{errorJobs}</Text>
+                </View>
+              ) : jobOffers.length > 0 ? (
+                <AutoSlider
+                  data={jobOffers}
+                  renderItem={renderJobOffer}
+                  onPress={handlePressOffre}
+                  autoScrollInterval={5000}
+                />
+              ) : (
+                <View style={styles.emptyStateContainer}>
+                  <Text style={styles.emptyStateIcon}>📭</Text>
+                  <Text style={styles.emptyStateText}>
+                    Aucune offre en vedette pour le moment.
+                  </Text>
+                </View>
+              )}
+            </View>
+
+
+              {/* Section Dernières Actualités */}
+            <View style={styles.sectionContainer}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Dernières Actualités</Text>
+                <TouchableOpacity style={styles.viewAllButton} onPress={() => router.push('/(app)/actualites')}>
+                  <Text style={styles.viewAllText}>Voir tout</Text>
+                </TouchableOpacity>
               </View>
-            ) : recommendedOffres.length > 0 ? (
+
               <AutoSlider
-                data={recommendedOffres}
-                renderItem={renderRecommendation}
-                onPress={handlePressOffre} // Utilise la même fonction de presse que pour les offres
-                autoScrollInterval={5000}
+                data={newsItems}
+                renderItem={renderNews}
+                onPress={handlePressNews}
+                autoScrollInterval={6000}
               />
-            ) : (
-              <View style={styles.emptyStateContainer}>
-                <Text style={styles.emptyStateIcon}>💡</Text>
-                <Text style={styles.emptyStateText}>
-                  Pas de recommandations pour le moment. Téléchargez votre CV pour en obtenir !
-                </Text>
-              </View>
-            )}
-          </View>
-
-          {/* Section Offres d'emploi en vedette */}
-          <View style={styles.sectionContainer}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}> Offres en Vedette</Text>
-              <TouchableOpacity style={styles.viewAllButton} onPress={() => router.push('/(app)/job_board')}>
-                <Text style={styles.viewAllText}>Voir tout</Text>
-              </TouchableOpacity>
             </View>
 
-            {loadingJobs ? (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#0f8e35" />
-                <Text style={styles.loadingText}>Chargement des offres...</Text>
+              {/* Section Astuces Carrière */}
+            <View style={styles.sectionContainer}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Astuces Carrière</Text>
+                <TouchableOpacity style={styles.viewAllButton}>
+                  <Text style={styles.viewAllText}>Voir tout</Text>
+                </TouchableOpacity>
               </View>
-            ) : errorJobs ? (
-              <View style={styles.errorContainer}>
-                <Text style={styles.errorIcon}>⚠️</Text>
-                <Text style={styles.errorText}>{errorJobs}</Text>
-              </View>
-            ) : jobOffers.length > 0 ? (
+
               <AutoSlider
-                data={jobOffers}
-                renderItem={renderJobOffer}
-                onPress={handlePressOffre}
-                autoScrollInterval={5000}
+                data={tipsItems}
+                renderItem={renderTip}
+                onPress={handlePressTip}
+                autoScrollInterval={7000}
               />
-            ) : (
-              <View style={styles.emptyStateContainer}>
-                <Text style={styles.emptyStateIcon}>📭</Text>
-                <Text style={styles.emptyStateText}>
-                  Aucune offre en vedette pour le moment.
-                </Text>
-              </View>
-            )}
-          </View>
-
-          {/* Section Dernières Actualités */}
-          <View style={styles.sectionContainer}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Dernières Actualités</Text>
-              <TouchableOpacity style={styles.viewAllButton} onPress={() => router.push('/(app)/actualites')}>
-                <Text style={styles.viewAllText}>Voir tout</Text>
-              </TouchableOpacity>
+      
             </View>
-
-            <AutoSlider
-              data={newsItems}
-              renderItem={renderNews}
-              onPress={handlePressNews}
-              autoScrollInterval={6000}
-            />
-          </View>
-
-          {/* Section Astuces Carrière */}
-          <View style={styles.sectionContainer}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Astuces Carrière</Text>
-              <TouchableOpacity style={styles.viewAllButton}>
-                <Text style={styles.viewAllText}>Voir tout</Text>
-              </TouchableOpacity>
-            </View>
-
-            <AutoSlider
-              data={tipsItems}
-              renderItem={renderTip}
-              onPress={handlePressTip}
-              autoScrollInterval={7000}
-            />
-          </View>
-
           {/* Espacement pour le bas de l'écran */}
           <View style={{ height: 60 }} />
         </Animated.View>
@@ -707,7 +704,10 @@ const styles = StyleSheet.create({
 
   // Sections
   sectionContainer: {
-    marginBottom: 30,
+    marginTop: 8,
+    paddingHorizontal: 8,
+    paddingBottom: 8,
+    marginBottom: 20,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -724,12 +724,12 @@ const styles = StyleSheet.create({
   viewAllButton: {
     paddingHorizontal: 12,
     paddingVertical: 6,
-    backgroundColor: "#EBF8FF",
+    backgroundColor: "#e0e7fc",
     borderRadius: 12,
   },
   viewAllText: {
     fontSize: 14,
-    color: "#3B82F6",
+    color: "#091e60",
     fontWeight: "600",
   },
 
@@ -749,15 +749,16 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#3B82F6',
+    backgroundColor: '#091e60',
     marginHorizontal: 4,
   },
 
   // Cartes d'offres d'emploi
   jobCard: {
     width: width * 0.85,
-    height: 220,
+    height: 230,
     marginLeft: 20,
+    marginBottom: 20,
     borderRadius: 16,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 8 },
@@ -781,7 +782,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#EBF8FF',
+    backgroundColor: '#DCFCE7',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -900,6 +901,7 @@ const styles = StyleSheet.create({
     width: width * 0.9,
     height: 200,
     marginLeft: 20,
+    marginBottom: 20,
     backgroundColor: "#FFFFFF",
     borderRadius: 16,
     padding: 20,
@@ -944,8 +946,9 @@ const styles = StyleSheet.create({
   // Cartes de recommandations (Nouveau)
   recommendationCard: {
     width: width * 0.85,
-    height: 220,
+    height: 230,
     marginLeft: 20,
+    marginBottom: 20,
     borderRadius: 16,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 8 },

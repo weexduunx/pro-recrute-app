@@ -4,6 +4,32 @@ import { useAuth } from "../../components/AuthProvider";
 import { FontAwesome5 } from "@expo/vector-icons";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { View, Text, Image, StyleSheet } from 'react-native';
+import { DrawerContentScrollView, DrawerItemList } from '@react-navigation/drawer';
+
+// Composant personnalisé pour le contenu du drawer
+function CustomDrawerContent(props) {
+  return (
+    <View style={styles.drawerContainer}>
+      <DrawerContentScrollView {...props} contentContainerStyle={styles.scrollContent}>
+        <DrawerItemList {...props} />
+      </DrawerContentScrollView>
+      
+      {/* Section du logo et version en bas */}
+      <View style={styles.footerContainer}>
+        <Image
+          source={require('../../assets/images/logo-gbg-white.png')}
+          style={styles.logo}
+          resizeMode="contain"
+        />
+        <Text style={styles.gbgAdresse}>Ouest Foire Cité Khadar Lot 3 | Dakar, Sénégal</Text>
+        <Text style={styles.versionText}>copyright © {new Date().getFullYear()} Tous droits réservés | GBG SI </Text>
+        <Text style={styles.versionText}>Version 1.0.0 </Text>
+
+      </View>
+    </View>
+  );
+}
 
 export default function AppLayout() {
   const { isAuthenticated } = useAuth();
@@ -13,6 +39,7 @@ export default function AppLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <Drawer
+        drawerContent={(props) => <CustomDrawerContent {...props} />}
         screenOptions={{
           headerShown: false,
           drawerActiveTintColor: "#0f8e35",
@@ -33,12 +60,9 @@ export default function AppLayout() {
             backgroundColor: "#091e60",
           },
           drawerType: "front",
-          drawerPosition: "left", // Position du drawer à gauche
-          drawerHideStatusBarOnOpen: true, // Masquer la barre d'état lorsque le drawer est ouvert
-          drawerStatusBarAnimation: "fade", // Animation de la barre d'état lors de l'ouverture du drawer
-          drawerIconStyle: {
-            marginTop: 4,
-          },
+          drawerPosition: "left",
+          drawerHideStatusBarOnOpen: true,
+          drawerStatusBarAnimation: "fade",
         }}
       >
         <Drawer.Screen
@@ -100,3 +124,38 @@ export default function AppLayout() {
     </GestureHandlerRootView>
   );
 }
+
+const styles = StyleSheet.create({
+  drawerContainer: {
+    flex: 1,
+    backgroundColor: "#091e60",
+  },
+  scrollContent: {
+    flexGrow: 1,
+  },
+  footerContainer: {
+    alignItems: 'center',
+    paddingVertical: 20,
+    paddingHorizontal: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#1e3a8a',
+    backgroundColor: "#091e60",
+  },
+  logo: {
+    width: 100,
+    height: 100,
+    marginBottom: 8,
+  },
+  versionText: {
+    color: '#9CA3AF',
+    fontSize: 11,
+    fontWeight: '400',
+  },
+  gbgAdresse: {
+    color: '#9CA3AF',
+    fontSize: 13,
+    fontWeight: '400',
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+});

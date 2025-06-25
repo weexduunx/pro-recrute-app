@@ -13,19 +13,12 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useAuth } from "../../components/AuthProvider";
-import { FontAwesome5 } from "@expo/vector-icons"; // Pour l'icône Google
+import { FontAwesome5 } from "@expo/vector-icons";
 
-/**
- * Écran de Connexion :
- * Fournit une interface utilisateur pour la connexion des utilisateurs.
- * Utilise la fonction `login` du contexte d'authentification.
- * Inclut maintenant votre logo d'application en haut.
- */
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-   const { login, socialLogin, loading, error, clearError } = useAuth(); // Récupérer socialLogin
-
+  const { login, socialLogin, loading, error, clearError } = useAuth();
 
   useEffect(() => {
     if (error) {
@@ -36,98 +29,119 @@ export default function LoginScreen() {
   const handleLoginPress = async () => {
     if (!email || !password) {
       clearError();
-       // Vous pouvez ajouter un feedback visuel ici
       return;
     }
     await login(email, password);
   };
+
   const handleGoogleLogin = async () => {
-    await socialLogin('google'); // Appeler la connexion sociale pour Google
+    await socialLogin('google');
   };
 
   const handleLinkedInLogin = async () => {
-    await socialLogin('linkedin'); // Pour LinkedIn plus tard
+    await socialLogin('linkedin');
   };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView
         style={styles.container}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
-        <Image
-          source={require("../../assets/images/logo.png")}
-          style={styles.logo}
-          resizeMode="contain"
-        />
+        {/* Section Logo et Titre */}
+        <View style={styles.headerSection}>
+          <Image
+            source={require("../../assets/images/logo.png")}
+            style={styles.logo}
+            resizeMode="contain"
+          />
+          <Text style={styles.title}>GBG | Pro Recrute</Text>
+          <Text style={styles.subtitle}>Bienvenue</Text>
+        </View>
 
-        <Text style={styles.loginTitle}>GBG ProRecrute</Text>
-        <Text style={styles.subtitle}>Accéder à votre espace</Text>
-
-        {error && <Text style={styles.errorText}>{error}</Text>}
-
-        <TextInput
-          style={styles.input}
-          placeholder="Email"
-          placeholderTextColor="#9CA3AF"
-          value={email}
-          onChangeText={setEmail}
-          keyboardType="email-address"
-          autoCapitalize="none"
-          textContentType="emailAddress"
-          autoComplete="email"
-          editable={!loading}
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="Mot de passe"
-          placeholderTextColor="#9CA3AF"
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-          textContentType="password"
-          autoComplete="password"
-          editable={!loading}
-        />
-
-        <TouchableOpacity
-          style={[styles.loginButton, loading && styles.loginButtonDisabled]}
-          onPress={handleLoginPress}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color="#FFFFFF" />
-          ) : (
-            <Text style={styles.loginButtonText}>Se connecter</Text>
+        {/* Section Formulaire */}
+        <View style={styles.formSection}>
+          {error && (
+            <View style={styles.errorContainer}>
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
           )}
-        </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.registerButton}
-          onPress={() => router.push("/(auth)/register")}
-        >
-          <Text style={styles.registerButtonText}>
-            Vous n'avez pas de compte ? Candidater
-          </Text>
-        </TouchableOpacity>
+          <View style={styles.inputContainer}>
+            <TextInput
+              style={styles.input}
+              placeholder="Adresse email"
+              placeholderTextColor="#9CA3AF"
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              textContentType="emailAddress"
+              autoComplete="email"
+              editable={!loading}
+            />
+          </View>
 
-                {/* Boutons de connexion sociale */}
-        <View style={styles.socialLoginContainer}>
-          <Text style={styles.socialLoginDivider}>OU</Text>
+          <View style={styles.inputContainer}>
+            <TextInput
+              style={styles.input}
+              placeholder="Mot de passe"
+              placeholderTextColor="#9CA3AF"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              textContentType="password"
+              autoComplete="password"
+              editable={!loading}
+            />
+          </View>
+
           <TouchableOpacity
-            style={[styles.socialButton, styles.googleButton, loading && styles.loginButtonDisabled]}
+            style={[styles.primaryButton, loading && styles.buttonDisabled]}
+            onPress={handleLoginPress}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="#FFFFFF" size="small" />
+            ) : (
+              <Text style={styles.primaryButtonText}>Se connecter</Text>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.linkButton}
+            onPress={() => router.push("/(auth)/register")}
+          >
+            <Text style={styles.linkText}>
+              Pas encore de compte ? <Text style={styles.linkAccent}>Candidater</Text>
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Section Connexion Sociale */}
+        <View style={styles.socialSection}>
+          <View style={styles.dividerContainer}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>ou</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          <TouchableOpacity
+            style={[styles.socialButton, styles.googleButton, loading && styles.buttonDisabled]}
             onPress={handleGoogleLogin}
             disabled={loading}
           >
-            <FontAwesome5 name="google" size={20} color="#FFFFFF" style={styles.socialIcon} />
-            <Text style={styles.socialButtonText}>Continuer avec Google</Text>
+            <FontAwesome5 name="google" size={18} color="#FFFFFF" />
+            <Text style={styles.socialButtonText}>Google</Text>
           </TouchableOpacity>
+
           <TouchableOpacity
-            style={[styles.socialButton, styles.linkedinButton, loading && styles.loginButtonDisabled]}
+            style={[styles.socialButton, styles.linkedinButton, loading && styles.buttonDisabled]}
             onPress={handleLinkedInLogin}
             disabled={loading}
           >
-            <FontAwesome5 name="linkedin" size={20} color="#FFFFFF" style={styles.socialIcon} />
-            <Text style={styles.socialButtonText}>Continuer avec LinkedIn</Text>
+            <FontAwesome5 name="linkedin" size={18} color="#FFFFFF" />
+            <Text style={styles.socialButtonText}>LinkedIn</Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -138,132 +152,139 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#F3F4F6",
+    backgroundColor: "#FFFFFF",
   },
   container: {
     flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 24,
-    backgroundColor: "#F3F4F6",
-  },
-  logo: {
-    width: "60%",
-    height: 70,
-    marginBottom: 30,
-  },
-  loginTitle: {
-    fontSize: 32,
-    fontWeight: "800",
-    color: "#091e60",
-    marginBottom: 8,
-    textAlign: "center",
-  },
-  subtitle: {
-    fontSize: 18,
-    color: "#4B5563",
-    marginBottom: 32,
-    textAlign: "center",
-  },
-  errorText: {
-    color: "#EF4444",
-    fontSize: 14,
-    marginBottom: 16,
-    textAlign: "center",
-    fontWeight: "500",
-  },
-  input: {
-    width: "100%",
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderWidth: 1,
-    borderColor: "#D1D5DB",
-    borderRadius: 8,
-    marginBottom: 16,
-    fontSize: 16,
-    color: "#1F2937",
-    backgroundColor: "#FFFFFF",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  loginButton: {
-    backgroundColor: "#0f8e35", // Vert secondaire
-    paddingVertical: 14,
     paddingHorizontal: 24,
-    borderRadius: 8,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
-    width: "100%",
+    paddingVertical: 40,
+  },
+  
+  // Section Header
+  headerSection: {
     alignItems: "center",
-    marginTop: 8,
-  },
-  loginButtonDisabled: {
-    backgroundColor: "#93C5FD",
-    opacity: 0.7,
-  },
-  loginButtonText: {
-    color: "#FFFFFF",
-    fontSize: 18,
-    fontWeight: "600",
-  },
-  registerButton: {
-    marginTop: 20,
-  },
-  registerButtonText: {
-    color: "#091e60", // Bleu foncé primaire pour le lien d'inscription
-    fontSize: 16,
-    textDecorationLine: "underline",
-  },
-    socialLoginContainer: {
-    width: '100%',
-    alignItems: 'center',
-    marginTop: 30,
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
+    marginBottom: 48,
     paddingTop: 20,
   },
-  socialLoginDivider: {
-    position: 'absolute',
-    top: -15,
-    backgroundColor: '#F3F4F6',
-    paddingHorizontal: 10,
-    color: '#6B7280',
+  logo: {
+    width: 100,
+    height: 100,
+    marginBottom: 20,
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: "700",
+    color: "#091e60",
+    marginBottom: 8,
+    letterSpacing: -0.5,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: "#6B7280",
+    fontWeight: "400",
+     marginBottom: 10,
+  },
+
+  // Section Formulaire
+  formSection: {
+    flex: 1,
+    justifyContent: "center",
+  },
+  errorContainer: {
+    backgroundColor: "#FEF2F2",
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 24,
+    borderLeftWidth: 4,
+    borderLeftColor: "#EF4444",
+  },
+  errorText: {
+    color: "#DC2626",
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: "500",
+  },
+  inputContainer: {
+    marginBottom: 20,
+  },
+  input: {
+    backgroundColor: "#F9FAFB",
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    fontSize: 16,
+    color: "#1F2937",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  primaryButton: {
+    backgroundColor: "#0e8030",
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: "center",
+    marginTop: 8,
+    marginBottom: 24,
+  },
+  primaryButtonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  buttonDisabled: {
+    opacity: 0.6,
+  },
+  linkButton: {
+    alignItems: "center",
+    paddingVertical: 8,
+  },
+  linkText: {
+    fontSize: 15,
+    color: "#6B7280",
+  },
+  linkAccent: {
+    color: "#1F2937",
+    fontWeight: "600",
+  },
+
+  // Section Sociale
+  socialSection: {
+    paddingBottom: 20,
+  },
+  dividerContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: 32,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: "#E5E7EB",
+  },
+  dividerText: {
+    paddingHorizontal: 16,
+    fontSize: 14,
+    color: "#9CA3AF",
+    fontWeight: "500",
   },
   socialButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    borderRadius: 8,
-    width: '100%',
-    marginBottom: 15,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-    elevation: 2,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 12,
+    paddingVertical: 14,
+    marginBottom: 12,
+    gap: 12,
   },
   googleButton: {
-    backgroundColor: '#DB4437', // Couleur de Google
+    backgroundColor: "#1F2937",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
   },
   linkedinButton: {
-    backgroundColor: '#0A66C2', // Couleur de LinkedIn
+    backgroundColor: "#0A66C2",
   },
   socialButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 10,
-  },
-  socialIcon: {
-    marginRight: 10,
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "600",
   },
 });

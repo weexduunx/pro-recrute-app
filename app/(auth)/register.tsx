@@ -1,16 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator, Platform, Image } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context'; // <-- CHANGEMENT ICI
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator, Platform, Image, ScrollView } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { registerUser } from '../../utils/api';
 import { useAuth } from '../../components/AuthProvider';
 
-/**
- * Écran d'inscription :
- * Fournit une interface utilisateur pour l'inscription de l'utilisateur.
- * Envoie les données d'inscription à l'API Laravel et gère l'état.
- * Inclut maintenant votre logo.
- */
 export default function RegisterScreen() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -57,78 +51,110 @@ export default function RegisterScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
-        <Image
-          source={require('../../assets/images/logo.png')}
-          style={styles.logo}
-          resizeMode="contain"
-        />
-        <Text style={styles.title}>Créer votre compte</Text>
-        <Text style={styles.subtitle}>Rejoignez GBG aujourd'hui !</Text>
+      <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
+        {/* Section Header */}
+        <View style={styles.headerSection}>
+          <Image
+            source={require('../../assets/images/logo.png')}
+            style={styles.logo}
+            resizeMode="contain"
+          />
+          <Text style={styles.title}>Créer un compte</Text>
+          <Text style={styles.subtitle}>Rejoignez GBG Pro Recrute</Text>
+        </View>
 
-        {error && <Text style={styles.errorText}>{error}</Text>}
-        {success && <Text style={styles.successText}>{success}</Text>}
-
-        <TextInput
-          style={styles.input}
-          placeholder="Nom complet"
-          placeholderTextColor="#9CA3AF"
-          value={name}
-          onChangeText={setName}
-          autoCapitalize="words"
-          editable={!loading}
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="Adresse e-mail"
-          placeholderTextColor="#9CA3AF"
-          value={email}
-          onChangeText={setEmail}
-          keyboardType="email-address"
-          autoCapitalize="none"
-          textContentType="emailAddress"
-          autoComplete="email"
-          editable={!loading}
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="Mot de passe"
-          placeholderTextColor="#9CA3AF"
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-          textContentType="newPassword"
-          autoComplete="new-password"
-          editable={!loading}
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="Confirmer le mot de passe"
-          placeholderTextColor="#9CA3AF"
-          value={passwordConfirmation}
-          onChangeText={setPasswordConfirmation}
-          secureTextEntry
-          textContentType="newPassword"
-          autoComplete="new-password"
-          editable={!loading}
-        />
-
-        <TouchableOpacity
-          style={[styles.registerButton, loading && styles.buttonDisabled]}
-          onPress={handleRegister}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color="#FFFFFF" />
-          ) : (
-            <Text style={styles.registerButtonText}>S'inscrire</Text>
+        {/* Section Formulaire */}
+        <View style={styles.formSection}>
+          {error && (
+            <View style={styles.errorContainer}>
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
           )}
-        </TouchableOpacity>
 
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()} disabled={loading}>
-          <Text style={styles.backButtonText}>Retour à la connexion</Text>
-        </TouchableOpacity>
-      </View>
+          {success && (
+            <View style={styles.successContainer}>
+              <Text style={styles.successText}>{success}</Text>
+            </View>
+          )}
+
+          <View style={styles.inputContainer}>
+            <TextInput
+              style={styles.input}
+              placeholder="Nom complet"
+              placeholderTextColor="#9CA3AF"
+              value={name}
+              onChangeText={setName}
+              autoCapitalize="words"
+              editable={!loading}
+            />
+          </View>
+
+          <View style={styles.inputContainer}>
+            <TextInput
+              style={styles.input}
+              placeholder="Adresse email"
+              placeholderTextColor="#9CA3AF"
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              textContentType="emailAddress"
+              autoComplete="email"
+              editable={!loading}
+            />
+          </View>
+
+          <View style={styles.inputContainer}>
+            <TextInput
+              style={styles.input}
+              placeholder="Mot de passe"
+              placeholderTextColor="#9CA3AF"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              textContentType="newPassword"
+              autoComplete="new-password"
+              editable={!loading}
+            />
+          </View>
+
+          <View style={styles.inputContainer}>
+            <TextInput
+              style={styles.input}
+              placeholder="Confirmer le mot de passe"
+              placeholderTextColor="#9CA3AF"
+              value={passwordConfirmation}
+              onChangeText={setPasswordConfirmation}
+              secureTextEntry
+              textContentType="newPassword"
+              autoComplete="new-password"
+              editable={!loading}
+            />
+          </View>
+
+          <TouchableOpacity
+            style={[styles.primaryButton, loading && styles.buttonDisabled]}
+            onPress={handleRegister}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="#FFFFFF" size="small" />
+            ) : (
+              <Text style={styles.primaryButtonText}>Créer mon compte</Text>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.linkButton}
+            onPress={() => router.back()}
+            disabled={loading}
+          >
+            <Text style={styles.linkText}>
+              Déjà un compte ? <Text style={styles.linkAccent}>Se connecter</Text>
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -136,98 +162,107 @@ export default function RegisterScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#F3F4F6',
-    // RETIRÉ : paddingTop: Platform.OS === 'android' ? 25 : 0,
+    backgroundColor: "#FFFFFF",
   },
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-    backgroundColor: '#F3F4F6',
+  scrollContainer: {
+    flexGrow: 1,
+    paddingHorizontal: 24,
+    paddingVertical: 40,
+  },
+  
+  // Section Header
+  headerSection: {
+    alignItems: "center",
+    marginBottom: 48,
+    paddingTop: 20,
   },
   logo: {
-    width: '60%',
-    height: 70,
-    marginBottom: 30,
+    width: 100,
+    height: 100,
+    marginBottom: 20,
   },
   title: {
     fontSize: 28,
-    fontWeight: '700',
-    color: '#091e60',
-    marginBottom: 12,
-    textAlign: 'center',
+    fontWeight: "700",
+    color: "#1F2937",
+    marginBottom: 8,
+    letterSpacing: -0.5,
   },
   subtitle: {
     fontSize: 16,
-    color: '#4B5563',
-    marginBottom: 32,
-    textAlign: 'center',
+    color: "#6B7280",
+    fontWeight: "400",
+  },
+
+  // Section Formulaire
+  formSection: {
+    flex: 1,
+  },
+  errorContainer: {
+    backgroundColor: "#FEF2F2",
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 24,
+    borderLeftWidth: 4,
+    borderLeftColor: "#EF4444",
   },
   errorText: {
-    color: '#EF4444',
+    color: "#DC2626",
     fontSize: 14,
-    marginBottom: 16,
-    textAlign: 'center',
-    fontWeight: '500',
+    fontWeight: "500",
+  },
+  successContainer: {
+    backgroundColor: "#F0FDF4",
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 24,
+    borderLeftWidth: 4,
+    borderLeftColor: "#10B981",
   },
   successText: {
-    color: '#0f8e35',
+    color: "#059669",
     fontSize: 14,
-    marginBottom: 16,
-    textAlign: 'center',
-    fontWeight: '500',
+    fontWeight: "500",
+  },
+  inputContainer: {
+    marginBottom: 20,
   },
   input: {
-    width: '100%',
-    paddingVertical: 12,
+    backgroundColor: "#F9FAFB",
+    borderRadius: 12,
     paddingHorizontal: 16,
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 8,
-    marginBottom: 16,
+    paddingVertical: 16,
     fontSize: 16,
-    color: '#1F2937',
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    color: "#1F2937",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
   },
-  registerButton: {
-    backgroundColor: '#0f8e35', // Vert secondaire
-    paddingVertical: 14,
-    paddingHorizontal: 24,
-    borderRadius: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
-    width: '100%',
-    alignItems: 'center',
+  primaryButton: {
+    backgroundColor: "#0e8030",
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: "center",
     marginTop: 8,
+    marginBottom: 24,
   },
-  registerButtonText: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '600',
+  primaryButtonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "600",
   },
   buttonDisabled: {
-    opacity: 0.7,
+    opacity: 0.6,
   },
-  backButton: {
-    marginTop: 32,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    borderColor: '#091e60', // Bordure bleu foncé primaire
-    borderWidth: 1,
+  linkButton: {
+    alignItems: "center",
+    paddingVertical: 8,
   },
-  backButtonText: {
-    color: '#091e60', // Bleu foncé primaire
-    fontSize: 16,
-    fontWeight: '600',
+  linkText: {
+    fontSize: 15,
+    color: "#6B7280",
+  },
+  linkAccent: {
+    color: "#1F2937",
+    fontWeight: "600",
   },
 });
