@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Platform, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Platform, Alert, StatusBar } from 'react-native';
 import { useAuth } from '../../components/AuthProvider';
 import CustomHeader from '../../components/CustomHeader';
 
@@ -27,7 +27,9 @@ export default function ActualitesScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <>
+     <StatusBar barStyle="light-content" backgroundColor="#091e60" />
+         <SafeAreaView style={styles.safeArea}>
       {/* Remplacer l'en-tête par CustomHeader */}
       <CustomHeader
         title="Actualités"
@@ -51,6 +53,8 @@ export default function ActualitesScreen() {
         <Text style={styles.footerText}>Restez informé avec JobBoard !</Text>
       </ScrollView>
     </SafeAreaView>
+    </>
+
   );
 }
 

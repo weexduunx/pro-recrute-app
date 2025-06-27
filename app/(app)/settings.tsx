@@ -22,20 +22,22 @@ import {
 } from '@expo/vector-icons';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
-import { savePushToken } from '../../utils/api';
+import { savePushToken, sendTestPushNotification } from '../../utils/api';
 
-// Configuration pour les notifications
+
+// Configuration pour les notifications en arrière-plan (headless)
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: true,
-    shouldShowBanner: true,
-    shouldShowList: true,
   }),
 });
 
-// Interface pour les props des composants
+
+/**
+ * Interface pour les props des composants de SettingItem
+ */
 interface SettingItemProps {
   title: string;
   subtitle?: string;
@@ -49,6 +51,9 @@ interface SettingItemProps {
   showChevron?: boolean;
 }
 
+/**
+ * Interface pour les props des en-têtes de section
+ */
 interface SectionHeaderProps {
   title: string;
   icon?: string;
@@ -160,6 +165,7 @@ export default function ParametresScreen() {
   const [darkModeEnabled, setDarkModeEnabled] = useState(false);
   const [biometricEnabled, setBiometricEnabled] = useState(false);
   const [autoSyncEnabled, setAutoSyncEnabled] = useState(true);
+  const [registeringToken, setRegisteringToken] = useState(false);
 
   useEffect(() => {
     // Charger l'état initial des notifications
@@ -172,6 +178,10 @@ export default function ParametresScreen() {
     // Écouteurs pour les notifications
     const notificationListener = Notifications.addNotificationReceivedListener(notification => {
       console.log("Notification reçue:", notification);
+      Alert.alert(
+        notification.request.content.title || "Notification",
+        notification.request.content.body || "Vous avez une nouvelle notification."
+      );
     });
 
     const responseListener = Notifications.addNotificationResponseReceivedListener(response => {
@@ -185,41 +195,49 @@ export default function ParametresScreen() {
   }, []);
 
   const registerForPushNotificationsAsync = async () => {
-    if (Platform.OS === 'android') {
-      Notifications.setNotificationChannelAsync('default', {
-        name: 'default',
-        importance: Notifications.AndroidImportance.MAX,
-        vibrationPattern: [0, 250, 250, 250],
-        lightColor: '#FF231F7C',
-      });
-    }
+    setRegisteringToken(true);
+    try {
+      if (Platform.OS === 'android') {
+        Notifications.setNotificationChannelAsync('default', {
+          name: 'default',
+          importance: Notifications.AndroidImportance.MAX,
+          vibrationPattern: [0, 250, 250, 250],
+          lightColor: '#FF231F7C',
+        });
+      }
 
-    if (Device.isDevice) {
+      if (!Device.isDevice) {
+        Alert.alert('Appareil physique requis', 'Les notifications Push ne fonctionnent que sur les appareils physiques ou les émulateurs configurés pour Google Play Services !');
+        setNotificationEnabled(false);
+        return;
+      }
+
       const { status: existingStatus } = await Notifications.getPermissionsAsync();
       let finalStatus = existingStatus;
       if (existingStatus !== 'granted') {
         const { status } = await Notifications.requestPermissionsAsync();
         finalStatus = status;
       }
+
       if (finalStatus !== 'granted') {
-        Alert.alert('Permission refusée', 'Impossible d\'obtenir le push token pour la notification !');
+        Alert.alert('Permission refusée', 'Impossible d\'obtenir le push token pour la notification ! Vous pouvez l\'activer dans les paramètres de votre appareil.');
         setNotificationEnabled(false);
         return;
       }
+      
       const token = (await Notifications.getExpoPushTokenAsync()).data;
       console.log('Expo Push Token:', token);
       
-      try {
-        await savePushToken(token);
-        Alert.alert("Succès", "Notifications activées !");
-        setNotificationEnabled(true);
-      } catch (error) {
-        Alert.alert("Erreur", "Impossible d'activer les notifications sur le serveur.");
-        setNotificationEnabled(false);
-      }
-    } else {
-      Alert.alert('Appareil physique requis', 'Les notifications Push ne fonctionnent que sur les appareils physiques !');
+      await savePushToken(token); // Sauvegarde le token sur le backend
+      Alert.alert("Succès", "Notifications activées !");
+      setNotificationEnabled(true);
+
+    } catch (error: any) {
+      console.error("Erreur d'enregistrement des notifications:", error);
+      Alert.alert("Erreur", "Impossible d'activer les notifications. " + (error.message || "Veuillez réessayer."));
       setNotificationEnabled(false);
+    } finally {
+      setRegisteringToken(false);
     }
   };
 
@@ -247,17 +265,21 @@ export default function ParametresScreen() {
     );
   };
 
-  const handleMenuPress = () => {
-    Alert.alert("Menu", "Menu Paramètres pressé !");
+  const handleMenuPress = () => { Alert.alert("Menu", "Menu Paramètres pressé !"); };
+  const handleAvatarPress = () => { Alert.alert("Profil", "Avatar Paramètres pressé !"); };
+  const handleSettingPress = (settingName: string) => { Alert.alert("Paramètre", `Vous avez cliqué sur "${settingName}"`); };
+
+  // Fonction pour envoyer une notification de test (déjà présente, juste pour le contexte)
+  const handleSendTestNotification = async () => {
+    try {
+      await sendTestPushNotification();
+      Alert.alert("Test Envoyé", "Une notification de test a été envoyée. Vérifiez votre appareil !");
+    } catch (error: any) {
+      console.error("Échec de l'envoi de la notification de test:", error);
+      Alert.alert("Erreur d'envoi", error.message || "Impossible d'envoyer la notification de test. Assurez-vous que le token est enregistré.");
+    }
   };
 
-  const handleAvatarPress = () => {
-    Alert.alert("Profil", "Avatar Paramètres pressé !");
-  };
-
-  const handleSettingPress = (settingName: string) => {
-    Alert.alert("Paramètre", `Vous avez cliqué sur "${settingName}"`);
-  };
 
   return (
     <>
@@ -328,6 +350,16 @@ export default function ParametresScreen() {
               iconLibrary="Feather"
               iconColor="#EF4444"
               onPress={() => handleSettingPress("Notifications email")}
+            />
+            {/* Bouton pour envoyer une notification de test */}
+            <SettingItem
+              title="Envoyer notification test"
+              subtitle="Envoyer une notification pour tester"
+              icon="notifications"
+              iconLibrary="Ionicons"
+              iconColor="#091e60"
+              onPress={handleSendTestNotification} // Appel de la fonction de test
+              showChevron={false} // Pas de chevron pour le bouton de test
             />
           </View>
 

@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
   Alert,
   Animated,
+  StatusBar,
 } from "react-native";
 import { useAuth } from "../../components/AuthProvider";
 import CustomHeader from "../../components/CustomHeader";
@@ -517,6 +518,8 @@ export default function HomeScreen() {
   );
 
   return (
+    <>
+    <StatusBar barStyle="light-content" backgroundColor="#091e60" />
     <SafeAreaView style={styles.safeArea}>
       <CustomHeader
         title="Accueil"
@@ -664,7 +667,8 @@ export default function HomeScreen() {
           <View style={{ height: 60 }} />
         </Animated.View>
       </ScrollView>
-    </SafeAreaView>
+    </SafeAreaView></>
+
   );
 }
 

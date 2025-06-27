@@ -24,7 +24,9 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.weexduunx88.prorecrutegbg"
+      "package": "com.weexduunx88.prorecrutegbg",
+      "googleServicesFile":"./google-services.json"
+
     },
     "web": {
       "bundler": "metro",
@@ -41,8 +43,8 @@
             "image": "./assets/images/logo-gbg-white.png",
             "backgroundColor": "#000000"
           },
-          "imageWidth": 200,
-          "resizeMode": "contain",
+          "imageWidth": 100,
+          "resizeMode": "native",
           "backgroundColor": "#ffffff"
         }
       ],

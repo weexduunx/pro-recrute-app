@@ -1,11 +1,11 @@
 // utils/api.js
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as FileSystem from 'expo-file-system'; // Pour sauvegarder le fichier
-import * as Sharing from 'expo-sharing'; // Pour partager le fichier
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 
 // **IMPORTANT: Mettez à jour cette URL avec l'adresse IP et le port du  backend Laravel**
-const API_URL = 'http://192.168.1.123:8000/api';
+const API_URL = 'http://192.168.1.144:8000/api';
 
 const api = axios.create({
   baseURL: API_URL,
@@ -259,7 +259,7 @@ const arrayBufferToBase64 = (buffer) => {
 };
 
 /**
- * [MODIFIÉ] Déclenche l'exportation du CV en PDF depuis le backend Laravel.
+ * Déclenche l'exportation du CV en PDF depuis le backend Laravel.
  * Télécharge le fichier et propose de l'ouvrir/partager.
  */
 export const exportCvPdf = async () => {
@@ -272,7 +272,7 @@ export const exportCvPdf = async () => {
     });
 
     // Convertir l'ArrayBuffer reçu en chaîne Base64
-    const base64Content = arrayBufferToBase64(response.data); // <-- NOUVEAU
+    const base64Content = arrayBufferToBase64(response.data);
 
     // Récupérer le nom de fichier suggéré depuis les headers ou utiliser un nom par défaut
     const contentDisposition = response.headers['content-disposition'];
@@ -284,11 +284,12 @@ export const exportCvPdf = async () => {
       }
     }
 
-    // Chemin où sauvegarder le fichier localement
+    // Chemin du sauvegarde en local
+    // Utilisation de FileSystem.documentDirectory pour stocker le fichier dans l'application
     const localUri = FileSystem.documentDirectory + fileName;
 
     // Écrire le contenu Base64 dans un fichier local
-    await FileSystem.writeAsStringAsync(localUri, base64Content, { // <-- UTILISE base64Content
+    await FileSystem.writeAsStringAsync(localUri, base64Content, {
       encoding: FileSystem.EncodingType.Base64,
     });
 
@@ -323,18 +324,66 @@ export const exportCvPdf = async () => {
 };
 
 /**
- * [NOUVEAU] Enregistre le token de notification push de l'utilisateur sur le backend.
+ * Enregistre le token de notification push de l'utilisateur sur le backend.
  * @param {string} token - Le token Expo Push (ou autre token de notification).
  * @returns {Promise<object>} La réponse de l'API.
  */
 export const savePushToken = async (token) => {
   try {
-    // Laravel: POST /api/user/save-push-token
     const response = await api.post('/user/save-push-token', { push_token: token });
     console.log('Push token sauvegardé avec succès:', response.data);
     return response.data;
   } catch (error) {
     console.error('Échec de la sauvegarde du push token:', error.response?.data || error.message);
+    throw error;
+  }
+};
+
+/**
+ * Récupère les informations du profil Candidat de l'utilisateur.
+ */
+export const getCandidatProfile = async () => {
+  try {
+    const response = await api.get('/candidat'); // Laravel: GET /api/candidat
+    return response.data;
+  } catch (error) {
+    if (error.response?.status === 404) {
+      console.log("Profil candidat non trouvé.");
+      return null;
+    }
+    console.error("Échec de l'appel API getCandidatProfile:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+/**
+ * Crée ou met à jour le profil Candidat de l'utilisateur.
+ */
+export const createOrUpdateCandidatProfile = async (candidatData) => {
+  try {
+    const response = await api.post('/candidat/create-update', candidatData); // Laravel: POST /api/candidat/create-update
+    return response.data;
+  } catch (error) {
+    console.error("Échec de l'appel API createOrUpdateCandidatProfile:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+/**
+ * [NOUVEAU] Envoie une notification de test à l'utilisateur connecté via le backend.
+ * @returns {Promise<object>} La réponse de l'API.
+ */
+export const sendTestPushNotification = async () => {
+  try {
+    // Laravel: POST /api/user/send-test-push-notification
+    const response = await api.post('/user/send-test-push-notification', {
+      title: "Test de Notification",
+      body: "Ceci est une notification de test envoyée depuis votre application!",
+    });
+    console.log('Notification de test envoyée avec succès:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('Échec de l\'envoi de la notification de test:', error.response?.data || error.message);
     throw error;
   }
 };

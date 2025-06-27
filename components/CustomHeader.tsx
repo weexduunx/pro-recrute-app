@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, Platform, Modal, Pressable, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { FontAwesome5 } from '@expo/vector-icons';
+import { FontAwesome5,MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { useNavigation, DrawerActions } from '@react-navigation/native';
 import { router } from 'expo-router';
 import { useAuth } from '../components/AuthProvider';
@@ -96,15 +96,15 @@ export default function CustomHeader({ title, user }: CustomHeaderProps) {
             <View style={styles.dropdownContainer}>
               <TouchableOpacity style={styles.dropdownItem} onPress={handleDropdownProfile}>
                 <View style={styles.dropdownItemContent}>
-                  <AntDesign name="user" size={22} color="#091e60" />
+                  <Ionicons name="person-outline" size={22} color="#091e60" />
                   <Text style={styles.dropdownItemText}>Voir le profil</Text>
                 </View>
               </TouchableOpacity>
 
               <TouchableOpacity style={styles.dropdownItem} onPress={handleDropdownLogout}>
                 <View style={styles.dropdownItemContent}>
-                  <AntDesign name="logout" size={22} color="#091e60" />
-                  <Text style={styles.dropdownItemText}>Déconnexion</Text>
+                   <Ionicons name="log-out-outline" size={22} color="#ef4444" />
+                  <Text style={styles.dropdownItemTextDecon}>Déconnexion</Text>
                 </View>
               </TouchableOpacity>
 
@@ -189,6 +189,12 @@ const styles = StyleSheet.create({
   dropdownItemText: {
     fontSize: 16,
     color: '#091e60',
+    marginLeft: 8,
+  },
+
+    dropdownItemTextDecon: {
+    fontSize: 16,
+    color: '#ef4444',
     marginLeft: 8,
   },
 });
