@@ -31,6 +31,8 @@ Notifications.setNotificationHandler({
     shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
   }),
 });
 
@@ -175,8 +177,12 @@ export default function ParametresScreen() {
     }
     getInitialNotificationStatus();
 
+    // MODIFIÉ : Stocker les souscriptions dans des variables pour pouvoir appeler .remove()
+    let notificationListener: Notifications.Subscription;
+    let responseListener: Notifications.Subscription;
+
     // Écouteurs pour les notifications
-    const notificationListener = Notifications.addNotificationReceivedListener(notification => {
+    notificationListener = Notifications.addNotificationReceivedListener(notification => {
       console.log("Notification reçue:", notification);
       Alert.alert(
         notification.request.content.title || "Notification",
@@ -184,15 +190,17 @@ export default function ParametresScreen() {
       );
     });
 
-    const responseListener = Notifications.addNotificationResponseReceivedListener(response => {
+    responseListener = Notifications.addNotificationResponseReceivedListener(response => {
       console.log("Notification tapée:", response);
     });
 
     return () => {
-      Notifications.removeNotificationSubscription(notificationListener);
-      Notifications.removeNotificationSubscription(responseListener);
+      // MODIFIÉ : Appeler .remove() sur l'objet de souscription
+      notificationListener.remove();
+      responseListener.remove();
     };
-  }, []);
+  }, []); // Dépendances vides pour s'exécuter une fois au montage
+
 
   const registerForPushNotificationsAsync = async () => {
     setRegisteringToken(true);
@@ -269,7 +277,6 @@ export default function ParametresScreen() {
   const handleAvatarPress = () => { Alert.alert("Profil", "Avatar Paramètres pressé !"); };
   const handleSettingPress = (settingName: string) => { Alert.alert("Paramètre", `Vous avez cliqué sur "${settingName}"`); };
 
-  // Fonction pour envoyer une notification de test (déjà présente, juste pour le contexte)
   const handleSendTestNotification = async () => {
     try {
       await sendTestPushNotification();
@@ -358,8 +365,8 @@ export default function ParametresScreen() {
               icon="notifications"
               iconLibrary="Ionicons"
               iconColor="#091e60"
-              onPress={handleSendTestNotification} // Appel de la fonction de test
-              showChevron={false} // Pas de chevron pour le bouton de test
+              onPress={handleSendTestNotification}
+              showChevron={false}
             />
           </View>
 
