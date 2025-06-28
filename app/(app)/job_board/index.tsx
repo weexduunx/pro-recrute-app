@@ -135,7 +135,7 @@ export default function AuthenticatedJobBoardScreen() {
           </Text>
           <View style={styles.contractTypeContainer}>
             <Ionicons 
-              name={getContractTypeIcon(offre.typeContrat?.libelle_type_contrat)} 
+              name={getContractTypeIcon(offre.type_contrat?.libelle_type_contrat)} 
               size={14} 
               color="#0f8e35" 
             />

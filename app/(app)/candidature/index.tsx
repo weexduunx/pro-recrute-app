@@ -66,15 +66,15 @@ export default function MyApplicationsScreen() {
 
   const getStatusConfig = (etat: string) => {
     switch (etat) {
-      case 'pending': 
+      case 'En attente': 
         return { 
           color: '#F59E0B', 
           backgroundColor: '#FEF3C7', 
-          icon: 'clock-outline',
+          icon: 'time',
           text: 'En attente',
           gradient: ['#FEF3C7', '#FDE68A']
         };
-      case 'approved': 
+      case 'Acceptée': 
         return { 
           color: '#10B981', 
           backgroundColor: '#D1FAE5', 
@@ -82,7 +82,7 @@ export default function MyApplicationsScreen() {
           text: 'Acceptée',
           gradient: ['#D1FAE5', '#A7F3D0']
         };
-      case 'rejected': 
+      case 'Refusée': 
         return { 
           color: '#EF4444', 
           backgroundColor: '#FEE2E2', 
@@ -176,7 +176,7 @@ export default function MyApplicationsScreen() {
             <View style={styles.cardHeader}>
               <View style={styles.cardIconContainer}>
                 <LinearGradient
-                  colors={['#091e60', '#1e40af']}
+                  colors={['#091e60', '#091e60']}
                   style={styles.cardIcon}
                 >
                   <Ionicons name="briefcase" size={16} color="#FFFFFF" />
@@ -190,7 +190,7 @@ export default function MyApplicationsScreen() {
                 <View style={styles.companyRow}>
                   <Ionicons name="business-outline" size={12} color="#6B7280" />
                   <Text style={styles.cardSubtitle} numberOfLines={1}>
-                    {app.offre?.demande?.entreprise?.nom_entreprise || 'Entreprise non spécifiée'}
+                    {app.offre?.demande?.entreprise?.libelleE || 'Entreprise non spécifiée'}
                   </Text>
                 </View>
               </View>
@@ -267,7 +267,7 @@ export default function MyApplicationsScreen() {
         >
           <View style={styles.sectionHeader}>
             <LinearGradient
-              colors={['#091e60', '#1e40af']}
+              colors={['#091e60', '#091e60']}
               style={styles.sectionIconContainer}
             >
               <Ionicons name="briefcase" size={20} color="#FFFFFF" />
@@ -309,7 +309,7 @@ export default function MyApplicationsScreen() {
                 <Text style={styles.errorText}>{error}</Text>
                 <TouchableOpacity style={styles.retryButton} onPress={loadApplications}>
                   <LinearGradient
-                    colors={['#091e60', '#1e40af']}
+                    colors={['#091e60', '#091e60']}
                     style={styles.retryButtonGradient}
                   >
                     <Ionicons name="refresh" size={16} color="#FFFFFF" />
@@ -338,7 +338,7 @@ export default function MyApplicationsScreen() {
                 </Text>
                 <TouchableOpacity 
                   style={styles.callToActionButton} 
-                  onPress={() => router.push('/(app)/tabs/job_board')}
+                  onPress={() => router.push('/(app)/job_board')}
                 >
                   <LinearGradient
                     colors={['#0f8e35', '#059669']}

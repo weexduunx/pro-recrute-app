@@ -48,21 +48,21 @@ export default function ApplicationDetailsScreen() {
 
   const getStatusConfig = (etat: string) => {
     switch (etat) {
-      case 'pending': 
+      case 'En attente': 
         return { 
           color: '#F59E0B', 
           text: 'En attente', 
           icon: 'time-outline',
           bgColor: '#FEF3C7'
         };
-      case 'approved': 
+      case 'Acceptée': 
         return { 
           color: '#0f8e35', 
           text: 'Acceptée', 
           icon: 'checkmark-circle-outline',
           bgColor: '#D1FAE5'
         };
-      case 'rejected': 
+      case 'Refusée': 
         return { 
           color: '#EF4444', 
           text: 'Refusée', 
@@ -207,7 +207,7 @@ export default function ApplicationDetailsScreen() {
               </View>
               
               <Text style={styles.jobTitle}>{offre.poste?.titre_poste || 'Poste non spécifié'}</Text>
-              <Text style={styles.companyName}>{offre.demande?.entreprise?.nom_entreprise || 'Entreprise non spécifiée'}</Text>
+              <Text style={styles.companyName}>{offre.demande?.entreprise?.libelleE || 'Entreprise non spécifiée'}</Text>
               
               <View style={styles.detailsGrid}>
                 {offre.lieux && (
