@@ -94,6 +94,15 @@ export default function AppLayout() {
           }}
         />
         <Drawer.Screen
+          name="candidature"
+          options={{
+            drawerLabel: "Mes Candidatures",
+            drawerIcon: ({ color }) => (
+              <FontAwesome name="file-text" size={22} color={color} />
+            ),
+          }}
+        />
+        <Drawer.Screen
           name="actualites"
           options={{
             drawerLabel: "Actualités",

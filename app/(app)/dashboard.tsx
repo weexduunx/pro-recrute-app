@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, Platform, ScrollView, ActivityIndicator, Alert,StatusBar } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, Platform, ScrollView, ActivityIndicator, Alert, StatusBar, RefreshControl } from 'react-native';
 import { useAuth } from '../../components/AuthProvider';
 import { FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
@@ -11,6 +11,7 @@ import CustomHeader from '../../components/CustomHeader';
  * Écran du Tableau de bord de l'utilisateur :
  * Interface minimaliste et intuitive avec une UX améliorée.
  * Conserve la palette de couleurs et la structure fonctionnelle.
+ * Ajout du pull-to-refresh pour actualiser les données.
  */
 export default function DashboardScreen() {
   const { user, logout, loading: authLoading } = useAuth();
@@ -29,6 +30,7 @@ export default function DashboardScreen() {
   const [loadingApplications, setLoadingApplications] = useState(true);
   const [recommendedOffres, setRecommendedOffres] = useState<any[]>([]);
   const [loadingRecommendations, setLoadingRecommendations] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   const loadApplications = useCallback(async () => {
     if (user) {
@@ -63,6 +65,22 @@ export default function DashboardScreen() {
       setLoadingRecommendations(false);
     }
   }, [user]);
+
+  // Fonction pour rafraîchir toutes les données
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      // Charger les données en parallèle pour plus d'efficacité
+      await Promise.all([
+        loadApplications(),
+        loadRecommendations()
+      ]);
+    } catch (error) {
+      console.error("Erreur lors du rafraîchissement:", error);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [loadApplications, loadRecommendations]);
 
   useEffect(() => {
     loadApplications();
@@ -110,6 +128,16 @@ export default function DashboardScreen() {
       <ScrollView 
         contentContainerStyle={styles.scrollContainer}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={['#0f8e35']} // Android
+            tintColor="#0f8e35" // iOS
+            title="Actualisation..." // iOS
+            titleColor="#6B7280" // iOS
+          />
+        }
       >
         {/* Hero Section - Bienvenue */}
         <View style={styles.heroSection}>
@@ -226,7 +254,7 @@ export default function DashboardScreen() {
             <View style={styles.emptyState}>
               <FontAwesome5 name="lightbulb" size={24} color="#9CA3AF" />
               <Text style={styles.emptyStateTitle}>Aucune recommandation</Text>
-              <Text style={styles.emptyStateText}>Téléchargez votre CV pour obtenir des recommandations personnalisées</Text>
+              <Text style={styles.emptyStateText}>Remplissez votre profil personnel et professionnel pour recevoir des recommandations personnalisées</Text>
             </View>
           )}
         </View>

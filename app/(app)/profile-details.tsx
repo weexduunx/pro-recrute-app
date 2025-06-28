@@ -379,10 +379,10 @@ export default function ProfileDetailsScreen() {
           }}
         >
           <View style={[styles.tabIconContainer, activeTab === 'cv' && styles.activeTabIconContainer]}>
-            <Ionicons name="document-text" size={24} color={activeTab === 'cv' ? '#0f8e35' : '#64748b'} />
+            <FontAwesome5 name="briefcase" size={24} color={activeTab === 'cv' ? '#0f8e35' : '#64748b'} />
           </View>
           <Text style={[styles.tabText, activeTab === 'cv' && styles.activeTabText]}>
-            Candidat
+            Professionnel
           </Text>
         </TouchableOpacity>
       </View>

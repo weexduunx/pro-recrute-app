@@ -275,8 +275,7 @@ export default function HomeScreen() {
         setRecommendedOffres(fetchedRecommendations.slice(0, 5));
         console.log('HomeScreen: Recommandations récupérées:', fetchedRecommendations.length); // Log de débogage
       } catch (err: any) {
-        console.error("HomeScreen: Erreur de chargement des recommandations:", err);
-        setErrorRecommendations("Impossible de charger les recommandations.");
+        setErrorRecommendations("Remplissez votre profil pour recevoir des recommandations personnalisées.");
       } finally {
         setLoadingRecommendations(false);
       }

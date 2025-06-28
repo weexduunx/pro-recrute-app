@@ -28,7 +28,6 @@ import { savePushToken, sendTestPushNotification } from '../../utils/api';
 // Configuration pour les notifications en arrière-plan (headless)
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
-    shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: true,
     shouldShowBanner: true,
