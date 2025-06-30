@@ -5,6 +5,7 @@ import CustomHeader from '../../../components/CustomHeader';
 import { getActualites } from '../../../utils/api';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { decode } from 'html-entities';
 
 // Définition de type pour une actualité (doit correspondre à votre backend)
 interface ActualiteItem {
@@ -128,7 +129,7 @@ export default function ActualitesScreen() {
                   activeOpacity={0.8}
                 >
                   <Image 
-                    source={{ uri: item.fr_image || item.en_image || 'https://placehold.co/400x200/D1D5DB/FFFFFF?text=Actualité' }}
+                    source={{ uri: 'https://globalbusiness-gbg.com/storage/images-actualite/' + item.fr_image }}
                     style={styles.newsImage}
                     resizeMode="cover"
                     onError={(e) => console.log('Error loading news list image:', e.nativeEvent.error)}
@@ -137,9 +138,12 @@ export default function ActualitesScreen() {
                     <Text style={styles.newsCardTitle} numberOfLines={2}>
                       {item.fr_titre_mag || item.en_titre_mag || 'Titre actualité'}
                     </Text>
-                    <Text style={styles.newsCardSubtitle} numberOfLines={3}>
+                    {/* <Text style={styles.newsCardSubtitle} numberOfLines={3}>
                       {item.apercu || item.fr_description || 'Contenu actualité...'}
-                    </Text>
+                    </Text> */}
+                     <Text style={styles.newsCardSubtitle} numberOfLines={3}> 
+                        {decode((item.apercu || item.fr_description).replace(/<[^>]+>/g, '') )|| 'Description non disponible.'}
+                      </Text>
                     {/* NOUVEAU : Affichage de la catégorie */}
                     {item.categorieMag?.fr_libelle && (
                       <View style={styles.newsCategoryContainer}>

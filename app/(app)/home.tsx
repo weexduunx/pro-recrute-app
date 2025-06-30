@@ -433,9 +433,9 @@ export default function HomeScreen() {
 
       <View style={styles.content}>
         <Text style={styles.headline} numberOfLines={2}>{item.fr_titre_mag || item.en_titre_mag || 'Titre actualité'}</Text>
-<Text style={styles.description} numberOfLines={3}>
-  {decode((item.apercu || item.fr_description || 'Contenu actualité...').replace(/<[^>]+>/g, ''))}
-</Text>
+        <Text style={styles.description} numberOfLines={3}>
+          {decode((item.apercu || item.fr_description || 'Contenu actualité...').replace(/<[^>]+>/g, ''))}
+        </Text>
         <View style={styles.footer}>
           {/* Colonne gauche */}
           <View style={styles.footerLeft}>
