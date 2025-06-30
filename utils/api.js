@@ -388,4 +388,46 @@ export const sendTestPushNotification = async () => {
   }
 };
 
+/**
+ * Récupère toutes les actualités depuis le backend, avec des options de filtrage.
+ * @param {object} [filters] - Un objet contenant les filtres (ex: { type: 'Conseil RH', category: 'RH' }).
+ * @returns {Promise<Array>} Un tableau d'objets actualités.
+ */
+export const getActualites = async (filters = {}) => {
+  try {
+    const params = new URLSearchParams();
+    if (filters.type) {
+      params.append('type', filters.type);
+    }
+    if (filters.category) {
+      params.append('category', filters.category);
+    }
+
+    const queryString = params.toString();
+    const url = `/actualites${queryString ? `?${queryString}` : ''}`;
+    
+    const response = await api.get(url); // Laravel: GET /api/actualites?type=...&category=...
+    return response.data;
+  } catch (error) {
+    console.error("Échec de l'appel API getActualites:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+/**
+ * Récupère une actualité spécifique par son ID depuis le backend.
+ * @param {string} actualiteId - L'ID de l'actualité à récupérer.
+ * @returns {Promise<object>} L'objet actualité.
+ */
+export const getActualiteById = async (actualiteId) => {
+  try {
+    const response = await api.get(`/actualites/${actualiteId}`); // Laravel: GET /api/actualites/{id}
+    return response.data;
+  } catch (error) {
+    console.error(`Échec de l'appel API getActualiteById pour l'ID ${actualiteId}:`, error.response?.data || error.message);
+    throw error;
+  }
+};
+
+
 export default api;

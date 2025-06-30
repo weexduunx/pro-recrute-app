@@ -91,6 +91,10 @@ export default function DashboardScreen() {
     router.push(`/(app)/job_board/job_details?id=${offreId}`);
   };
 
+  const handleApplicationPress = (applicationId: string) => {
+    router.push(`/candidature/application_details?id=${applicationId}`);
+  };  
+
   const handleMenuPress = () => { /* ... */ };
   const handleAvatarPress = () => { /* ... */ };
 
@@ -169,7 +173,7 @@ export default function DashboardScreen() {
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Mes candidatures</Text>
             {applications.length > 0 && (
-              <TouchableOpacity style={styles.viewAllLink}>
+              <TouchableOpacity style={styles.viewAllLink} onPress={() => router.push('/(app)/candidature')}>
                 <Text style={styles.viewAllText}>Voir tout</Text>
                 <FontAwesome5 name="arrow-right" size={12} color="#0f8e35" style={{ marginLeft: 4 }} />
               </TouchableOpacity>
@@ -182,9 +186,9 @@ export default function DashboardScreen() {
               <Text style={styles.loadingText}>Chargement...</Text>
             </View>
           ) : applications.length > 0 ? (
-            <View style={styles.listContainer}>
+            <View style={styles.listContainer} >
               {applications.slice(0, 3).map(app => (
-                <View key={app.id} style={styles.listItem}>
+                <TouchableOpacity key={app.id} style={styles.listItem} onPress={() => handleApplicationPress(app.id)} activeOpacity={0.7}>
                   <View style={styles.listItemContent}>
                     <Text style={styles.listItemTitle} numberOfLines={1}>
                       {app.offre?.poste?.titre_poste || 'Titre de l\'offre inconnu'}
@@ -197,7 +201,7 @@ export default function DashboardScreen() {
                     </View>
                   </View>
                   <FontAwesome5 name="chevron-right" size={12} color="#9CA3AF" />
-                </View>
+                </TouchableOpacity>
               ))}
             </View>
           ) : (

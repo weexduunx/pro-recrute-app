@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, Platform, Modal, Pressable, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { FontAwesome5,MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
+import { FontAwesome5, MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { useNavigation, DrawerActions } from '@react-navigation/native';
 import { router } from 'expo-router';
 import { useAuth } from '../components/AuthProvider';
@@ -17,6 +17,8 @@ import UserAvatar from 'react-native-user-avatar';
 export interface CustomHeaderProps {
   title: string;
   user: any | null; // L'utilisateur connecté, peut être null si non connecté
+  onAvatarPress?: () => void;
+  onMenuPress?: () => void;
 }
 
 
@@ -80,7 +82,7 @@ export default function CustomHeader({ title, user }: CustomHeaderProps) {
             style={{ borderWidth: 2, borderColor: '#FFFFFF' }}
             textColor="#FFFFFF"
             borderRadius={30}
-            
+
 
           />
         </TouchableOpacity>
@@ -103,7 +105,7 @@ export default function CustomHeader({ title, user }: CustomHeaderProps) {
 
               <TouchableOpacity style={styles.dropdownItem} onPress={handleDropdownLogout}>
                 <View style={styles.dropdownItemContent}>
-                   <Ionicons name="log-out-outline" size={22} color="#ef4444" />
+                  <Ionicons name="log-out-outline" size={22} color="#ef4444" />
                   <Text style={styles.dropdownItemTextDecon}>Déconnexion</Text>
                 </View>
               </TouchableOpacity>
@@ -147,13 +149,13 @@ const styles = StyleSheet.create({
   },
   avatarButton: {
     padding: 5,
-    width: 50, 
-    height: 50, 
+    width: 50,
+    height: 50,
     borderRadius: 25,
     borderWidth: 2,
-    borderColor: '#FFFFFF', 
-    justifyContent: 'center', 
-    alignItems: 'center', 
+    borderColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 
   modalOverlay: {
@@ -192,7 +194,7 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
 
-    dropdownItemTextDecon: {
+  dropdownItemTextDecon: {
     fontSize: 16,
     color: '#ef4444',
     marginLeft: 8,

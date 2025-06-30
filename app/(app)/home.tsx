@@ -16,7 +16,7 @@ import {
 } from "react-native";
 import { useAuth } from "../../components/AuthProvider";
 import CustomHeader from "../../components/CustomHeader";
-import { getOffres, getRecommendedOffres } from "../../utils/api";
+import { getOffres, getRecommendedOffres, getActualites } from "../../utils/api";
 import { router } from "expo-router";
 import { LinearGradient } from 'expo-linear-gradient';
 import EvilIcons from '@expo/vector-icons/EvilIcons';
@@ -24,6 +24,7 @@ import { FontAwesome5 } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { format } from "date-fns";
 import { Feather } from '@expo/vector-icons';
+import { decode } from 'html-entities';
 
 const { width } = Dimensions.get("window");
 
@@ -125,6 +126,7 @@ const AutoSlider = <T extends { id?: string | number }>({
   );
 };
 
+
 /**
  * Écran d'accueil principal amélioré
  */
@@ -133,6 +135,9 @@ export default function HomeScreen() {
   const [jobOffers, setJobOffers] = useState([]);
   const [loadingJobs, setLoadingJobs] = useState(true);
   const [errorJobs, setErrorJobs] = useState<string | null>(null);
+  const [newsData, setNewsData] = useState<any[]>([]); // NOUVEAU: Pour les actualités réelles
+  const [loadingNews, setLoadingNews] = useState(true); // NOUVEAU: État de chargement des actualités
+  const [errorNews, setErrorNews] = useState<string | null>(null); // NOUVEAU: Erreur de chargement des actualités
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
 
@@ -157,57 +162,57 @@ export default function HomeScreen() {
     ]).start();
   }, []);
 
-  //  LOGIQUE DE RÉCUPÉRATION DES ACTUALITÉS
-  const newsItems = [
-    {
-      id: "news1",
-      title: "Découvrez notre suivi de candidatures",
-      content: "Notre nouvelle fonctionnalité simplifie le processus pour vous.",
-      image: "https://picsum.photos/id/0/400/600",
-      gradient: ['#0f8e35', '#50b45d'],
-      icon: "search-plus",
-      readTime: "5 min read",
-      author: "Idrissa Ndiouck",
-      category: "RH",
-      publishDate: new Date(),
-    },
-    {
-      id: "news2",
-      title: "Atelier CV: Maximisez vos chances!",
-      content: "Participez à notre webinaire gratuit pour un CV percutant.",
-      image: "https://picsum.photos/id/2/400/600",
-      gradient: ['#091e60', '#3B82F6'],
-      icon: "file-contract",
-      readTime: "2 min read",
-      author: "Idrissa Ndiouck",
-      category: "Coaching",
-      publishDate: new Date(),
-    },
-    {
-      id: "news3",
-      title: "Les emplois les plus recherchés en 2025",
-      content: "Explorez les tendances du marché du travail et préparez l'avenir.",
-      image: "https://picsum.photos/id/3/400/600",
-      gradient: ['#bf2f2f', '#f07e7e'],
-      icon: "chart-line",
-      readTime: "6 min read",
-      author: "Idrissa Ndiouck",
-      category: "Emplois",
-      publishDate: new Date(),
-    },
-    {
-      id: "news4",
-      title: "Conseils pour réussir votre entretien",
-      content: "Apprenez les techniques pour laisser une impression durable.",
-      image: "https://picsum.photos/id/4/400/600",
-      gradient: ['#10B981', '#34D399'],
-      icon: "business-time",
-      readTime: "10 min read",
-      author: "Idrissa Ndiouck",
-      category: "Management",
-      publishDate: new Date(),
-    },
-  ];
+  // //  LOGIQUE DE RÉCUPÉRATION DES ACTUALITÉS
+  // const newsItems = [
+  //   {
+  //     id: "news1",
+  //     title: "Découvrez notre suivi de candidatures",
+  //     content: "Notre nouvelle fonctionnalité simplifie le processus pour vous.",
+  //     image: "https://picsum.photos/id/0/400/600",
+  //     gradient: ['#0f8e35', '#50b45d'],
+  //     icon: "search-plus",
+  //     readTime: "5 min read",
+  //     author: "Idrissa Ndiouck",
+  //     category: "RH",
+  //     publishDate: new Date(),
+  //   },
+  //   {
+  //     id: "news2",
+  //     title: "Atelier CV: Maximisez vos chances!",
+  //     content: "Participez à notre webinaire gratuit pour un CV percutant.",
+  //     image: "https://picsum.photos/id/2/400/600",
+  //     gradient: ['#091e60', '#3B82F6'],
+  //     icon: "file-contract",
+  //     readTime: "2 min read",
+  //     author: "Idrissa Ndiouck",
+  //     category: "Coaching",
+  //     publishDate: new Date(),
+  //   },
+  //   {
+  //     id: "news3",
+  //     title: "Les emplois les plus recherchés en 2025",
+  //     content: "Explorez les tendances du marché du travail et préparez l'avenir.",
+  //     image: "https://picsum.photos/id/3/400/600",
+  //     gradient: ['#bf2f2f', '#f07e7e'],
+  //     icon: "chart-line",
+  //     readTime: "6 min read",
+  //     author: "Idrissa Ndiouck",
+  //     category: "Emplois",
+  //     publishDate: new Date(),
+  //   },
+  //   {
+  //     id: "news4",
+  //     title: "Conseils pour réussir votre entretien",
+  //     content: "Apprenez les techniques pour laisser une impression durable.",
+  //     image: "https://picsum.photos/id/4/400/600",
+  //     gradient: ['#10B981', '#34D399'],
+  //     icon: "business-time",
+  //     readTime: "10 min read",
+  //     author: "Idrissa Ndiouck",
+  //     category: "Management",
+  //     publishDate: new Date(),
+  //   },
+  // ];
 
   // LOGIQUE D'ASTUCES POUR LA RECHERCHE D'EMPLOI
   const tipsItems = [
@@ -258,6 +263,25 @@ export default function HomeScreen() {
     fetchOffersForSlider();
   }, []); 
 
+  // MODIFIÉ : LOGIQUE DE RÉCUPÉRATION DES ACTUALITÉS (filtrées)
+  useEffect(() => {
+    async function fetchNewsForSlider() {
+      console.log('HomeScreen: Début fetchNewsForSlider'); // LOG
+      try {
+        setLoadingNews(true);
+        const fetchedNews = await getActualites({ type: 'Conseil RH' }); 
+        setNewsData(fetchedNews.slice(0, 4));
+        console.log('HomeScreen: Actualités récupérées (NewsData):', fetchedNews); // LOG LES DONNÉES COMPLÈTES ICI
+      } catch (err: any) {
+        console.error("HomeScreen: Échec de la récupération des actualités pour le slider:", err);
+        setErrorNews("Impossible de charger les actualités.");
+      } finally {
+        setLoadingNews(false);
+      }
+    }
+    fetchNewsForSlider();
+  }, []);
+
   // LOGIQUE DE RÉCUPÉRATION DES RECOMMANDATIONS
   useEffect(() => {
     async function fetchRecommendations() {
@@ -287,9 +311,11 @@ export default function HomeScreen() {
     router.push(`/(app)/job_board/job_details?id=${offreId}`);
   };
 
+  // Navigation vers la page de liste des actualités
   const handlePressNews = (newsId: string) => {
-    Alert.alert("Actualité", `Détails de l'actualité ${newsId}`);
+    router.push(`/(app)/actualites/actualites_details?id=${newsId}`); 
   };
+  
 
   const handlePressTip = (tipId: string) => {
     Alert.alert("Astuce", `Détails de l'astuce ${tipId}`);
@@ -307,9 +333,9 @@ export default function HomeScreen() {
     Alert.alert("Partage", "Fonction de partage déclenchée");
   };
 
-  const handleCardClick = () => {
-    Alert.alert("Navigation", "Vers l'article complet...");
-  };
+  // const handleCardClick = () => {
+  //   Alert.alert("Navigation", "Vers l'article complet...");
+  // };
 
   const formatDate = (date: Date) => {
     const options: Intl.DateTimeFormatOptions = { year: 'numeric', month: 'short', day: 'numeric' };
@@ -366,14 +392,14 @@ export default function HomeScreen() {
     </TouchableOpacity>
   );
 
-  // Rendu pour les actualités (carte de slider)
+  // Rendu pour les actualités (utilisant les données réelles de l'API)
   const renderNews = (item: any, index: number, onPress: (id: string) => void) => (
     <TouchableOpacity
       key={item.id?.toString() || index.toString()}
       style={styles.card}
       onPress={() => {
         onPress(item.id);
-        handleCardClick();
+
       }}
       activeOpacity={0.9}
     >
@@ -384,7 +410,7 @@ export default function HomeScreen() {
           </View>
         )}
         <Image
-          source={{ uri: item.image }}
+           source={{ uri:   'https://globalbusiness-gbg.com/storage/images-actualite/' + item.fr_image }}
           style={[
             styles.image,
             { opacity: isImageLoaded ? 1 : 0 }]}
@@ -398,26 +424,29 @@ export default function HomeScreen() {
           cachePolicy="memory"
           transition={1000}
         />
+        {item.type_mag?.fr_libelle && (
         <View style={styles.categoryTag}>
-          <Text style={styles.categoryText}>{item.category}</Text>
+          <Text style={styles.categoryText}>{item.type_mag.fr_libelle}</Text>
         </View>
+        )}
       </View>
 
       <View style={styles.content}>
-        <Text style={styles.headline} numberOfLines={2}> {item.title}</Text>
-        <Text style={styles.description} numberOfLines={3}> {item.content}</Text>
-
+        <Text style={styles.headline} numberOfLines={2}>{item.fr_titre_mag || item.en_titre_mag || 'Titre actualité'}</Text>
+<Text style={styles.description} numberOfLines={3}>
+  {decode((item.apercu || item.fr_description || 'Contenu actualité...').replace(/<[^>]+>/g, ''))}
+</Text>
         <View style={styles.footer}>
           {/* Colonne gauche */}
           <View style={styles.footerLeft}>
             <View style={styles.meta}>
-              <Text style={styles.author}>{item.author}</Text>
+              <Text style={styles.author}>GBG</Text>
               <Text style={styles.dot}>·</Text>
-              <Text>{formatDate(new Date(item.publishDate))}</Text>
+              <Text>{formatDate(new Date(item.created_at))}</Text>
             </View>
             <View style={styles.readTime}>
               <Feather name="clock" size={14} style={{ marginRight: 4 }} />
-              <Text>{item.readTime}</Text>
+              <Text>5mn</Text>
             </View>
           </View>
 
@@ -442,6 +471,7 @@ export default function HomeScreen() {
     </TouchableOpacity>
   );
 
+  
   // Rendu pour les astuces (carte de slider)
   const renderTip = (item: any, index: number, onPress: (id: string) => void) => (
     <TouchableOpacity
@@ -629,7 +659,7 @@ export default function HomeScreen() {
 
 
               {/* Section Dernières Actualités */}
-            <View style={styles.sectionContainer}>
+            {/* <View style={styles.sectionContainer}>
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>Dernières Actualités</Text>
                 <TouchableOpacity style={styles.viewAllButton} onPress={() => router.push('/(app)/actualites')}>
@@ -643,7 +673,43 @@ export default function HomeScreen() {
                 onPress={handlePressNews}
                 autoScrollInterval={6000}
               />
+            </View> */}
+
+          {/* Section Dernières Actualités */}
+          <View style={styles.sectionContainer}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Dernières Actualités</Text>
+              <TouchableOpacity style={styles.viewAllButton} onPress={() => router.push('/(app)/actualites')}>
+                <Text style={styles.viewAllText}>Voir tout</Text>
+              </TouchableOpacity>
             </View>
+            
+            {loadingNews ? ( // NOUVEAU: Ajout de l'état de chargement pour les actualités
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#0f8e35" />
+                <Text style={styles.loadingText}>Chargement des actualités...</Text>
+              </View>
+            ) : errorNews ? ( // NOUVEAU: Ajout de l'état d'erreur pour les actualités
+              <View style={styles.errorContainer}>
+                <Text style={styles.errorIcon}>⚠️</Text>
+                <Text style={styles.errorText}>{errorNews}</Text>
+              </View>
+            ) : newsData.length > 0 ? ( // NOUVEAU: Utilisation de newsData
+              <AutoSlider
+                data={newsData}
+                renderItem={renderNews}
+                onPress={handlePressNews}
+                autoScrollInterval={6000}
+              />
+            ) : (
+              <View style={styles.emptyStateContainer}>
+                <Text style={styles.emptyStateIcon}>📰</Text>
+                <Text style={styles.emptyStateText}>
+                  Aucune actualité disponible pour le moment.
+                </Text>
+              </View>
+            )}
+          </View>
 
               {/* Section Astuces Carrière */}
             <View style={styles.sectionContainer}>
@@ -899,6 +965,43 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
+    // Cartes d'actualités
+  // newsCard: {
+  //   width: width * 0.9,
+  //   height: 200,
+  //   marginLeft: 20,
+  //   borderRadius: 16,
+  //   shadowColor: "#000",
+  //   shadowOffset: { width: 0, height: 8 },
+  //   shadowOpacity: 0.15,
+  //   shadowRadius: 12,
+  //   elevation: 8,
+  //   overflow: 'hidden', // IMPORTANT pour que l'image ne dépasse pas les bords arrondis
+  // },
+  newsImage: {
+    width: '100%',
+    height: '60%', // Image prend 60% de la hauteur de la carte
+  },
+  newsContentOverlay: { // NOUVEAU: Overlay pour le texte
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0,0,0,0.6)', // Fond semi-transparent pour le texte
+    padding: 10,
+    borderBottomLeftRadius: 16, // Coins arrondis pour l'overlay
+    borderBottomRightRadius: 16,
+  },
+  // newsTitle: {
+  //   fontSize: 16,
+  //   fontWeight: "bold",
+  //   color: "#FFFFFF",
+  //   marginBottom: 4,
+  // },
+  // newsDescription: {
+  //   fontSize: 12,
+  //   color: "#E0E0E0",
+  // },
   // Cartes d'astuces
   tipCard: {
     width: width * 0.9,
@@ -1099,13 +1202,13 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: 10,
     left: 10,
-    backgroundColor: "#2563eb",
+    backgroundColor: "#dbffe5",
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
   },
   categoryText: {
-    color: "#fff",
+    color: "#1c6003",
     fontSize: 12,
     fontWeight: "600",
   },
