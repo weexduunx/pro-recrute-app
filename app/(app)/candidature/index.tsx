@@ -179,7 +179,7 @@ export default function MyApplicationsScreen() {
               <Text style={styles.positionText}>#{index + 1}</Text>
             </View>
           </View>
-          <TouchableOpacity style={styles.detailsButton}>
+          <TouchableOpacity style={styles.detailsButton} onPress={() => handleApplicationPress(app.id)}>
             <Text style={styles.detailsButtonText}>Voir détails</Text>
             <Ionicons name="chevron-forward" size={16} color="#0f8e35" />
           </TouchableOpacity>
@@ -233,7 +233,7 @@ export default function MyApplicationsScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-
+    <StatusBar barStyle="light-content" backgroundColor="#091e60" />
       <CustomHeader
         title="Candidatures"
         user={user}

@@ -6,6 +6,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { getUserApplications, getRecommendedOffres } from '../../utils/api'; 
 import { router } from 'expo-router';
 import CustomHeader from '../../components/CustomHeader';
+import { useTheme } from '../../components/ThemeContext'; 
 
 /**
  * Écran du Tableau de bord de l'utilisateur :
@@ -15,6 +16,7 @@ import CustomHeader from '../../components/CustomHeader';
  */
 export default function DashboardScreen() {
   const { user, logout, loading: authLoading } = useAuth();
+   const { isDarkMode, toggleDarkMode, colors } = useTheme();
   type Application = {
     id: string;
     etat: string;
@@ -121,7 +123,7 @@ export default function DashboardScreen() {
   return (
     <>
      <StatusBar barStyle="light-content" backgroundColor="#091e60" />
-      <SafeAreaView style={styles.safeArea}>
+      <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
       <CustomHeader
         title="Tableau de bord"
         user={user}
@@ -130,7 +132,7 @@ export default function DashboardScreen() {
       />
 
       <ScrollView 
-        contentContainerStyle={styles.scrollContainer}
+        contentContainerStyle={[styles.scrollContainer, { backgroundColor: colors.background }]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -216,9 +218,9 @@ export default function DashboardScreen() {
         {/* Section Offres Recommandées */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Recommandées pour vous</Text>
+            <Text style={styles.sectionTitle}>Offres Recommandées</Text>
             {recommendedOffres.length > 0 && (
-              <TouchableOpacity style={styles.viewAllLink}>
+              <TouchableOpacity style={styles.viewAllLink} onPress={() => router.push('/(app)/job_board')}>
                 <Text style={styles.viewAllText}>Voir tout</Text>
                 <FontAwesome5 name="arrow-right" size={12} color="#0f8e35" style={{ marginLeft: 4 }} />
               </TouchableOpacity>
@@ -330,7 +332,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   statLabel: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#6B7280',
     fontWeight: '500',
   },

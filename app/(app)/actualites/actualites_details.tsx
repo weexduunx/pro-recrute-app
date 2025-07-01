@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Image, Platform } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Image, Platform, StatusBar } from 'react-native';
 import { useAuth } from '../../../components/AuthProvider';
 import CustomHeader from '../../../components/CustomHeader';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -70,6 +70,7 @@ export default function ActualiteDetailsScreen() {
   if (loading) {
     return (
       <SafeAreaView style={styles.safeArea}>
+        <StatusBar barStyle="light-content" backgroundColor="#091e60" />
         <CustomHeader title="Détails Actualité" user={user} onMenuPress={handleMenuPress} onAvatarPress={handleAvatarPress} />
         <View style={styles.centerContainer}>
           <View style={styles.loadingCard}>

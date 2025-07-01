@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView, ActivityIndicator, Alert, RefreshControl, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView, ActivityIndicator, Alert, RefreshControl, Dimensions, StatusBar } from 'react-native';
 import { useAuth } from '../../../components/AuthProvider';
 import CustomHeader from '../../../components/CustomHeader';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -204,6 +204,7 @@ export default function ApplicationDetailsScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      <StatusBar barStyle="light-content" backgroundColor="#091e60" />
       <CustomHeader 
         title="Etat de la Candidature" 
         user={user} 
@@ -253,20 +254,6 @@ export default function ApplicationDetailsScreen() {
           {/* Job Details Card */}
           {offre && (
             <View style={styles.primaryCard}>
-              {/* <View style={styles.cardHeader}>
-                <View style={styles.cardHeaderLeft}>
-                  <View style={styles.iconContainer}>
-                    <Ionicons name="briefcase" size={24} color="#0f8e35" />
-                  </View>
-                  <View>
-                    <Text style={styles.cardTitle}>Offre d'emploi</Text>
-                    <Text style={styles.cardSubtitle}>Détails du poste</Text>
-                  </View>
-                </View>
-                <TouchableOpacity style={styles.favoriteButton}>
-                  <Ionicons name="heart-outline" size={20} color="#6B7280" />
-                </TouchableOpacity>
-              </View> */}
               
               <View style={styles.jobMainInfo}>
                 
@@ -382,7 +369,7 @@ export default function ApplicationDetailsScreen() {
 
           {/* Action Buttons */}
           <View style={styles.actionButtonsContainer}>
-            <TouchableOpacity style={styles.secondaryButton} onPress={() => router.back()}>
+            <TouchableOpacity style={styles.secondaryButton} onPress={() => router.push('/(app)/candidature')}>
               <Ionicons name="arrow-back" size={20} color="#091e60" />
               <Text style={styles.secondaryButtonText}>Retour</Text>
             </TouchableOpacity>
@@ -431,7 +418,7 @@ const styles = StyleSheet.create({
   },
   loadingSubtext: {
     marginTop: 8,
-    fontSize: 14,
+    fontSize: 13,
     color: '#6B7280',
     textAlign: 'center',
   },
@@ -448,31 +435,31 @@ const styles = StyleSheet.create({
   },
   errorTitle: {
     fontSize: 20,
-    fontWeight: '700',
+    fontWeight: '600',
     color: '#374151',
     textAlign: 'center',
     marginTop: 16,
     marginBottom: 8,
   },
   errorText: {
-    fontSize: 16,
+    fontSize: 13,
     color: '#6B7280',
     textAlign: 'center',
-    marginBottom: 24,
+    marginBottom: 20,
     lineHeight: 22,
   },
   retryButton: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#091e60',
-    paddingVertical: 12,
-    paddingHorizontal: 24,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
     borderRadius: 12,
-    gap: 8,
+    gap: 6,
   },
   retryButtonText: {
     color: '#FFFFFF',
-    fontSize: 16,
+    fontSize: 13,
     fontWeight: '600',
   },
   emptyContainer: {
@@ -488,14 +475,14 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontSize: 22,
-    fontWeight: '700',
+    fontWeight: '600',
     color: '#374151',
     textAlign: 'center',
     marginTop: 24,
     marginBottom: 12,
   },
   emptyText: {
-    fontSize: 16,
+    fontSize: 13,
     color: '#6B7280',
     textAlign: 'center',
     lineHeight: 24,
@@ -505,41 +492,41 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    paddingVertical: 12,
-    paddingHorizontal: 24,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
     borderRadius: 12,
     borderWidth: 2,
     borderColor: '#0f8e35',
-    gap: 8,
+    gap: 6,
   },
   backButtonText: {
     color: '#0f8e35',
-    fontSize: 16,
+    fontSize: 13,
     fontWeight: '600',
   },
 
   // Hero Section
   heroSection: {
-    paddingHorizontal: 24,
-    paddingVertical: 32,
-    marginBottom: 24,
+    paddingHorizontal: 12,
+    paddingVertical: 24,
+    marginBottom: 20,
   },
   heroContent: {
     alignItems: 'center',
   },
   heroHeader: {
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 8,
   },
   heroTitle: {
-    fontSize: 24,
-    fontWeight: '800',
+    fontSize: 20,
+    fontWeight: '600',
     color: '#091e60',
-    marginBottom: 16,
+    marginBottom: 8,
     textAlign: 'center',
   },
   heroSubtitle: {
-    fontSize: 16,
+    fontSize: 13,
     color: '#6B7280',
     textAlign: 'center',
     lineHeight: 22,
@@ -549,14 +536,14 @@ const styles = StyleSheet.create({
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: 16,
-    gap: 8,
+    gap: 6,
   },
   statusText: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 13,
+    fontWeight: '600',
   },
 
   // Card Components
@@ -610,12 +597,12 @@ const styles = StyleSheet.create({
   },
   cardTitle: {
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: '600',
     color: '#091e60',
     marginBottom: 4,
   },
   cardSubtitle: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#6B7280',
     fontWeight: '500',
   },
@@ -627,11 +614,11 @@ const styles = StyleSheet.create({
 
   // Job Main Info
   jobMainInfo: {
-    marginBottom: 24,
+    marginBottom: 20,
   },
   jobTitle: {
-    fontSize: 24,
-    fontWeight: '800',
+    fontSize: 20,
+    fontWeight: '600',
     color: '#091e60',
     marginBottom: 12,
     lineHeight: 32,
@@ -639,7 +626,7 @@ const styles = StyleSheet.create({
   companyContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
     marginBottom: 8,
   },
   companyName: {
@@ -651,10 +638,10 @@ const styles = StyleSheet.create({
   locationContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
   locationText: {
-    fontSize: 16,
+    fontSize: 13,
     color: '#6B7280',
     fontWeight: '500',
   },
@@ -662,20 +649,24 @@ const styles = StyleSheet.create({
   // Details Grid
   detailsGrid: {
     gap: 16,
-    marginBottom: 24,
+    marginBottom: 20,
   },
   detailCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    padding: 16,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: '#F1F5F9',
+    flexBasis: '48%',
+    gap: 10,
     borderRadius: 12,
     borderLeftWidth: 3,
     borderLeftColor: '#0f8e35',
   },
   detailIcon: {
-    width: 40,
-    height: 40,
+    width: 24,
+    height: 24,
     borderRadius: 10,
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
@@ -686,13 +677,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   detailLabel: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#6B7280',
     fontWeight: '500',
     marginBottom: 4,
   },
   detailValue: {
-    fontSize: 16,
+    fontSize: 13,
     color: '#374151',
     fontWeight: '600',
   },
@@ -705,12 +696,12 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: '600',
     color: '#091e60',
     marginBottom: 12,
   },
   descriptionText: {
-    fontSize: 16,
+    fontSize: 13,
     color: '#374151',
     lineHeight: 24,
   },
@@ -719,12 +710,13 @@ const styles = StyleSheet.create({
   motivationContainer: {
     backgroundColor: '#F8FAFC',
     borderRadius: 12,
-    padding: 20,
-    borderLeftWidth: 4,
-    borderLeftColor: '#091e60',
+    padding: 16,
+    marginTop: 8,
+    // borderLeftWidth removed
+    // borderLeftColor removed
   },
   motivationText: {
-    fontSize: 16,
+    fontSize: 13,
     color: '#374151',
     lineHeight: 24,
   },
@@ -732,7 +724,7 @@ const styles = StyleSheet.create({
   // Action Buttons
   actionButtonsContainer: {
     flexDirection: 'row',
-    paddingHorizontal: 24,
+    paddingHorizontal: 12,
     paddingVertical: 24,
     gap: 12,
   },
@@ -744,7 +736,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#0f8e35',
     paddingVertical: 16,
     borderRadius: 16,
-    gap: 8,
+    gap: 6,
     shadowColor: '#0f8e35',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
@@ -753,8 +745,8 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: {
     color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 13,
+    fontWeight: '600',
   },
   secondaryButton: {
     flex: 1,
@@ -766,11 +758,11 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 2,
     borderColor: '#091e60',
-    gap: 8,
+    gap: 6,
   },
   secondaryButtonText: {
     color: '#091e60',
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 13,
+    fontWeight: '600',
   },
 });

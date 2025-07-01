@@ -23,11 +23,14 @@ import {
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import { savePushToken, sendTestPushNotification } from '../../utils/api';
+import { useTheme } from '../../components/ThemeContext'; 
+import { useLanguage } from '../../components/LanguageContext'; // NOUVEAU : Importer useLanguage
 
 
 // Configuration pour les notifications en arrière-plan (headless)
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
+    shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: true,
     shouldShowBanner: true,
@@ -73,6 +76,7 @@ const SettingItem: React.FC<SettingItemProps> = ({
   onSwitchChange,
   showChevron = true
 }) => {
+  const { colors } = useTheme();
   const [scaleAnim] = useState(new Animated.Value(1));
 
   const handlePressIn = () => {
@@ -107,28 +111,35 @@ const SettingItem: React.FC<SettingItemProps> = ({
   };
 
   const content = (
-    <Animated.View style={[styles.settingItem, { transform: [{ scale: scaleAnim }] }]}>
+    <Animated.View style={[
+      styles.settingItem, 
+      { 
+        transform: [{ scale: scaleAnim }],
+        backgroundColor: colors.cardBackground, 
+        borderBottomColor: colors.border, 
+      }
+    ]}>
       <View style={styles.settingLeft}>
         <View style={[styles.iconContainer, { backgroundColor: iconColor + '15' }]}>
           {renderIcon()}
         </View>
         <View style={styles.settingTextContainer}>
-          <Text style={styles.settingTitle}>{title}</Text>
-          {subtitle && <Text style={styles.settingSubtitle}>{subtitle}</Text>}
+          <Text style={[styles.settingTitle, { color: colors.textPrimary }]}>{title}</Text>
+          {subtitle && <Text style={[styles.settingSubtitle, { color: colors.textSecondary }]}>{subtitle}</Text>}
         </View>
       </View>
       
       <View style={styles.settingRight}>
         {hasSwitch ? (
           <Switch
-            trackColor={{ false: "#E5E7EB", true: iconColor + '40' }}
-            thumbColor={switchValue ? iconColor : "#F9FAFB"}
-            ios_backgroundColor="#E5E7EB"
+            trackColor={{ false: colors.switchTrackFalse, true: colors.secondary + '40' }}
+            thumbColor={switchValue ? colors.secondary : colors.switchThumb}
+            ios_backgroundColor={colors.switchTrackFalse}
             onValueChange={onSwitchChange}
             value={switchValue}
           />
         ) : showChevron ? (
-          <Feather name="chevron-right" size={18} color="#9CA3AF" />
+          <Feather name="chevron-right" size={18} color={colors.textSecondary} />
         ) : null}
       </View>
     </Animated.View>
@@ -151,36 +162,37 @@ const SettingItem: React.FC<SettingItemProps> = ({
 };
 
 // Composant pour les en-têtes de section
-const SectionHeader: React.FC<SectionHeaderProps> = ({ title, icon }) => (
-  <View style={styles.sectionHeader}>
-    {icon && <Ionicons name={icon as any} size={18} color="#6366F1" />}
-    <Text style={styles.sectionTitle}>{title}</Text>
-  </View>
-);
+const SectionHeader: React.FC<SectionHeaderProps> = ({ title, icon }) => {
+  const { colors } = useTheme();
+  return (
+    <View style={styles.sectionHeader}>
+      {icon && <Ionicons name={icon as any} size={18} color={colors.textAccent} />}
+      <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>{title}</Text>
+    </View>
+  );
+};
 
 export default function ParametresScreen() {
   const { user, logout, loading: authLoading } = useAuth();
+  const { isDarkMode, toggleDarkMode, colors } = useTheme();
+  const { language, setLanguage, t } = useLanguage(); // NOUVEAU : Utiliser useLanguage
   
   // États pour les différents switches
   const [notificationEnabled, setNotificationEnabled] = useState(false);
-  const [darkModeEnabled, setDarkModeEnabled] = useState(false);
   const [biometricEnabled, setBiometricEnabled] = useState(false);
   const [autoSyncEnabled, setAutoSyncEnabled] = useState(true);
   const [registeringToken, setRegisteringToken] = useState(false);
 
   useEffect(() => {
-    // Charger l'état initial des notifications
     async function getInitialNotificationStatus() {
       const { status } = await Notifications.getPermissionsAsync();
       setNotificationEnabled(status === 'granted');
     }
     getInitialNotificationStatus();
 
-    // MODIFIÉ : Stocker les souscriptions dans des variables pour pouvoir appeler .remove()
-    let notificationListener: Notifications.Subscription;
-    let responseListener: Notifications.Subscription;
+    let notificationListener: Notifications.Subscription | undefined;
+    let responseListener: Notifications.Subscription | undefined;
 
-    // Écouteurs pour les notifications
     notificationListener = Notifications.addNotificationReceivedListener(notification => {
       console.log("Notification reçue:", notification);
       Alert.alert(
@@ -194,11 +206,14 @@ export default function ParametresScreen() {
     });
 
     return () => {
-      // MODIFIÉ : Appeler .remove() sur l'objet de souscription
-      notificationListener.remove();
-      responseListener.remove();
+      if (notificationListener) {
+        notificationListener.remove();
+      }
+      if (responseListener) {
+        responseListener.remove();
+      }
     };
-  }, []); // Dépendances vides pour s'exécuter une fois au montage
+  }, []); 
 
 
   const registerForPushNotificationsAsync = async () => {
@@ -214,7 +229,7 @@ export default function ParametresScreen() {
       }
 
       if (!Device.isDevice) {
-        Alert.alert('Appareil physique requis', 'Les notifications Push ne fonctionnent que sur les appareils physiques ou les émulateurs configurés pour Google Play Services !');
+        Alert.alert(t('Appareil physique requis'), t('Les notifications Push ne fonctionnent que sur les appareils physiques ou les émulateurs configurés pour Google Play Services !'));
         setNotificationEnabled(false);
         return;
       }
@@ -227,7 +242,7 @@ export default function ParametresScreen() {
       }
 
       if (finalStatus !== 'granted') {
-        Alert.alert('Permission refusée', 'Impossible d\'obtenir le push token pour la notification ! Vous pouvez l\'activer dans les paramètres de votre appareil.');
+        Alert.alert(t('Permission refusée'), t('Impossible d\'obtenir le push token pour la notification ! Vous pouvez l\'activer dans les paramètres de votre appareil.'));
         setNotificationEnabled(false);
         return;
       }
@@ -235,13 +250,13 @@ export default function ParametresScreen() {
       const token = (await Notifications.getExpoPushTokenAsync()).data;
       console.log('Expo Push Token:', token);
       
-      await savePushToken(token); // Sauvegarde le token sur le backend
-      Alert.alert("Succès", "Notifications activées !");
+      await savePushToken(token);
+      Alert.alert(t('Succès'), t('Notifications activées !'));
       setNotificationEnabled(true);
 
     } catch (error: any) {
       console.error("Erreur d'enregistrement des notifications:", error);
-      Alert.alert("Erreur", "Impossible d'activer les notifications. " + (error.message || "Veuillez réessayer."));
+      Alert.alert(t('Erreur'), t('Impossible d\'activer les notifications. ') + (error.message || t('Veuillez réessayer.')));
       setNotificationEnabled(false);
     } finally {
       setRegisteringToken(false);
@@ -249,7 +264,7 @@ export default function ParametresScreen() {
   };
 
   const unregisterForPushNotificationsAsync = async () => {
-    Alert.alert("Notifications désactivées", "Les notifications ont été désactivées.");
+    Alert.alert(t('Notifications désactivées'), t('Les notifications ont été désactivées.'));
     setNotificationEnabled(false);
   };
 
@@ -263,70 +278,79 @@ export default function ParametresScreen() {
 
   const confirmLogout = () => {
     Alert.alert(
-      "Confirmation",
-      "Êtes-vous sûr de vouloir vous déconnecter ?",
+      t('Confirmation'),
+      t('Êtes-vous sûr de vouloir vous déconnecter ?'),
       [
-        { text: "Annuler", style: "cancel" },
-        { text: "Déconnexion", style: "destructive", onPress: logout }
+        { text: t('Annuler'), style: "cancel" },
+        { text: t('Déconnexion'), style: "destructive", onPress: logout }
       ]
     );
   };
 
-  const handleMenuPress = () => { Alert.alert("Menu", "Menu Paramètres pressé !"); };
-  const handleAvatarPress = () => { Alert.alert("Profil", "Avatar Paramètres pressé !"); };
-  const handleSettingPress = (settingName: string) => { Alert.alert("Paramètre", `Vous avez cliqué sur "${settingName}"`); };
+  const handleMenuPress = () => { Alert.alert(t('Menu'), t('Menu Paramètres pressé !')); };
+  const handleAvatarPress = () => { Alert.alert(t('Profil'), t('Avatar Paramètres pressé !')); };
+  const handleSettingPress = (settingName: string) => { Alert.alert(t('Paramètre'), t('Vous avez cliqué sur "') + settingName + t('"')); };
 
   const handleSendTestNotification = async () => {
     try {
       await sendTestPushNotification();
-      Alert.alert("Test Envoyé", "Une notification de test a été envoyée. Vérifiez votre appareil !");
+      Alert.alert(t('Succès'), t('Notification test envoyée !'));
     } catch (error: any) {
-      console.error("Échec de l'envoi de la notification de test:", error);
-      Alert.alert("Erreur d'envoi", error.message || "Impossible d'envoyer la notification de test. Assurez-vous que le token est enregistré.");
+      Alert.alert(t('Erreur'), t('Impossible d\'envoyer la notification test.'));
     }
   };
 
-
   return (
     <>
-      <StatusBar barStyle="dark-content" backgroundColor="#F8FAFC" />
-      <SafeAreaView style={styles.safeArea}>
+      {/* <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />  */}
+      <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
+        <StatusBar barStyle="light-content" backgroundColor="#091e60" />
         <CustomHeader
-          title="Paramètres"
+          title={t('Paramètres')} // Traduction du titre
           user={user}
           onMenuPress={handleMenuPress}
           onAvatarPress={handleAvatarPress}
         />
 
         <ScrollView 
-          style={styles.scrollView}
+          style={[styles.scrollView, { backgroundColor: colors.background }]}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
         >
           {/* Section Préférences */}
-          <SectionHeader title="Préférences" icon="settings-outline" />
-          <View style={styles.section}>
+          <SectionHeader title={t('Préférences')} icon="settings-outline" />
+            <View style={[styles.section, { backgroundColor: colors.cardBackground }]}>
             <SettingItem
-              title="Langue"
-              subtitle="Français"
+              title={t('Langue')}
+              subtitle={language === 'fr' ? 'Français' : language === 'en' ? 'English' : 'العربية'}
               icon="language"
               iconLibrary="Ionicons"
               iconColor="#6366F1"
-              onPress={() => handleSettingPress("Langue")}
+              onPress={() =>
+              Alert.alert(
+                t('Langue'),
+                t('Sélectionnez votre langue :'),
+                [
+                { text: '🇫🇷 Français', onPress: () => setLanguage('fr') },
+                { text: '🇬🇧 English', onPress: () => setLanguage('en') },
+                { text: '🇸🇦 العربية', onPress: () => setLanguage('ar') },
+                ]
+              )
+              }
             />
             <SettingItem
-              title="Mode sombre"
-              subtitle="Activer le thème sombre"
+              title={t('Mode sombre')}
+              subtitle={t('Activer le thème sombre')}
               icon="moon"
               iconLibrary="Feather"
               iconColor="#8B5CF6"
               hasSwitch
-              switchValue={darkModeEnabled}
-              onSwitchChange={setDarkModeEnabled}
+              switchValue={isDarkMode}
+              onSwitchChange={toggleDarkMode}
             />
             <SettingItem
-              title="Synchronisation auto"
-              subtitle="Synchroniser automatiquement les données"
+              title={t('Synchronisation auto')}
+              subtitle={t('Synchroniser automatiquement les données')}
               icon="refresh-cw"
               iconLibrary="Feather"
               iconColor="#10B981"
@@ -334,14 +358,13 @@ export default function ParametresScreen() {
               switchValue={autoSyncEnabled}
               onSwitchChange={setAutoSyncEnabled}
             />
-          </View>
-
+            </View>
           {/* Section Notifications */}
-          <SectionHeader title="Notifications" icon="notifications-outline" />
-          <View style={styles.section}>
+          <SectionHeader title={t('Notifications')} icon="notifications-outline" />
+          <View style={[styles.section, { backgroundColor: colors.cardBackground }]}>
             <SettingItem
-              title="Notifications Push"
-              subtitle="Recevoir des notifications en temps réel"
+              title={t('Notifications Push')}
+              subtitle={t('Recevoir des notifications en temps réel')}
               icon="bell"
               iconLibrary="Feather"
               iconColor="#F59E0B"
@@ -350,17 +373,16 @@ export default function ParametresScreen() {
               onSwitchChange={toggleNotifications}
             />
             <SettingItem
-              title="Notifications par email"
-              subtitle="Recevoir des résumés par email"
+              title={t('Notifications par email')}
+              subtitle={t('Recevoir des résumés par email')}
               icon="mail"
               iconLibrary="Feather"
               iconColor="#EF4444"
-              onPress={() => handleSettingPress("Notifications email")}
+              onPress={() => handleSettingPress(t("Notifications email"))}
             />
-            {/* Bouton pour envoyer une notification de test */}
             <SettingItem
-              title="Envoyer notification test"
-              subtitle="Envoyer une notification pour tester"
+              title={t('Envoyer notification test')}
+              subtitle={t('Envoyer une notification pour tester')}
               icon="notifications"
               iconLibrary="Ionicons"
               iconColor="#091e60"
@@ -370,11 +392,11 @@ export default function ParametresScreen() {
           </View>
 
           {/* Section Sécurité */}
-          <SectionHeader title="Sécurité" icon="shield-outline" />
-          <View style={styles.section}>
+          <SectionHeader title={t('Sécurité')} icon="shield-outline" />
+          <View style={[styles.section, { backgroundColor: colors.cardBackground }]}>
             <SettingItem
-              title="Authentification biométrique"
-              subtitle="Utiliser Face ID / Touch ID"
+              title={t('Authentification biométrique')}
+              subtitle={t('Utiliser Face ID / Touch ID')}
               icon="fingerprint"
               iconLibrary="MaterialIcons"
               iconColor="#06B6D4"
@@ -383,90 +405,90 @@ export default function ParametresScreen() {
               onSwitchChange={setBiometricEnabled}
             />
             <SettingItem
-              title="Changer le mot de passe"
-              subtitle="Modifier votre mot de passe"
+              title={t('Changer le mot de passe')}
+              subtitle={t('Modifier votre mot de passe')}
               icon="lock"
               iconLibrary="Feather"
               iconColor="#DC2626"
-              onPress={() => handleSettingPress("Changer mot de passe")}
+              onPress={() => handleSettingPress(t("Changer mot de passe"))}
             />
             <SettingItem
-              title="Sessions actives"
-              subtitle="Gérer vos sessions connectées"
+              title={t('Sessions actives')}
+              subtitle={t('Gérer vos sessions connectées')}
               icon="smartphone"
               iconLibrary="Feather"
               iconColor="#7C3AED"
-              onPress={() => handleSettingPress("Sessions actives")}
+              onPress={() => handleSettingPress(t("Sessions actives"))}
             />
           </View>
 
           {/* Section Compte */}
-          <SectionHeader title="Compte" icon="person-outline" />
-          <View style={styles.section}>
+          <SectionHeader title={t('Compte')} icon="person-outline" />
+          <View style={[styles.section, { backgroundColor: colors.cardBackground }]}>
             <SettingItem
-              title="Informations personnelles"
-              subtitle="Modifier votre profil"
+              title={t('Informations personnelles')}
+              subtitle={t('Modifier votre profil')}
               icon="user"
               iconLibrary="Feather"
               iconColor="#059669"
-              onPress={() => handleSettingPress("Informations personnelles")}
+              onPress={() => handleSettingPress(t("Informations personnelles"))}
             />
             <SettingItem
-              title="Confidentialité"
-              subtitle="Paramètres de confidentialité"
+              title={t('Confidentialité')}
+              subtitle={t('Paramètres de confidentialité')}
               icon="eye-off"
               iconLibrary="Feather"
               iconColor="#7C2D12"
-              onPress={() => handleSettingPress("Confidentialité")}
+              onPress={() => handleSettingPress(t("Confidentialité"))}
             />
             <SettingItem
-              title="Exporter mes données"
-              subtitle="Télécharger vos données"
+              title={t('Exporter mes données')}
+              subtitle={t('Télécharger vos données')}
               icon="download"
               iconLibrary="Feather"
               iconColor="#0891B2"
-              onPress={() => handleSettingPress("Export données")}
+              onPress={() => handleSettingPress(t("Export données"))}
             />
           </View>
 
           {/* Section Support */}
-          <SectionHeader title="Support" icon="help-circle-outline" />
-          <View style={styles.section}>
+          <SectionHeader title={t('Support')} icon="help-circle-outline" />
+          <View style={[styles.section, { backgroundColor: colors.cardBackground }]}>
             <SettingItem
-              title="Centre d'aide"
-              subtitle="FAQ et guides d'utilisation"
+              title={t('Centre d\'aide')}
+              subtitle={t('FAQ et guides d\'utilisation')}
               icon="help-circle"
               iconLibrary="Feather"
               iconColor="#F97316"
-              onPress={() => handleSettingPress("Centre d'aide")}
+              onPress={() => handleSettingPress(t("Centre d'aide"))}
             />
             <SettingItem
-              title="Nous contacter"
-              subtitle="Obtenir de l'aide"
+              title={t('Nous contacter')}
+              subtitle={t('Obtenir de l\'aide')}
               icon="message-circle"
               iconLibrary="Feather"
               iconColor="#8B5CF6"
-              onPress={() => handleSettingPress("Contact")}
+              onPress={() => handleSettingPress(t("Contact"))}
             />
             <SettingItem
-              title="À propos"
-              subtitle="Informations sur l'application"
+              title={t('À propos')}
+              subtitle={t('Informations sur l\'application')}
               icon="info"
               iconLibrary="Feather"
               iconColor="#6B7280"
-              onPress={() => handleSettingPress("À propos")}
+              onPress={() => handleSettingPress(t("À propos"))}
             />
           </View>
 
           {/* Bouton de déconnexion */}
           <TouchableOpacity 
-            style={styles.logoutButton} 
+            style={[styles.logoutButton, { backgroundColor: colors.error }]}
             onPress={confirmLogout} 
             disabled={authLoading}
           >
             <Feather name="log-out" size={18} color="#FFFFFF" style={styles.logoutIcon} />
             <Text style={styles.logoutButtonText}>
-              {authLoading ? "Déconnexion..." : "Se déconnecter"}
+              {authLoading ? t("Déconnexion...") : t("Se déconnecter")}
             </Text>
           </TouchableOpacity>
         </ScrollView>
@@ -478,11 +500,9 @@ export default function ParametresScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
   },
   scrollView: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
   },
   scrollContent: {
     padding: 16,
@@ -498,13 +518,13 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#374151',
+    // color est géré par le style inline
     marginLeft: 8,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   section: {
-    backgroundColor: '#FFFFFF',
+    // backgroundColor est géré par le style inline
     borderRadius: 16,
     marginBottom: 8,
     shadowColor: '#000',
@@ -520,7 +540,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     paddingHorizontal: 20,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#F1F5F9',
+    // borderBottomColor est géré par le style inline
   },
   settingLeft: {
     flexDirection: 'row',
@@ -534,6 +554,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 16,
+    // backgroundColor est géré par le style inline
   },
   settingTextContainer: {
     flex: 1,
@@ -541,12 +562,12 @@ const styles = StyleSheet.create({
   settingTitle: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#1F2937',
+    // color est géré par le style inline
     marginBottom: 2,
   },
   settingSubtitle: {
     fontSize: 13,
-    color: '#6B7280',
+    // color est géré par le style inline
     lineHeight: 18,
   },
   settingRight: {
@@ -556,7 +577,7 @@ const styles = StyleSheet.create({
   },
   logoutButton: {
     flexDirection: 'row',
-    backgroundColor: '#DC2626',
+    // backgroundColor est géré par le style inline
     paddingVertical: 16,
     paddingHorizontal: 24,
     borderRadius: 16,
