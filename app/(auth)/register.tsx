@@ -1,27 +1,43 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator, Platform, Image, ScrollView } from 'react-native';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  TouchableOpacity, 
+  TextInput, 
+  ActivityIndicator, 
+  Platform, 
+  Image, 
+  ScrollView, 
+  Alert // Import Alert pour les messages d'erreur/succès
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { registerUser } from '../../utils/api';
 import { useAuth } from '../../components/AuthProvider';
+import { Picker } from '@react-native-picker/picker'; // NOUVEAU : Import du Picker
+import { Ionicons } from '@expo/vector-icons'; // Pour les icônes
 
 export default function RegisterScreen() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [passwordConfirmation, setPasswordConfirmation] = useState('');
+  // NOUVEAU : État pour le rôle sélectionné (par défaut 'candidate')
+  const [role, setRole] = useState('user'); 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  const { login } = useAuth();
+  const { login } = useAuth(); // Nous utiliserons login après l'inscription si elle réussit
 
   const handleRegister = async () => {
     setLoading(true);
     setError(null);
     setSuccess(null);
 
-    if (!name || !email || !password || !passwordConfirmation) {
+    // Validations côté client
+    if (!name || !email || !password || !passwordConfirmation || !role) {
       setError('Veuillez remplir tous les champs.');
       setLoading(false);
       return;
@@ -33,12 +49,19 @@ export default function RegisterScreen() {
     }
 
     try {
-      const response = await registerUser(name, email, password, passwordConfirmation);
+      // MODIFIÉ : Envoyer le rôle sélectionné au backend
+      const response = await registerUser(name, email, password, passwordConfirmation, role);
+      
       setSuccess('Inscription réussie ! Connexion en cours...');
-      await login(email, password);
+      Alert.alert('Inscription réussie', 'Vous êtes maintenant inscrit. Connexion en cours...');
+      
+      // Tenter de connecter l'utilisateur immédiatement après l'inscription réussie
+      await login(email, password); // Assurez-vous que votre fonction loginUser peut récupérer le rôle
+      
     } catch (err: any) {
       console.error("Erreur d'inscription :", err.response ? err.response.data : err.message);
       if (err.response && err.response.data && err.response.data.errors) {
+        // Affiche la première erreur de validation du backend
         const firstError = Object.values(err.response.data.errors)[0] as string[];
         setError(firstError[0] || "L'inscription a échoué. Veuillez réessayer.");
       } else {
@@ -130,6 +153,22 @@ export default function RegisterScreen() {
               autoComplete="new-password"
               editable={!loading}
             />
+          </View>
+          
+          {/* NOUVEAU : Sélecteur de rôle */}
+          <View style={styles.rolePickerContainer}>
+            <Text style={styles.pickerLabel}>Je suis :</Text>
+            <Picker
+              selectedValue={role}
+              onValueChange={(itemValue: string) => setRole(itemValue)}
+              style={styles.picker}
+              itemStyle={styles.pickerItem} // Style pour les éléments du Picker
+            >
+              <Picker.Item label="Candidat" value="user" />
+              <Picker.Item label="Intérimaire" value="interimaire" />
+              {/* Ajoutez d'autres rôles si nécessaire */}
+            </Picker>
+            <Ionicons name="chevron-down" size={20} color="#6B7280" style={styles.pickerIcon} />
           </View>
 
           <TouchableOpacity
@@ -264,5 +303,32 @@ const styles = StyleSheet.create({
   linkAccent: {
     color: "#1F2937",
     fontWeight: "600",
+  },
+  // NOUVEAU : Styles pour le sélecteur de rôle (Picker)
+  rolePickerContainer: {
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    backgroundColor: '#F9FAFB',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+  },
+  pickerLabel: {
+    fontSize: 15,
+    color: '#6B7280',
+    marginRight: 10,
+  },
+  picker: {
+    flex: 1,
+    height: 50, // Hauteur du Picker
+    color: '#1F2937', // Couleur du texte sélectionné
+  },
+  pickerItem: {
+    fontSize: 16,
+  },
+  pickerIcon: { // Icône du chevron à droite
+    marginLeft: 'auto', // Pousse l'icône à droite
   },
 });

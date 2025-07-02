@@ -16,6 +16,7 @@
     "@netizen-teknologi/avatar-placeholder": "^1.0.0",
     "@react-native-async-storage/async-storage": "^2.1.2",
     "@react-native-google-signin/google-signin": "^14.0.1",
+    "@react-native-picker/picker": "^2.11.1",
     "@react-navigation/bottom-tabs": "^7.3.10",
     "@react-navigation/drawer": "^7.5.1",
     "@react-navigation/elements": "^2.3.8",

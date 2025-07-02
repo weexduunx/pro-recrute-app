@@ -5,10 +5,10 @@ import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 
 // **IMPORTANT: Mettez à jour cette URL avec l'adresse IP et le port du  backend Laravel**
-const API_URL = 'http://192.168.1.144:8000/api';
+// const API_URL = proce;
 
 const api = axios.create({
-  baseURL: API_URL,
+  baseURL: process.env.EXPO_PUBLIC_API_URL,
   withCredentials: true,
   headers: {
     'Accept': 'application/json',
@@ -60,13 +60,14 @@ export const loginUser = async (email, password, deviceName) => {
   }
 };
 
-export const registerUser = async (name, email, password, passwordConfirmation) => {
+export const registerUser = async (name, email, password, passwordConfirmation, role: any) => {
   try {
     const response = await api.post('/register', {
       name: name,
       email: email,
       password: password,
       password_confirmation: passwordConfirmation,
+      role: role || 'user', // Définit le rôle par défaut à 'user' si non spécifié
     });
     console.log("Appel API registerUser réussi:", response.data);
     return response.data;
@@ -370,7 +371,7 @@ export const createOrUpdateCandidatProfile = async (candidatData) => {
 };
 
 /**
- * [NOUVEAU] Envoie une notification de test à l'utilisateur connecté via le backend.
+ *  Envoie une notification de test à l'utilisateur connecté via le backend.
  * @returns {Promise<object>} La réponse de l'API.
  */
 export const sendTestPushNotification = async () => {
@@ -405,7 +406,7 @@ export const getActualites = async (filters = {}) => {
 
     const queryString = params.toString();
     const url = `/actualites${queryString ? `?${queryString}` : ''}`;
-    
+
     const response = await api.get(url); // Laravel: GET /api/actualites?type=...&category=...
     return response.data;
   } catch (error) {
@@ -425,6 +426,39 @@ export const getActualiteById = async (actualiteId) => {
     return response.data;
   } catch (error) {
     console.error(`Échec de l'appel API getActualiteById pour l'ID ${actualiteId}:`, error.response?.data || error.message);
+    throw error;
+  }
+};
+
+/**
+ *  Récupère le profil détaillé de l'utilisateur intérimaire.
+ * @returns {Promise<object | null>} L'objet profil intérimaire ou null si non trouvé.
+ */
+export const getInterimProfile = async () => {
+  try {
+    const response = await api.get('/interim/profile'); // Laravel: GET /api/interim/profile
+    return response.data;
+  } catch (error) {
+    if (error.response?.status === 404) {
+      console.log("Profil intérimaire non trouvé (404).");
+      return null;
+    }
+    console.error("Échec de l'appel API getInterimProfile:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+/**
+ * Crée ou met à jour le profil détaillé de l'utilisateur intérimaire.
+ * @param {object} profileData - Les données du profil intérimaire à sauvegarder.
+ * @returns {Promise<object>} L'objet profil intérimaire mis à jour.
+ */
+export const createOrUpdateInterimProfile = async (profileData) => {
+  try {
+    const response = await api.post('/interim/create-update-profile', profileData); // Laravel: POST /api/interim/create-update-profile
+    return response.data;
+  } catch (error) {
+    console.error("Échec de l'appel API createOrUpdateInterimProfile:", error.response?.data || error.message);
     throw error;
   }
 };

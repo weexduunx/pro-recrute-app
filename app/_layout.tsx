@@ -33,7 +33,9 @@ export default function RootLayout() {
  */
 function RootLayoutContent() {
    const {  isAuthenticated } = useAuth();
-  const { isDarkMode, colors } = useTheme(); 
+
+   
+   const { isDarkMode, colors } = useTheme(); 
     const { t } = useLanguage();
 
  

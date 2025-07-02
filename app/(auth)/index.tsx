@@ -24,6 +24,7 @@ export default function LoginScreen() {
     if (error) {
       clearError();
     }
+    console.log('api: ' + process.env.EXPO_PUBLIC_API_URL);
   }, [email, password]);
 
   const handleLoginPress = async () => {
