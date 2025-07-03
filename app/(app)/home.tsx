@@ -162,58 +162,6 @@ export default function HomeScreen() {
     ]).start();
   }, []);
 
-  // //  LOGIQUE DE RÉCUPÉRATION DES ACTUALITÉS
-  // const newsItems = [
-  //   {
-  //     id: "news1",
-  //     title: "Découvrez notre suivi de candidatures",
-  //     content: "Notre nouvelle fonctionnalité simplifie le processus pour vous.",
-  //     image: "https://picsum.photos/id/0/400/600",
-  //     gradient: ['#0f8e35', '#50b45d'],
-  //     icon: "search-plus",
-  //     readTime: "5 min read",
-  //     author: "Idrissa Ndiouck",
-  //     category: "RH",
-  //     publishDate: new Date(),
-  //   },
-  //   {
-  //     id: "news2",
-  //     title: "Atelier CV: Maximisez vos chances!",
-  //     content: "Participez à notre webinaire gratuit pour un CV percutant.",
-  //     image: "https://picsum.photos/id/2/400/600",
-  //     gradient: ['#091e60', '#3B82F6'],
-  //     icon: "file-contract",
-  //     readTime: "2 min read",
-  //     author: "Idrissa Ndiouck",
-  //     category: "Coaching",
-  //     publishDate: new Date(),
-  //   },
-  //   {
-  //     id: "news3",
-  //     title: "Les emplois les plus recherchés en 2025",
-  //     content: "Explorez les tendances du marché du travail et préparez l'avenir.",
-  //     image: "https://picsum.photos/id/3/400/600",
-  //     gradient: ['#bf2f2f', '#f07e7e'],
-  //     icon: "chart-line",
-  //     readTime: "6 min read",
-  //     author: "Idrissa Ndiouck",
-  //     category: "Emplois",
-  //     publishDate: new Date(),
-  //   },
-  //   {
-  //     id: "news4",
-  //     title: "Conseils pour réussir votre entretien",
-  //     content: "Apprenez les techniques pour laisser une impression durable.",
-  //     image: "https://picsum.photos/id/4/400/600",
-  //     gradient: ['#10B981', '#34D399'],
-  //     icon: "business-time",
-  //     readTime: "10 min read",
-  //     author: "Idrissa Ndiouck",
-  //     category: "Management",
-  //     publishDate: new Date(),
-  //   },
-  // ];
-
   // LOGIQUE D'ASTUCES POUR LA RECHERCHE D'EMPLOI
   const tipsItems = [
     {
@@ -332,10 +280,6 @@ export default function HomeScreen() {
   const handleShare = () => {
     Alert.alert("Partage", "Fonction de partage déclenchée");
   };
-
-  // const handleCardClick = () => {
-  //   Alert.alert("Navigation", "Vers l'article complet...");
-  // };
 
   const formatDate = (date: Date) => {
     const options: Intl.DateTimeFormatOptions = { year: 'numeric', month: 'short', day: 'numeric' };
@@ -658,23 +602,6 @@ export default function HomeScreen() {
             </View>
 
 
-              {/* Section Dernières Actualités */}
-            {/* <View style={styles.sectionContainer}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Dernières Actualités</Text>
-                <TouchableOpacity style={styles.viewAllButton} onPress={() => router.push('/(app)/actualites')}>
-                  <Text style={styles.viewAllText}>Voir tout</Text>
-                </TouchableOpacity>
-              </View>
-
-              <AutoSlider
-                data={newsItems}
-                renderItem={renderNews}
-                onPress={handlePressNews}
-                autoScrollInterval={6000}
-              />
-            </View> */}
-
           {/* Section Dernières Actualités */}
           <View style={styles.sectionContainer}>
             <View style={styles.sectionHeader}>
@@ -965,19 +892,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
-    // Cartes d'actualités
-  // newsCard: {
-  //   width: width * 0.9,
-  //   height: 200,
-  //   marginLeft: 20,
-  //   borderRadius: 16,
-  //   shadowColor: "#000",
-  //   shadowOffset: { width: 0, height: 8 },
-  //   shadowOpacity: 0.15,
-  //   shadowRadius: 12,
-  //   elevation: 8,
-  //   overflow: 'hidden', // IMPORTANT pour que l'image ne dépasse pas les bords arrondis
-  // },
   newsImage: {
     width: '100%',
     height: '60%', // Image prend 60% de la hauteur de la carte
@@ -992,16 +906,7 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 16, // Coins arrondis pour l'overlay
     borderBottomRightRadius: 16,
   },
-  // newsTitle: {
-  //   fontSize: 16,
-  //   fontWeight: "bold",
-  //   color: "#FFFFFF",
-  //   marginBottom: 4,
-  // },
-  // newsDescription: {
-  //   fontSize: 12,
-  //   color: "#E0E0E0",
-  // },
+
   // Cartes d'astuces
   tipCard: {
     width: width * 0.9,

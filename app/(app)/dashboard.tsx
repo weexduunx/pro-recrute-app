@@ -4,7 +4,7 @@ import { useAuth } from '../../components/AuthProvider';
 import { FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import { getUserApplications, getRecommendedOffres } from '../../utils/api'; 
-import { router } from 'expo-router';
+import { router, useRouter  } from 'expo-router';
 import CustomHeader from '../../components/CustomHeader';
 import { useTheme } from '../../components/ThemeContext'; 
 
@@ -17,6 +17,7 @@ import { useTheme } from '../../components/ThemeContext';
 export default function DashboardScreen() {
   const { user, logout, loading: authLoading } = useAuth();
    const { isDarkMode, toggleDarkMode, colors } = useTheme();
+   const router = useRouter();
   type Application = {
     id: string;
     etat: string;
@@ -83,6 +84,7 @@ export default function DashboardScreen() {
       setRefreshing(false);
     }
   }, [loadApplications, loadRecommendations]);
+
 
   useEffect(() => {
     loadApplications();

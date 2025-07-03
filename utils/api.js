@@ -463,5 +463,32 @@ export const createOrUpdateInterimProfile = async (profileData) => {
   }
 };
 
+/**
+ * NOUVEAU : Récupère les attestations (certificats) de l'intérimaire connecté.
+ * @returns {Promise<Array>} Un tableau d'objets attestation.
+ */
+export const getInterimCertificates = async () => {
+  try {
+    const response = await api.get('/interim/certificates'); // Laravel: GET /api/interim/certificates
+    return response.data;
+  } catch (error) {
+    console.error("Échec de l'appel API getInterimCertificates:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+/**
+ * NOUVEAU : Récupère les détails des prêts (échéanciers) de l'intérimaire connecté.
+ * @returns {Promise<Array>} Un tableau d'objets échéancier de prêt.
+ */
+export const getInterimLoans = async () => {
+  try {
+    const response = await api.get('/interim/loans'); // Laravel: GET /api/interim/loans
+    return response.data;
+  } catch (error) {
+    console.error("Échec de l'appel API getInterimLoans:", error.response?.data || error.message);
+    throw error;
+  }
+};
 
 export default api;

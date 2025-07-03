@@ -74,21 +74,29 @@ interface CandidatProfileData {
 
 interface InterimProfileData {
   matricule?: string;
-  sexe?: string;
-  matrimoniale?: string;
+  sexe?: number; // Stocké en nombre
+  matrimoniale?: number; // Stocké en nombre
   nationalite?: string;
-  phone?: string; // Peut être différent du téléphone de l'utilisateur principal
+  phone?: string;
   date_naissance?: string;
   lieu_naissance?: string;
   cni?: string;
   adresse?: string;
-  profile_photo_path?: string; // Chemin de la photo de profil
-  statut_agent?: number; // Ex: 1 (actif), 2 (en_conge), etc.
+  profile_photo_path?: string;
+  statut_agent?: number; // Stocké en nombre
   diplome?: string;
   taux_retenu?: number;
   taux_remboursse?: number;
-  // Les champs 'name' et 'email' sont supposés venir de l'objet User principal
+  // Attributs appendus par les accesseurs Laravel
+  sexe_label?: string; // NOUVEAU
+  statut_agent_label?: string; // NOUVEAU
+  situation_matrimoniale_label?: string; // NOUVEAU
+  taux_retenu_label?: string; // NOUVEAU
+  taux_remboursse_label?: string; // NOUVEAU
 }
+
+
+
 export default function ProfileDetailsScreen() {
   const { user, logout, loading: authLoading } = useAuth();
   const { colors } = useTheme();
@@ -116,7 +124,7 @@ export default function ProfileDetailsScreen() {
   const [loadingInterimProfile, setLoadingInterimProfile] = useState(true);
   const [interimEditMode, setInterimEditMode] = useState(false);
   const [editableInterimProfile, setEditableInterimProfile] = useState<InterimProfileData>({
-    matricule: '', sexe: 'Homme', matrimoniale: '', nationalite: '', phone: '', date_naissance: '', lieu_naissance: '', cni: '', adresse: '', profile_photo_path: '', statut_agent: 1, diplome: '', taux_retenu: 0, taux_remboursse: 0,
+    matricule: '', sexe: 1, matrimoniale: 1, nationalite: '', phone: '', date_naissance: '', lieu_naissance: '', cni: '', adresse: '', profile_photo_path: '', statut_agent: 0, diplome: '', taux_retenu: 0, taux_remboursse: 0,
   });
   const [interimUpdateError, setInterimUpdateError] = useState<string | null>(null);
 
@@ -173,16 +181,17 @@ export default function ProfileDetailsScreen() {
     }
   }, [user]);
 
+  // Chargement du profil Intérimaire
   const loadInterimProfile = useCallback(async () => {
-    if (user && user.role === 'interim') {
+    if (user && user.role === 'interimaire') {
       setLoadingInterimProfile(true);
       try {
-        const data = await getInterimProfile() as InterimProfileData;
+        const data = await getInterimProfile();
         setInterimProfile(data);
         setEditableInterimProfile({
           matricule: data?.matricule || '',
-          sexe: data?.sexe || 'Homme',
-          matrimoniale: data?.matrimoniale || '',
+          sexe: data?.sexe ?? 1, 
+          matrimoniale: data?.matrimoniale ?? 1,
           nationalite: data?.nationalite || '',
           phone: data?.phone || '',
           date_naissance: data?.date_naissance || '',
@@ -190,7 +199,7 @@ export default function ProfileDetailsScreen() {
           cni: data?.cni || '',
           adresse: data?.adresse || '',
           profile_photo_path: data?.profile_photo_path || '',
-          statut_agent: data?.statut_agent ||  1,
+          statut_agent: data?.statut_agent ?? 0, 
           diplome: data?.diplome || '',
           taux_retenu: data?.taux_retenu ?? 0,
           taux_remboursse: data?.taux_remboursse ?? 0,
@@ -198,13 +207,13 @@ export default function ProfileDetailsScreen() {
       } catch (error: any) {
         console.error("Erreur de chargement du profil intérimaire:", error);
         setInterimProfile(null);
-        setEditableInterimProfile({ matricule: '', sexe: 'Homme', matrimoniale: '', nationalite: '', phone: '', date_naissance: '', lieu_naissance: '', cni: '', adresse: '', profile_photo_path: '', statut_agent: 'actif', diplome: '', taux_retenu: 0, taux_remboursse: 0, });
+        setEditableInterimProfile({ matricule: '', sexe: 1, matrimoniale: 1, nationalite: '', phone: '', date_naissance: '', lieu_naissance: '', cni: '', adresse: '', profile_photo_path: '', statut_agent: 0, diplome: '', taux_retenu: 0, taux_remboursse: 0, });
       } finally {
         setLoadingInterimProfile(false);
       }
     } else {
       setInterimProfile(null);
-      setEditableInterimProfile({ matricule: '', sexe: 'Homme', matrimoniale: '', nationalite: '', phone: '', date_naissance: '', lieu_naissance: '', cni: '', adresse: '', profile_photo_path: '', statut_agent: 'actif', diplome: '', taux_retenu: 0, taux_remboursse: 0, });
+      setEditableInterimProfile({ matricule: '', sexe: 1, matrimoniale: 1, nationalite: '', phone: '', date_naissance: '', lieu_naissance: '', cni: '', adresse: '', profile_photo_path: '', statut_agent: 0, diplome: '', taux_retenu: 0, taux_remboursse: 0, });
       setLoadingInterimProfile(false);
     }
   }, [user]);
@@ -291,6 +300,7 @@ export default function ProfileDetailsScreen() {
     }
   };
 
+ // Sauvegarde du profil Intérimaire
   const handleInterimProfileSave = async () => {
     setInterimUpdateError(null);
     try {
@@ -1184,7 +1194,7 @@ export default function ProfileDetailsScreen() {
 
       <View style={styles.actionButtons}>
         <TouchableOpacity
-          style={[styles.button, styles.secondaryButton, { backgroundColor: colors.settingIconBg, borderColor: colors.border }]}
+          style={[styles.secondaryButton, { backgroundColor: colors.settingIconBg, borderColor: colors.border }]}
           onPress={() => {
             setCvEditMode(false);
             setCandidatEditMode(false);
@@ -1194,7 +1204,7 @@ export default function ProfileDetailsScreen() {
             setCandidatUpdateError(null);
           }}
         >
-          <Text style={[styles.secondaryButtonText, { color: colors.textSecondary }]}>{t('Annuler')}</Text>
+          <Text style={{ color: colors.textSecondary, fontWeight: '700', fontSize: 16 }}>{t('Annuler')}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.primaryButton, { backgroundColor: colors.secondary }]}
@@ -1323,7 +1333,7 @@ export default function ProfileDetailsScreen() {
     </View>
   );
 
-  // NOUVEAU : Rendu de la section Intérimaire
+  //  Rendu de la section Intérimaire
   const renderInterimSection = () => (
     <View style={[styles.section, { backgroundColor: colors.cardBackground }]}>
       <View style={styles.sectionHeader}>
@@ -1365,11 +1375,11 @@ export default function ProfileDetailsScreen() {
       ) : interimEditMode ? (
         // Formulaire d'édition du profil Intérimaire
         <View style={styles.editContainer}>
-          {/* Champs non modifiables */}
+          {/* Nom complet et Email de l'utilisateur principal (non modifiables ici) */}
           <View style={styles.inputGroup}>
             <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Nom complet')}</Text>
             <TextInput
-              style={[styles.input, styles.disabledInputStyle, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
+              style={[styles.input, styles.disabledInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
               value={user?.name || ''}
               editable={false}
               placeholder={t("Nom complet de l'utilisateur")}
@@ -1379,32 +1389,79 @@ export default function ProfileDetailsScreen() {
           <View style={styles.inputGroup}>
             <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Email')}</Text>
             <TextInput
-              style={[styles.input, styles.disabledInputStyle, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
+              style={[styles.input, styles.disabledInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
               value={user?.email || ''}
               editable={false}
               placeholder={t("Email de l'utilisateur")}
               placeholderTextColor={colors.textSecondary}
             />
           </View>
+
+          {/* CHAMPS NON MODIFIABLES (Matricule, Statut agent, Diplôme, Taux retenue/remboursement) */}
           <View style={styles.inputGroup}>
             <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Matricule')}</Text>
             <TextInput
-              style={[styles.input, styles.disabledInputStyle, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
+              style={[styles.input, styles.disabledInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
               value={editableInterimProfile?.matricule || ''}
-              onChangeText={(text) => setEditableInterimProfile(prev => ({ ...prev!, matricule: text }))}
               placeholder={t("Matricule de l'agent")}
               placeholderTextColor={colors.textSecondary}
               editable={false} // Rendu non modifiable
             />
           </View>
 
-          {/* Champs modifiables */}
+          <View style={styles.inputGroup}>
+            <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Statut de l\'agent')}</Text>
+            <TextInput
+              style={[styles.input, styles.disabledInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
+              value={editableInterimProfile?.statut_agent_label || ''} // Utilise le label si disponible
+              placeholder={t("Actif, En congé, etc.")}
+              placeholderTextColor={colors.textSecondary}
+              editable={false} // Rendu non modifiable
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Diplôme')}</Text>
+            <TextInput
+              style={[styles.input, styles.disabledInputStyle, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
+              value={editableInterimProfile?.diplome || ''}
+              placeholder={t("Ex: Licence en Informatique")}
+              placeholderTextColor={colors.textSecondary}
+              editable={false} // Rendu non modifiable
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Taux de retenue (%)')}</Text>
+            <TextInput
+              style={[styles.input, styles.disabledInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
+              value={String(editableInterimProfile?.taux_retenu ?? '')}
+              placeholder={t("Ex: 10.5")}
+              placeholderTextColor={colors.textSecondary}
+              keyboardType="numeric"
+              editable={false} // Rendu non modifiable
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Taux de remboursement (%)')}</Text>
+            <TextInput
+              style={[styles.input, styles.disabledInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
+              value={String(editableInterimProfile?.taux_remboursse ?? '')}
+              placeholder={t("Ex: 5.0")}
+              placeholderTextColor={colors.textSecondary}
+              keyboardType="numeric"
+              editable={false} // Rendu non modifiable
+            />
+          </View>
+
+          {/* CHAMPS MODIFIABLES */}
           <View style={styles.inputGroup}>
             <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Sexe')}</Text>
             <TextInput
               style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
-              value={editableInterimProfile?.sexe || ''}
-              onChangeText={(text) => setEditableInterimProfile(prev => ({ ...prev!, sexe: text }))}
+              value={editableInterimProfile?.sexe_label || String(editableInterimProfile?.sexe ?? '')} // Utilise le label
+              onChangeText={(text) => setEditableInterimProfile(prev => ({ ...prev!, sexe: text as any }))} // Cast temporaire
               placeholder={t("Homme, Femme")}
               placeholderTextColor={colors.textSecondary}
             />
@@ -1414,8 +1471,8 @@ export default function ProfileDetailsScreen() {
             <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Situation matrimoniale')}</Text>
             <TextInput
               style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
-              value={editableInterimProfile?.matrimoniale || ''}
-              onChangeText={(text) => setEditableInterimProfile(prev => ({ ...prev!, matrimoniale: text }))}
+              value={editableInterimProfile?.situation_matrimoniale_label || String(editableInterimProfile?.matrimoniale ?? '')} // Utilise le label
+              onChangeText={(text) => setEditableInterimProfile(prev => ({ ...prev!, matrimoniale: text as any }))} // Cast temporaire
               placeholder={t("Célibataire, Marié(e)...")}
               placeholderTextColor={colors.textSecondary}
             />
@@ -1488,7 +1545,7 @@ export default function ProfileDetailsScreen() {
             />
           </View>
 
-          <View style={styles.inputGroup}>
+          {/* <View style={styles.inputGroup}>
             <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Chemin photo de profil')}</Text>
             <TextInput
               style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
@@ -1497,53 +1554,7 @@ export default function ProfileDetailsScreen() {
               placeholder={t("URL ou chemin de la photo")}
               placeholderTextColor={colors.textSecondary}
             />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Statut de l\'agent')}</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
-              value={editableInterimProfile?.statut_agent || ''}
-              onChangeText={(text) => setEditableInterimProfile(prev => ({ ...prev!, statut_agent: text }))}
-              placeholder={t("Actif, En congé, etc.")}
-              placeholderTextColor={colors.textSecondary}
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Diplôme')}</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
-              value={editableInterimProfile?.diplome || ''}
-              onChangeText={(text) => setEditableInterimProfile(prev => ({ ...prev!, diplome: text }))}
-              placeholder={t("Ex: Licence en Informatique")}
-              placeholderTextColor={colors.textSecondary}
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Taux de retenue (%)')}</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
-              value={String(editableInterimProfile?.taux_retenu ?? '')}
-              onChangeText={(text) => setEditableInterimProfile(prev => ({ ...prev!, taux_retenu: parseFloat(text) || 0 }))}
-              placeholder={t("Ex: 10.5")}
-              placeholderTextColor={colors.textSecondary}
-              keyboardType="numeric"
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Taux de remboursement (%)')}</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
-              value={String(editableInterimProfile?.taux_remboursse ?? '')}
-              onChangeText={(text) => setEditableInterimProfile(prev => ({ ...prev!, taux_remboursse: parseFloat(text) || 0 }))}
-              placeholder={t("Ex: 5.0")}
-              placeholderTextColor={colors.textSecondary}
-              keyboardType="numeric"
-            />
-          </View>
+          </View> */}
 
           {interimUpdateError && (
             <View style={[styles.errorContainer, { backgroundColor: colors.error + '10' }]}>
@@ -1554,17 +1565,17 @@ export default function ProfileDetailsScreen() {
 
           <View style={styles.actionButtons}>
             <TouchableOpacity
-              style={[styles.button, styles.secondaryButton, { backgroundColor: colors.settingIconBg, borderColor: colors.border }]}
+              style={[styles.secondaryButton, { backgroundColor: colors.settingIconBg, borderColor: colors.border }]}
               onPress={() => {
                 setInterimEditMode(false);
                 loadInterimProfile();
                 setInterimUpdateError(null);
               }}
             >
-              <Text style={[styles.secondaryButtonText, { color: colors.textSecondary }]}>{t('Annuler')}</Text>
+              <Text style={{ color: colors.textSecondary, fontWeight: '700', fontSize: 16 }}>{t('Annuler')}</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.button, styles.primaryButton, { backgroundColor: colors.secondary }]}
+              style={[styles.primaryButton, { backgroundColor: colors.secondary }]}
               onPress={handleInterimProfileSave}
             >
               <Text style={styles.primaryButtonText}>{t('Sauvegarder')}</Text>
@@ -1607,7 +1618,7 @@ export default function ProfileDetailsScreen() {
             </View>
             <View style={styles.infoContent}>
               <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Sexe')}</Text>
-              <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.sexe || t('Non renseigné')}</Text>
+              <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.sexe_label || t('Non renseigné')}</Text>
             </View>
           </View>
           <View style={styles.infoItem}>
@@ -1616,7 +1627,7 @@ export default function ProfileDetailsScreen() {
             </View>
             <View style={styles.infoContent}>
               <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Situation matrimoniale')}</Text>
-              <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.matrimoniale || t('Non renseigné')}</Text>
+              <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.situation_matrimoniale_label || t('Non renseigné')}</Text>
             </View>
           </View>
           <View style={styles.infoItem}>
@@ -1633,7 +1644,7 @@ export default function ProfileDetailsScreen() {
               <Ionicons name="call" size={18} color={colors.textSecondary} />
             </View>
             <View style={styles.infoContent}>
-              <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Téléphone (Agent)')}</Text>
+              <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Téléphone')}</Text>
               <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.phone || t('Non renseigné')}</Text>
             </View>
           </View>
@@ -1642,8 +1653,19 @@ export default function ProfileDetailsScreen() {
               <Ionicons name="calendar" size={18} color={colors.textSecondary} />
             </View>
             <View style={styles.infoContent}>
-              <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Date de naissance (Agent)')}</Text>
-              <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.date_naissance || t('Non renseignée')}</Text>
+              <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Date de naissance')}</Text>
+                <Text style={[styles.infoValue, { color: colors.textPrimary }]}>
+                  {interimProfile?.date_naissance
+                  ? (() => {
+                    const date = new Date(interimProfile.date_naissance);
+                    if (isNaN(date.getTime())) return t('Non renseignée');
+                    const day = date.getDate().toString().padStart(2, '0');
+                    const month = date.toLocaleString('fr-FR', { month: 'short' });
+                    const year = date.getFullYear();
+                    return `${day} ${month.charAt(0).toUpperCase() + month.slice(1)}. ${year}`;
+                    })()
+                  : t('Non renseignée')}
+                </Text>
             </View>
           </View>
           <View style={styles.infoItem}>
@@ -1651,7 +1673,7 @@ export default function ProfileDetailsScreen() {
               <Ionicons name="map" size={18} color={colors.textSecondary} />
             </View>
             <View style={styles.infoContent}>
-              <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Lieu de naissance (Agent)')}</Text>
+              <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Lieu de naissance')}</Text>
               <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.lieu_naissance || t('Non renseigné')}</Text>
             </View>
           </View>
@@ -1669,11 +1691,11 @@ export default function ProfileDetailsScreen() {
               <Ionicons name="home" size={18} color={colors.textSecondary} />
             </View>
             <View style={styles.infoContent}>
-              <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Adresse (Agent)')}</Text>
+              <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Adresse ')}</Text>
               <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.adresse || t('Non renseigné')}</Text>
             </View>
           </View>
-          <View style={styles.infoItem}>
+          {/* <View style={styles.infoItem}>
             <View style={styles.infoIcon}>
               <Ionicons name="image" size={18} color={colors.textSecondary} />
             </View>
@@ -1681,14 +1703,14 @@ export default function ProfileDetailsScreen() {
               <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Chemin photo de profil')}</Text>
               <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.profile_photo_path || t('Non renseigné')}</Text>
             </View>
-          </View>
+          </View> */}
           <View style={styles.infoItem}>
             <View style={styles.infoIcon}>
               <Ionicons name="briefcase" size={18} color={colors.textSecondary} />
             </View>
             <View style={styles.infoContent}>
               <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Statut de l\'agent')}</Text>
-              <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.statut_agent || t('Non renseigné')}</Text>
+              <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.statut_agent_label || t('Non renseigné')}</Text>
             </View>
           </View>
           <View style={styles.infoItem}>
@@ -1706,7 +1728,7 @@ export default function ProfileDetailsScreen() {
             </View>
             <View style={styles.infoContent}>
               <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Taux de retenue (%)')}</Text>
-              <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.taux_retenu ?? t('Non renseigné')}</Text>
+              <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.taux_retenu_label || t('Non renseigné')}</Text>
             </View>
           </View>
           <View style={styles.infoItem}>
@@ -1715,7 +1737,7 @@ export default function ProfileDetailsScreen() {
             </View>
             <View style={styles.infoContent}>
               <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Taux de remboursement (%)')}</Text>
-              <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.taux_remboursse ?? t('Non renseigné')}</Text>
+              <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.taux_remboursse_label || t('Non renseigné')}</Text>
             </View>
           </View>
         </View>
@@ -1762,11 +1784,21 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  infoContainer: {
+    marginBottom: 16,
+    gap: 8,
+  },
   formSection: {
     marginBottom: 24,
     paddingBottom: 24,
     borderBottomWidth: 1,
     borderColor: '#eee',
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 12,
+    marginTop: 16,
   },
   scrollView: {
     flex: 1,
@@ -1869,33 +1901,6 @@ const styles = StyleSheet.create({
     // backgroundColor et borderColor sont gérés par le style inline
   },
 
-  // Info Display Styles
-  infoContainer: {
-    gap: 16,
-  },
-  infoItem: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    paddingVertical: 8,
-  },
-  infoIcon: {
-    marginRight: 12,
-    marginTop: 2,
-  },
-  infoContent: {
-    flex: 1,
-  },
-  infoLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 4,
-  },
-  infoValue: {
-    fontSize: 16,
-    fontWeight: '500',
-  },
   statusIndicator: {
     width: 18,
     height: 18,
@@ -2279,11 +2284,67 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  secondaryButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    marginTop: 12,
+  },
   primaryButtonText: {
     color: '#fff',
     fontWeight: '700',
     fontSize: 16,
   },
-});
 
+  infoItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#091e60',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 3,
+    borderLeftWidth: 4,
+    borderLeftColor: '#0f8e35',
+  },
+  infoIcon: {
+    width: 40,
+    height: 40,
+    backgroundColor: '#effcf4',
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+    borderWidth: 2,
+    borderColor: '#0f8e35',
+  },
+  infoContent: {
+    flex: 1,
+    paddingTop: 2,
+  },
+  infoLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 6,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    color: '#091e60',
+  },
+  infoValue: {
+    fontSize: 16,
+    fontWeight: '500',
+    lineHeight: 22,
+    color: '#2c3e50',
+  },
+});
 

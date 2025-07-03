@@ -25,9 +25,6 @@ export default function InterimLayout() {
           title: t('Tableau de bord Intérimaire'),
         }}
       />
-      {/* Vous pouvez ajouter d'autres écrans spécifiques à l'intérimaire ici, ex: */}
-      {/* <Stack.Screen name="manage_offers" options={{ title: t('Gérer les offres') }} /> */}
-      {/* <Stack.Screen name="view_candidates" options={{ title: t('Voir les candidats') }} /> */}
     </Stack>
   );
 }
