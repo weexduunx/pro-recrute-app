@@ -11,9 +11,17 @@ import { router } from 'expo-router';
 // Interface pour un certificat (adaptez selon les champs réels de votre table 'attestations')
 interface Certificate {
   id: number;
-  libelle_attestation?: string; // Exemple de champ, à remplacer par le vrai libellé
-  date_emission?: string; // Exemple de champ
-  // ... autres champs pertinents comme numero_attestation, type_certificat, etc.
+  user_id: number;
+  start_date?: string;
+  end_date?: string;
+  label_masc?: string;
+  label_fem?: string;
+  contract_status?: string;
+  user_name?: string;
+  society_designation?: string;
+  category_label?: string;
+  category_class?: string;
+  convention_label?: string;
 }
 
 export default function HrFileScreen() {
@@ -51,19 +59,49 @@ export default function HrFileScreen() {
   const handleMenuPress = () => { Alert.alert(t("Menu"), t("Menu Dossier RH pressé !")); };
   const handleAvatarPress = () => { router.push('/(app)/profile-details'); };
 
-  const renderCertificateItem = ({ item }: { item: Certificate }) => (
-    <View style={[styles.cardItem, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
-      <Ionicons name="document-text-outline" size={24} color={colors.secondary} style={styles.itemIcon} />
-      <View style={styles.itemContent}>
-        <Text style={[styles.itemTitle, { color: colors.textPrimary }]}>{item.libelle_attestation || t("Certificat sans titre")}</Text>
-        <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>
-          {t("Date d'émission:")} {item.date_emission ? new Date(item.date_emission).toLocaleDateString() : t("Non disponible")}
-        </Text>
-        {/* Ajoutez d'autres détails du certificat ici */}
+const renderCertificateItem = ({ item }: { item: Certificate }) => (
+  <View style={[styles.cardItem, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
+    <Ionicons name="document-text-outline" size={24} color={colors.secondary} style={styles.itemIcon} />
+    <View style={styles.itemContent}>
+      <Text style={[styles.itemTitle, { color: colors.textPrimary }]}>
+        {item.label_masc || item.label_fem || t("Poste non précisé")}
+      </Text>
+
+      <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>{t("Employé :")} {item.user_name}</Text>
+      <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>{t("Société :")} {item.society_designation}</Text>
+      <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>{t("Contrat :")} {item.contract_status}</Text>
+      <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>
+        {t("Période :")} {item.start_date ? new Date(item.start_date).toLocaleDateString() : '...'} - {item.end_date ? new Date(item.end_date).toLocaleDateString() : '...'}
+      </Text>
+      <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>{t("Convention :")} {item.convention_label}</Text>
+      <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>{t("Catégorie :")} {item.category_label} ({item.category_class})</Text>
+
+      <View style={{ flexDirection: 'row', marginTop: 10 }}>
+        <TouchableOpacity
+          style={[styles.actionButton, { backgroundColor: colors.primary, marginRight: 10 }]}
+          onPress={() => Alert.alert(t("Détail"), t("Fonctionnalité en cours..."))}
+        >
+          <Ionicons name="eye-outline" size={18} color="#fff" style={{ marginRight: 6 }} />
+          <Text style={styles.actionButtonText}>{t("Voir détails")}</Text>
+        </TouchableOpacity>
+
+        {(item as any).pdf_url && (
+          <TouchableOpacity
+            style={[styles.actionButton, { backgroundColor: colors.secondary }]}
+            onPress={() => {
+              // Ouvrir le lien PDF dans le navigateur (ou télécharger via WebBrowser.openBrowserAsync si expo)
+              Linking.openURL(item.pdf_url);
+            }}
+          >
+            <Ionicons name="download-outline" size={18} color="#fff" style={{ marginRight: 6 }} />
+            <Text style={styles.actionButtonText}>{t("Télécharger")}</Text>
+          </TouchableOpacity>
+        )}
       </View>
-      <Ionicons name="chevron-forward-outline" size={20} color={colors.textSecondary} />
     </View>
-  );
+  </View>
+);
+
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
@@ -223,4 +261,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: 'bold',
   },
+  actionButton: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  paddingVertical: 8,
+  paddingHorizontal: 12,
+  borderRadius: 8,
+},
+actionButtonText: {
+  color: '#FFFFFF',
+  fontSize: 14,
+  fontWeight: '600',
+},
+
 });

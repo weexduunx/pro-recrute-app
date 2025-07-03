@@ -60,7 +60,7 @@ export const loginUser = async (email, password, deviceName) => {
   }
 };
 
-export const registerUser = async (name, email, password, passwordConfirmation, role: any) => {
+export const registerUser = async (name, email, password, passwordConfirmation, role) => {
   try {
     const response = await api.post('/register', {
       name: name,
