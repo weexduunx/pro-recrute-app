@@ -4,18 +4,23 @@ import CustomHeader from '../../../components/CustomHeader';
 import { useAuth } from '../../../components/AuthProvider';
 import { useTheme } from '../../../components/ThemeContext';
 import { useLanguage } from '../../../components/LanguageContext';
-import { getInterimAttestations, getDetailsUserGbg } from '../../../utils/api'; 
+import { getInterimAttestations, getDetailsUserGbg, getPdf } from '../../../utils/api';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { Animated } from 'react-native';
 import { useRef } from 'react';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
+import * as Notifications from 'expo-notifications';
 
 
 // Interface pour un certificat (adaptez selon les champs réels de votre table 'attestations')
 interface Attestation {
+  contrat_id_encrypted: string;
   pdf_url?: string;
   id: number;
   attestation_id: number;
+  contrat_id: number;
   user_id: number;
   start_date?: string;
   end_date?: string;
@@ -51,6 +56,10 @@ export default function HrFileScreen() {
   const [error, setError] = useState<string | null>(null);
   const [selectedCertificate, setSelectedCertificate] = useState<Attestation | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
+const [selectedAttestation, setSelectedAttestation] = useState<Attestation | null>(null);
+
+  const [exportingPdf, setExportingPdf] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   // Références pour les animations
   // Utilisation de useRef pour éviter les re-renders inutiles
@@ -116,7 +125,7 @@ export default function HrFileScreen() {
     }
   }, [user, t]);
 
- 
+
 
   // Chargement initial des certificats
   // Utilisation de useCallback pour éviter les re-renders inutiles
@@ -125,17 +134,17 @@ export default function HrFileScreen() {
   }, [loadAttestations]);
 
   useEffect(() => {
-  const fetchDetailsUser = async () => {
-    try {
-      const response = await getDetailsUserGbg();
-      setDetailsUser(response);
-    } catch (error) {
-      console.error("Erreur chargement des détails utilisateur :", error);
-      setDetailsUser([]);
-    }
-  };
+    const fetchDetailsUser = async () => {
+      try {
+        const response = await getDetailsUserGbg();
+        setDetailsUser(response);
+      } catch (error) {
+        console.error("Erreur chargement des détails utilisateur :", error);
+        setDetailsUser([]);
+      }
+    };
 
-  fetchDetailsUser();
+    fetchDetailsUser();
   }, []);
 
 
@@ -144,8 +153,43 @@ export default function HrFileScreen() {
   const handleMenuPress = () => { Alert.alert(t("Menu"), t("Menu Dossier RH pressé !")); };
   const handleAvatarPress = () => { router.push('/(app)/profile-details'); };
 
+  const sendLocalNotification = async () => {
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: "✅ Attestation prête",
+        body: "Votre attestation a été téléchargée avec succès.",
+      },
+      trigger: null, // immédiat
+    });
+  };
+
+
+const handleExportPdf = async () => {
+  setExportingPdf(true);
+  setExportError(null);
+  try {
+    await sendLocalNotification();
+    
+    // Vérifier que l'attestation est sélectionnée
+    if (!selectedAttestation) {
+      setExportError("Aucune attestation sélectionnée");
+      return;
+    }
+    
+    const response = await getPdf(selectedAttestation.contrat_id);
+    
+  } catch (err: any) {
+    console.error("Erreur lors de l'exportation de l'attestation:", err);
+    setExportError(err.message || t("Échec de l'exportation du CV."));
+  } finally {
+    setExportingPdf(false);
+  }
+};
+
   // Fonction pour rendre chaque item de certificat
   const renderCertificateItem = ({ item }: { item: Attestation }) => (
+
+    
     <View style={[styles.cardItem, { backgroundColor: colors.cardBackground, borderColor: colors.border, overflow: 'hidden' }]}>
       {/* Icône de fichier en background */}
       <Ionicons
@@ -164,7 +208,7 @@ export default function HrFileScreen() {
           style={{
             backgroundColor: item.updated_at
               ? '#d4edda'
-              :  '#fff3cd',
+              : '#fff3cd',
             paddingVertical: 4,
             paddingHorizontal: 10,
             borderRadius: 8,
@@ -176,7 +220,7 @@ export default function HrFileScreen() {
             style={{
               color: item.updated_at
                 ? '#155724'
-                :  '#856404',
+                : '#856404',
               fontWeight: 'bold',
               fontSize: 13,
             }}
@@ -188,7 +232,7 @@ export default function HrFileScreen() {
           {t("Date Attestée :")}  {item.start_date ? new Date(item.start_date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }) : '...'}
         </Text>
         <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>
-            {t("Période :")} {item.start_date ? new Date(item.start_date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }) : '...'} - {item.end_date ? new Date(item.end_date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }) : '...'}
+          {t("Période :")} {item.start_date ? new Date(item.start_date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }) : '...'} - {item.end_date ? new Date(item.end_date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }) : '...'}
         </Text>
         <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>{t("Convention :")} {item.convention_label}</Text>
 
@@ -201,17 +245,20 @@ export default function HrFileScreen() {
             <Text style={styles.actionButtonText}>{t("Voir détails")}</Text>
           </TouchableOpacity>
 
-          {(item as any).pdf_url && (
+      
             <TouchableOpacity
               style={[styles.actionButton, { backgroundColor: colors.secondary }]}
-              onPress={() => {
-                Linking.openURL(item.pdf_url);
-              }}
+              onPress={handleExportPdf} disabled={exportingPdf}
             >
-              <Ionicons name="download-outline" size={18} color="#fff" style={{ marginRight: 6 }} />
-              <Text style={styles.actionButtonText}>{t("Télécharger")}</Text>
+              {exportingPdf ? (
+                <ActivityIndicator color="#FFFFFF" size="small" />
+              ) : (
+                <>
+                  <Ionicons name="download-outline" size={18} color="#fff" style={{ marginRight: 6 }} />
+                  <Text style={styles.actionButtonText}>{t("Télécharger")}</Text>
+                </>
+              )}
             </TouchableOpacity>
-          )}
         </View>
       </View>
     </View>
@@ -314,15 +361,15 @@ export default function HrFileScreen() {
                 </Text>
 
                 <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>
-                  <Ionicons name="calendar-outline" size={16} /> {t("Période :")} 
+                  <Ionicons name="calendar-outline" size={16} /> {t("Période :")}
                   {selectedCertificate.start_date
                     ? new Date(selectedCertificate.start_date).toLocaleDateString('fr-FR', {
-                        day: '2-digit', month: 'short', year: 'numeric',
-                      })
+                      day: '2-digit', month: 'short', year: 'numeric',
+                    })
                     : '...'
                   } - {selectedCertificate.end_date ? new Date(selectedCertificate.end_date).toLocaleDateString('fr-FR', {
-                        day: '2-digit', month: 'short', year: 'numeric',
-                      }) : '...'}
+                    day: '2-digit', month: 'short', year: 'numeric',
+                  }) : '...'}
                 </Text>
 
                 <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>
@@ -332,14 +379,17 @@ export default function HrFileScreen() {
                 <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>
                   <Ionicons name="book-outline" size={16} /> {t("Convention :")} {selectedCertificate.convention_label}
                 </Text>
-
-                {selectedCertificate.pdf_url && (
-                  <TouchableOpacity onPress={() => Linking.openURL(selectedCertificate.pdf_url)} style={{ marginTop: 15 }}>
+                {selectedCertificate?.contrat_id_encrypted && (
+                  <TouchableOpacity
+                    onPress={() => handleExportPdf()}
+                    style={{ marginTop: 15 }}
+                  >
                     <Text style={{ color: colors.secondary, fontWeight: 'bold' }}>
                       <Ionicons name="download-outline" size={16} /> {t("Télécharger le PDF")}
                     </Text>
                   </TouchableOpacity>
                 )}
+
               </ScrollView>
 
               {/* Détails utilisateur */}
@@ -350,7 +400,7 @@ export default function HrFileScreen() {
                 return (
                   <View style={{ marginTop: 20 }}>
                     <Text style={[styles.itemTitle, { fontSize: 16, color: colors.textPrimary }]}>
-                      {t("Attestation créée par :")} 
+                      {t("Attestation créée par :")}
                     </Text>
 
                     <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>

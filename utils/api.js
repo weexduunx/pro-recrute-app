@@ -262,7 +262,7 @@ const arrayBufferToBase64 = (buffer) => {
 /**
  * Déclenche l'exportation du CV en PDF depuis le backend Laravel.
  * Télécharge le fichier et propose de l'ouvrir/partager.
- */
+*/
 export const exportCvPdf = async () => {
   try {
     const response = await api.get('/user/export-cv-pdf', {
@@ -323,6 +323,63 @@ export const exportCvPdf = async () => {
     throw new Error(errorMessage); // Rejette avec un message clair
   }
 };
+
+
+export const getPdf = async (contratId) => {
+  try {
+    const response = await api.post('/interim/printAttestation', 
+      {
+        contrat_id: contratId // Envoyer le contrat_id dans le body
+      },
+      {
+        responseType: 'arraybuffer', // Indispensable pour recevoir des données binaires (le PDF)
+        headers: {
+          'Accept': 'application/pdf', // Demander un PDF
+        },
+      }
+    );
+
+    // Convertir l'ArrayBuffer reçu en chaîne Base64
+    const base64Content = arrayBufferToBase64(response.data);
+
+    // Récupérer le nom de fichier suggéré depuis les headers ou utiliser un nom par défaut
+    const contentDisposition = response.headers['content-disposition'];
+    let fileName = `Attestation_${contratId}.pdf`; // Nom personnalisé avec contrat_id
+    if (contentDisposition) {
+      const fileNameMatch = contentDisposition.match(/filename="(.+)"/);
+      if (fileNameMatch && fileNameMatch[1]) {
+        fileName = fileNameMatch[1];
+      }
+    }
+
+    // Chemin du sauvegarde en local
+    // Utilisation de FileSystem.documentDirectory pour stocker le fichier dans l'application
+    const localUri = FileSystem.documentDirectory + fileName;
+
+    // Écrire le contenu Base64 dans un fichier local
+    await FileSystem.writeAsStringAsync(localUri, base64Content, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+
+    console.log(`Attestation PDF téléchargé vers : ${localUri}`);
+
+    // Proposer d'ouvrir ou de partager le fichier
+    if (await Sharing.isAvailableAsync()) {
+      await Sharing.shareAsync(localUri);
+    } else {
+      Alert.alert("Partage indisponible", "La fonctionnalité de partage n'est pas disponible sur cet appareil.");
+    }
+
+    return { message: 'Attestation PDF téléchargé et partagé.', uri: localUri };
+
+  } catch (error) {
+    console.error("Erreur téléchargement PDF:", error);
+    Alert.alert("Erreur", "Le téléchargement du PDF a échoué.");
+    throw error;
+  }
+};
+
+
 
 /**
  * Enregistre le token de notification push de l'utilisateur sur le backend.
@@ -486,6 +543,9 @@ export const getDetailsUserGbg = async () => {
     throw error;
   }
 };
+
+
+
 
 /**
  * NOUVEAU : Récupère les détails des prêts (échéanciers) de l'intérimaire connecté.
