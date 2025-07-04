@@ -467,12 +467,22 @@ export const createOrUpdateInterimProfile = async (profileData) => {
  * NOUVEAU : Récupère les attestations (certificats) de l'intérimaire connecté.
  * @returns {Promise<Array>} Un tableau d'objets attestation.
  */
-export const getInterimCertificates = async () => {
+export const getInterimAttestations = async () => {
   try {
-    const response = await api.get('/interim/certificates'); // Laravel: GET /api/interim/certificates
+    const response = await api.get('/interim/attestations'); // Laravel: GET /api/interim/certificates
     return response.data;
   } catch (error) {
     console.error("Échec de l'appel API getInterimCertificates:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+export const getDetailsUserGbg = async () => {
+  try {
+    const response = await api.get('/interim/details'); // Laravel: GET /api/interim/details
+    return response.data;
+  } catch (error) {
+    console.error("Échec de l'appel API getDetailsUserGbg:", error.response?.data || error.message);
     throw error;
   }
 };
