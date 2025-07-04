@@ -164,19 +164,13 @@ const [selectedAttestation, setSelectedAttestation] = useState<Attestation | nul
   };
 
 
-const handleExportPdf = async () => {
+const handleExportPdf = async (attestation: Attestation) => {
   setExportingPdf(true);
   setExportError(null);
   try {
     await sendLocalNotification();
     
-    // Vérifier que l'attestation est sélectionnée
-    if (!selectedAttestation) {
-      setExportError("Aucune attestation sélectionnée");
-      return;
-    }
-    
-    const response = await getPdf(selectedAttestation.contrat_id);
+    const response = await getPdf(attestation.contrat_id);
     
   } catch (err: any) {
     console.error("Erreur lors de l'exportation de l'attestation:", err);
@@ -381,7 +375,7 @@ const handleExportPdf = async () => {
                 </Text>
                 {selectedCertificate?.contrat_id_encrypted && (
                   <TouchableOpacity
-                    onPress={() => handleExportPdf(selectedCertificate.contrat_id)}
+                    onPress={() => handleExportPdf()}
                     style={{ marginTop: 15 }}
                   >
                     <Text style={{ color: colors.secondary, fontWeight: 'bold' }}>
