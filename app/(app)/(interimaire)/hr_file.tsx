@@ -248,7 +248,7 @@ const handleExportPdf = async () => {
       
             <TouchableOpacity
               style={[styles.actionButton, { backgroundColor: colors.secondary }]}
-              onPress={handleExportPdf} disabled={exportingPdf}
+              onPress={() => handleExportPdf(item.contrat_id)} disabled={exportingPdf}
             >
               {exportingPdf ? (
                 <ActivityIndicator color="#FFFFFF" size="small" />
@@ -381,7 +381,7 @@ const handleExportPdf = async () => {
                 </Text>
                 {selectedCertificate?.contrat_id_encrypted && (
                   <TouchableOpacity
-                    onPress={() => handleExportPdf()}
+                    onPress={() => handleExportPdf(selectedCertificate.contrat_id)}
                     style={{ marginTop: 15 }}
                   >
                     <Text style={{ color: colors.secondary, fontWeight: 'bold' }}>
