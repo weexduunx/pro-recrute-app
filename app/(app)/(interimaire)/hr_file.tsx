@@ -85,7 +85,7 @@ const renderCertificateItem = ({ item }: { item: Certificate }) => (
           <Text style={styles.actionButtonText}>{t("Voir détails")}</Text>
         </TouchableOpacity>
 
-        {(item as any).pdf_url && (
+        {/* {(item as any).pdf_url && (
           <TouchableOpacity
             style={[styles.actionButton, { backgroundColor: colors.secondary }]}
             onPress={() => {
@@ -96,7 +96,7 @@ const renderCertificateItem = ({ item }: { item: Certificate }) => (
             <Ionicons name="download-outline" size={18} color="#fff" style={{ marginRight: 6 }} />
             <Text style={styles.actionButtonText}>{t("Télécharger")}</Text>
           </TouchableOpacity>
-        )}
+        )} */}
       </View>
     </View>
   </View>
@@ -137,7 +137,7 @@ const renderCertificateItem = ({ item }: { item: Certificate }) => (
             <FlatList
               data={certificates}
               renderItem={renderCertificateItem}
-              keyExtractor={item => item.id.toString()}
+              keyExtractor={item => item?.id?.toString() ?? `item-${Math.random()}`}
               scrollEnabled={false} // Géré par la ScrollView parente
               contentContainerStyle={styles.listContainer}
             />
