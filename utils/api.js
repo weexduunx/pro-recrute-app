@@ -326,62 +326,6 @@ export const exportCvPdf = async () => {
 };
 
 
-export const getPdf = async (contratId) => {
-  try {
-    const response = await api.post('/interim/printAttestation', 
-      {
-        contrat_id: contratId // Envoyer le contrat_id dans le body
-      },
-      {
-        responseType: 'arraybuffer', // Indispensable pour recevoir des données binaires (le PDF)
-        headers: {
-          'Accept': 'application/pdf', // Demander un PDF
-        },
-      }
-    );
-
-    // Convertir l'ArrayBuffer reçu en chaîne Base64
-    const base64Content = arrayBufferToBase64(response.data);
-
-    // Récupérer le nom de fichier suggéré depuis les headers ou utiliser un nom par défaut
-    const contentDisposition = response.headers['content-disposition'];
-    let fileName = `Attestation_${contratId}.pdf`; // Nom personnalisé avec contrat_id
-    if (contentDisposition) {
-      const fileNameMatch = contentDisposition.match(/filename="(.+)"/);
-      if (fileNameMatch && fileNameMatch[1]) {
-        fileName = fileNameMatch[1];
-      }
-    }
-
-    // Chemin du sauvegarde en local
-    // Utilisation de FileSystem.documentDirectory pour stocker le fichier dans l'application
-    const localUri = FileSystem.documentDirectory + fileName;
-
-    // Écrire le contenu Base64 dans un fichier local
-    await FileSystem.writeAsStringAsync(localUri, base64Content, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
-
-    console.log(`Attestation PDF téléchargé vers : ${localUri}`);
-
-    // Proposer d'ouvrir ou de partager le fichier
-    if (await Sharing.isAvailableAsync()) {
-      await Sharing.shareAsync(localUri);
-    } else {
-      Alert.alert("Partage indisponible", "La fonctionnalité de partage n'est pas disponible sur cet appareil.");
-    }
-
-    return { message: 'Attestation PDF téléchargé et partagé.', uri: localUri };
-
-  } catch (error) {
-    console.error("Erreur téléchargement PDF:", error);
-    Alert.alert("Erreur", "Le téléchargement du PDF a échoué.");
-    throw error;
-  }
-};
-
-
-
 /**
  * Enregistre le token de notification push de l'utilisateur sur le backend.
  * @param {string} token - Le token Expo Push (ou autre token de notification).
@@ -535,6 +479,8 @@ export const getInterimAttestations = async () => {
   }
 };
 
+
+
 export const getDetailsUserGbg = async () => {
   try {
     const response = await api.get('/interim/details'); // Laravel: GET /api/interim/details
@@ -544,8 +490,6 @@ export const getDetailsUserGbg = async () => {
     throw error;
   }
 };
-
-
 
 
 /**
@@ -562,4 +506,54 @@ export const getInterimLoans = async () => {
   }
 };
 
+
+/**
+ * NOUVEAU : Télécharge le PDF d'une attestation spécifique.
+ * @param {string} encryptedContratId - L'ID du contrat encrypté.
+ * @returns {Promise<object>} Message de succès et URI local du fichier.
+ */
+export const getPdf = async (encryptedContratId) => {
+  try {
+    // MODIFIÉ : Requête GET et ID dans l'URL
+    const response = await api.get(`/interim/attestations/${encryptedContratId}/download`, { 
+      responseType: 'arraybuffer', // Indispensable pour recevoir des données binaires (le PDF)
+      headers: {
+        'Accept': 'application/pdf', // Demander un PDF
+      },
+    });
+
+     
+    const base64Content = arrayBufferToBase64(response.data);
+
+    const contentDisposition = response.headers['content-disposition'];
+    let fileName = `attestation_${encryptedContratId}.pdf`;
+    if (contentDisposition) {
+      const fileNameMatch = contentDisposition.match(/filename="(.+)"/);
+      if (fileNameMatch && fileNameMatch[1]) {
+        fileName = fileNameMatch[1];
+      }
+    }
+
+    const localUri = FileSystem.documentDirectory + fileName;
+
+    await FileSystem.writeAsStringAsync(localUri, base64Content, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+
+    console.log(`Attestation PDF téléchargée vers : ${localUri}`);
+
+    if (await Sharing.isAvailableAsync()) {
+      await Sharing.shareAsync(localUri);
+    } else {
+      Alert.alert("Partage indisponible", "La fonctionnalité de partage n'est pas disponible sur cet appareil.");
+    }
+
+    return { message: 'Attestation PDF téléchargée et partagée.', uri: localUri };
+
+  } catch (error) {
+    console.error("Erreur téléchargement PDF:", error.response?.data || error.message);
+    Alert.alert("Erreur", error.response?.data?.message || "Le téléchargement du PDF a échoué.");
+    throw error;
+  }
+};
 export default api;

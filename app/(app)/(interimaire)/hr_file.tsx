@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView, ActivityIndicator, Alert, FlatList, Linking } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView, ActivityIndicator, Alert, FlatList } from 'react-native';
 import CustomHeader from '../../../components/CustomHeader';
 import { useAuth } from '../../../components/AuthProvider';
 import { useTheme } from '../../../components/ThemeContext';
@@ -16,22 +16,21 @@ import * as Notifications from 'expo-notifications';
 
 // Interface pour un certificat (adaptez selon les champs réels de votre table 'attestations')
 interface Attestation {
-  contrat_id_encrypted: string;
-  pdf_url?: string;
-  id: number;
-  attestation_id: number;
-  contrat_id: number;
-  user_id: number;
+  attestation_id: number; // C'est l'id de l'attestation
+  contrat_id: number; // L'ID du contrat
+  contrat_id_encrypted: string; // L'ID du contrat encrypté pour le téléchargement
+  user_id: number; // L'ID de l'interimaire dans mysql_3.users
   start_date?: string;
   end_date?: string;
   label_masc?: string;
   label_fem?: string;
-  contract_status?: string;
-  user_name?: string;
+  contract_status?: string; // Statut du contrat
+  user_name?: string; // Nom de l'utilisateur principal lié au contrat
   society_designation?: string;
   category_label?: string;
   category_class?: string;
   convention_label?: string;
+  position_title?: string; // Titre du poste
   created_at?: string;
   updated_at?: string;
 }
@@ -44,34 +43,27 @@ interface DetailsUser {
 }
 
 export default function HrFileScreen() {
-  // Hooks pour l'authentification, le thème et la langue
   const { user } = useAuth();
   const { colors } = useTheme();
   const { t } = useLanguage();
 
-  // États pour gérer les certificats, le chargement, les erreurs et la sélection
   const [attestations, setAttestations] = useState<Attestation[]>([]);
   const [detailsUser, setDetailsUser] = useState<DetailsUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedCertificate, setSelectedCertificate] = useState<Attestation | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
-const [selectedAttestation, setSelectedAttestation] = useState<Attestation | null>(null);
 
   const [exportingPdf, setExportingPdf] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
 
-  // Références pour les animations
-  // Utilisation de useRef pour éviter les re-renders inutiles
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
 
-  // Fonction pour ouvrir le modal avec animation
   const openModal = async (item: Attestation) => {
     setSelectedCertificate(item);
     setModalVisible(true);
 
-    // Charger les détails utilisateur pour cette attestation
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
@@ -86,7 +78,6 @@ const [selectedAttestation, setSelectedAttestation] = useState<Attestation | nul
     ]).start();
   };
 
-  // Fonction pour fermer le modal avec animation
   const closeModal = () => {
     Animated.parallel([
       Animated.timing(fadeAnim, {
@@ -105,7 +96,6 @@ const [selectedAttestation, setSelectedAttestation] = useState<Attestation | nul
     });
   };
 
-  // Fonction pour charger les certificats depuis l'API
   const loadAttestations = useCallback(async () => {
     if (!user) {
       setAttestations([]);
@@ -125,10 +115,6 @@ const [selectedAttestation, setSelectedAttestation] = useState<Attestation | nul
     }
   }, [user, t]);
 
-
-
-  // Chargement initial des certificats
-  // Utilisation de useCallback pour éviter les re-renders inutiles
   useEffect(() => {
     loadAttestations();
   }, [loadAttestations]);
@@ -148,44 +134,37 @@ const [selectedAttestation, setSelectedAttestation] = useState<Attestation | nul
   }, []);
 
 
-  // Gestion des actions du menu et de l'avatar
-  // Ces fonctions peuvent être adaptées pour ouvrir des modals ou naviguer vers d'autres écr
   const handleMenuPress = () => { Alert.alert(t("Menu"), t("Menu Dossier RH pressé !")); };
   const handleAvatarPress = () => { router.push('/(app)/profile-details'); };
 
   const sendLocalNotification = async () => {
     await Notifications.scheduleNotificationAsync({
       content: {
-        title: "✅ Attestation prête",
-        body: "Votre attestation a été téléchargée avec succès.",
+        title: t("✅ Attestation prête"),
+        body: t("Votre attestation a été téléchargée avec succès."),
       },
       trigger: null, // immédiat
     });
   };
 
+  const handleDownloadPdf = async (encryptedContratId: string) => {
+    setExportingPdf(true);
+    setExportError(null);
+    try {
+      await sendLocalNotification();
+      await getPdf(encryptedContratId); // Appel API pour télécharger le PDF
+      Alert.alert(t("Succès"), t("Attestation téléchargée avec succès !"));
+    } catch (err: any) {
+      console.error("Erreur lors du téléchargement de l'attestation:", err);
+      setExportError(err.message || t("Échec du téléchargement de l'attestation."));
+      Alert.alert(t("Erreur"), err.message || t("Impossible de télécharger l'attestation."));
+    } finally {
+      setExportingPdf(false);
+    }
+  };
 
-const handleExportPdf = async (attestation: Attestation) => {
-  setExportingPdf(true);
-  setExportError(null);
-  try {
-    await sendLocalNotification();
-    
-    const response = await getPdf(attestation.contrat_id);
-    
-  } catch (err: any) {
-    console.error("Erreur lors de l'exportation de l'attestation:", err);
-    setExportError(err.message || t("Échec de l'exportation du CV."));
-  } finally {
-    setExportingPdf(false);
-  }
-};
-
-  // Fonction pour rendre chaque item de certificat
   const renderCertificateItem = ({ item }: { item: Attestation }) => (
-
-    
     <View style={[styles.cardItem, { backgroundColor: colors.cardBackground, borderColor: colors.border, overflow: 'hidden' }]}>
-      {/* Icône de fichier en background */}
       <Ionicons
         name="document-outline"
         size={190}
@@ -201,8 +180,8 @@ const handleExportPdf = async (attestation: Attestation) => {
         <View
           style={{
             backgroundColor: item.updated_at
-              ? '#d4edda'
-              : '#fff3cd',
+              ? colors.success + '20'
+              : colors.warning + '20',
             paddingVertical: 4,
             paddingHorizontal: 10,
             borderRadius: 8,
@@ -213,8 +192,8 @@ const handleExportPdf = async (attestation: Attestation) => {
           <Text
             style={{
               color: item.updated_at
-                ? '#155724'
-                : '#856404',
+                ? colors.success
+                : colors.warning,
               fontWeight: 'bold',
               fontSize: 13,
             }}
@@ -228,7 +207,7 @@ const handleExportPdf = async (attestation: Attestation) => {
         <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>
           {t("Période :")} {item.start_date ? new Date(item.start_date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }) : '...'} - {item.end_date ? new Date(item.end_date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }) : '...'}
         </Text>
-        <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>{t("Convention :")} {item.convention_label}</Text>
+        <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>{t("Convention :")} {item.convention_label || t("Non renseigné")}</Text>
 
         <View style={{ flexDirection: 'row', marginTop: 10 }}>
           <TouchableOpacity
@@ -239,31 +218,29 @@ const handleExportPdf = async (attestation: Attestation) => {
             <Text style={styles.actionButtonText}>{t("Voir détails")}</Text>
           </TouchableOpacity>
 
-      
-            <TouchableOpacity
-              style={[styles.actionButton, { backgroundColor: colors.secondary }]}
-              onPress={() => handleExportPdf(item.contrat_id)} disabled={exportingPdf}
-            >
-              {exportingPdf ? (
-                <ActivityIndicator color="#FFFFFF" size="small" />
-              ) : (
-                <>
-                  <Ionicons name="download-outline" size={18} color="#fff" style={{ marginRight: 6 }} />
-                  <Text style={styles.actionButtonText}>{t("Télécharger")}</Text>
-                </>
-              )}
-            </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.actionButton, { backgroundColor: colors.secondary }]}
+            onPress={() => handleDownloadPdf(item.contrat_id_encrypted)}
+            disabled={exportingPdf}
+          >
+            {exportingPdf ? (
+              <ActivityIndicator color="#FFFFFF" size="small" />
+            ) : (
+              <>
+                <Ionicons name="download-outline" size={18} color="#fff" style={{ marginRight: 6 }} />
+                <Text style={styles.actionButtonText}>{t("Télécharger")}</Text>
+              </>
+            )}
+          </TouchableOpacity>
         </View>
       </View>
     </View>
   );
 
-
-  // Rendu principal du composant
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
       <CustomHeader title={t("Mon Dossier RH")} user={user} onMenuPress={handleMenuPress} onAvatarPress={handleAvatarPress} />
-
+      
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -286,7 +263,6 @@ const handleExportPdf = async (attestation: Attestation) => {
             </View>
           ) : attestations.length === 0 ? (
             <View style={[styles.emptyState, { backgroundColor: colors.cardBackground, position: 'relative', overflow: 'hidden' }]}>
-              {/* Icône de fichier en background */}
               <Ionicons
                 name="file-tray-outline"
                 size={120}
@@ -299,7 +275,6 @@ const handleExportPdf = async (attestation: Attestation) => {
                   zIndex: 0,
                 }}
               />
-              {/* Icône principale au premier plan */}
               <Ionicons name="file-tray-outline" size={48} color={colors.textSecondary} style={{ zIndex: 1 }} />
               <Text style={[styles.emptyTitle, { color: colors.textPrimary, zIndex: 1 }]}>{t('Aucun certificat trouvé')}</Text>
               <Text style={[styles.emptyText, { color: colors.textSecondary, zIndex: 1 }]}>{t('Vos certificats apparaîtront ici.')}</Text>
@@ -308,15 +283,14 @@ const handleExportPdf = async (attestation: Attestation) => {
             <FlatList
               data={attestations}
               renderItem={renderCertificateItem}
-              keyExtractor={item => item?.id?.toString() ?? `item-${Math.random()}`}
-              scrollEnabled={false} // Géré par la ScrollView parente
+              keyExtractor={item => item?.attestation_id?.toString() ?? `item-${Math.random()}`}
+              scrollEnabled={false}
               contentContainerStyle={styles.listContainer}
             />
           )}
 
         </View>
       </ScrollView>
-      {/* NOUVEAU: Animation pour le modal */}
       {
         modalVisible && selectedCertificate && (
           <Animated.View style={{
@@ -339,19 +313,19 @@ const handleExportPdf = async (attestation: Attestation) => {
             }}>
               <ScrollView showsVerticalScrollIndicator={false}>
                 <Text style={[styles.itemTitle, { fontSize: 18, marginBottom: 10, color: colors.textPrimary }]}>
-                  <Ionicons name="briefcase-outline" size={18} color={colors.textPrimary} /> {selectedCertificate.label_masc || selectedCertificate.label_fem || t("Poste")}
+                  <Ionicons name="briefcase-outline" size={18} color={colors.textPrimary} /> {selectedCertificate.label_masc || t("Poste")}
                 </Text>
 
                 <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>
-                  <Ionicons name="person-outline" size={16} /> {t("Employé :")} {selectedCertificate.user_name}
+                  <Ionicons name="person-outline" size={16} /> {t("Employé :")} {selectedCertificate.user_name || t("Non renseigné")}
                 </Text>
 
                 <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>
-                  <Ionicons name="business-outline" size={16} /> {t("Société :")} {selectedCertificate.society_designation}
+                  <Ionicons name="business-outline" size={16} /> {t("Société :")} {selectedCertificate.society_designation || t("Non renseigné")}
                 </Text>
 
                 <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>
-                  <Ionicons name="document-outline" size={16} /> {t("Statut :")} {selectedCertificate.contract_status}
+                  <Ionicons name="document-outline" size={16} /> {t("Statut :")} {selectedCertificate.contract_status || t("Non renseigné")}
                 </Text>
 
                 <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>
@@ -360,27 +334,34 @@ const handleExportPdf = async (attestation: Attestation) => {
                     ? new Date(selectedCertificate.start_date).toLocaleDateString('fr-FR', {
                       day: '2-digit', month: 'short', year: 'numeric',
                     })
-                    : '...'
+                    : t("N/A")
                   } - {selectedCertificate.end_date ? new Date(selectedCertificate.end_date).toLocaleDateString('fr-FR', {
                     day: '2-digit', month: 'short', year: 'numeric',
-                  }) : '...'}
+                  }) : t("N/A")}
                 </Text>
 
                 <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>
-                  <Ionicons name="podium-outline" size={16} /> {t("Catégorie :")} {selectedCertificate.category_label} ({selectedCertificate.category_class})
+                  <Ionicons name="podium-outline" size={16} /> {t("Catégorie :")} {selectedCertificate.category_label || t("Non renseigné")} ({selectedCertificate.category_class || t("N/A")})
                 </Text>
 
                 <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>
-                  <Ionicons name="book-outline" size={16} /> {t("Convention :")} {selectedCertificate.convention_label}
+                  <Ionicons name="book-outline" size={16} /> {t("Convention :")} {selectedCertificate.convention_label || t("Non renseigné")}
                 </Text>
+                
                 {selectedCertificate?.contrat_id_encrypted && (
                   <TouchableOpacity
-                    onPress={() => handleExportPdf()}
-                    style={{ marginTop: 15 }}
+                    onPress={() => handleDownloadPdf(selectedCertificate.contrat_id_encrypted)}
+                    style={[styles.actionButton, { backgroundColor: colors.secondary, marginTop: 15 }]}
+                    disabled={exportingPdf}
                   >
-                    <Text style={{ color: colors.secondary, fontWeight: 'bold' }}>
-                      <Ionicons name="download-outline" size={16} /> {t("Télécharger le PDF")}
-                    </Text>
+                    {exportingPdf ? (
+                      <ActivityIndicator color="#FFFFFF" size="small" />
+                    ) : (
+                      <>
+                        <Ionicons name="download-outline" size={18} color="#fff" style={{ marginRight: 6 }} />
+                        <Text style={styles.actionButtonText}>{t("Télécharger le PDF")}</Text>
+                      </>
+                    )}
                   </TouchableOpacity>
                 )}
 
@@ -411,7 +392,6 @@ const handleExportPdf = async (attestation: Attestation) => {
               })()}
 
               {/* Bouton de fermeture */}
-
               <TouchableOpacity onPress={closeModal} style={{
                 marginTop: 15,
                 paddingVertical: 10,
@@ -539,10 +519,19 @@ const styles = StyleSheet.create({
   itemSubtitle: {
     fontSize: 13,
   },
-  // NOUVEAU: Styles pour le texte en pourcentages dans les détails
-  percentageText: {
+  detailsList: {
+    marginTop: 10,
+    borderTopWidth: 1,
+    paddingTop: 10,
+  },
+  detailsListTitle: {
     fontSize: 14,
     fontWeight: 'bold',
+    marginBottom: 5,
+  },
+  detailsListItem: {
+    fontSize: 13,
+    marginBottom: 2,
   },
   actionButton: {
     flexDirection: 'row',
@@ -556,5 +545,4 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
-
 });
