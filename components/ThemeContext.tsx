@@ -57,6 +57,8 @@ const darkColors = {
   newsImageOverlay: 'rgba(0,0,0,0.7)',
   newsCategoryBg: '#2C2C2C',
   newsCategoryText: '#64B5F6',
+
+  
 };
 
 // Interface pour le contexte du thème

@@ -556,4 +556,15 @@ export const getPdf = async (encryptedContratId) => {
     throw error;
   }
 };
+
+export const getContractHistory = async () => {
+  try {
+    const response = await api.get('/interim/contrats/history');
+    return response.data;
+  } catch (error) {
+    console.error("Erreur lors du chargement des contrats :", error.response?.data || error.message);
+    throw error;
+  }
+};
+
 export default api;

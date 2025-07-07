@@ -1587,29 +1587,11 @@ export default function ProfileDetailsScreen() {
         <View style={styles.infoContainer}>
           <View style={styles.infoItem}>
             <View style={styles.infoIcon}>
-              <Ionicons name="person" size={18} color={colors.textSecondary} />
-            </View>
-            <View style={styles.infoContent}>
-              <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Nom complet')}</Text>
-              <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{user?.name || t('Non renseigné')}</Text>
-            </View>
-          </View>
-          <View style={styles.infoItem}>
-            <View style={styles.infoIcon}>
-              <Ionicons name="mail" size={18} color={colors.textSecondary} />
-            </View>
-            <View style={styles.infoContent}>
-              <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Email')}</Text>
-              <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{user?.email || t('Non renseigné')}</Text>
-            </View>
-          </View>
-          <View style={styles.infoItem}>
-            <View style={styles.infoIcon}>
               <Ionicons name="finger-print" size={18} color={colors.textSecondary} />
             </View>
             <View style={styles.infoContent}>
               <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Matricule')}</Text>
-              <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.matricule || t('Non renseigné')}</Text>
+              <Text style={[styles.infoValue, { color: colors.textPrimary }]}>EMP-{interimProfile?.matricule || t('Non renseigné')}</Text>
             </View>
           </View>
           <View style={styles.infoItem}>

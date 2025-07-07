@@ -4,28 +4,26 @@ import CustomHeader from '../../../components/CustomHeader';
 import { useAuth } from '../../../components/AuthProvider';
 import { useTheme } from '../../../components/ThemeContext';
 import { useLanguage } from '../../../components/LanguageContext';
-import { getInterimAttestations, getDetailsUserGbg, getPdf } from '../../../utils/api';
+import { getInterimAttestations, getDetailsUserGbg, getPdf, getContractHistory } from '../../../utils/api';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { Animated } from 'react-native';
 import { useRef } from 'react';
-import * as FileSystem from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
 import * as Notifications from 'expo-notifications';
+import Toast from 'react-native-toast-message';
 
 
-// Interface pour un certificat (adaptez selon les champs réels de votre table 'attestations')
 interface Attestation {
-  attestation_id: number; // C'est l'id de l'attestation
-  contrat_id: number; // L'ID du contrat
-  contrat_id_encrypted: string; // L'ID du contrat encrypté pour le téléchargement
-  user_id: number; // L'ID de l'interimaire dans mysql_3.users
+  attestation_id: number;
+  contrat_id: number;
+  contrat_id_encrypted: string;
+  user_id: number;
   start_date?: string;
   end_date?: string;
   label_masc?: string;
   label_fem?: string;
-  contract_status?: string; // Statut du contrat
-  user_name?: string; // Nom de l'utilisateur principal lié au contrat
+  contract_status?: number;
+  user_name?: string;
   society_designation?: string;
   category_label?: string;
   category_class?: string;
@@ -53,6 +51,9 @@ export default function HrFileScreen() {
   const [error, setError] = useState<string | null>(null);
   const [selectedCertificate, setSelectedCertificate] = useState<Attestation | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
+  const [contractHistory, setContractHistory] = useState([]);
+  const [selectedFilter, setSelectedFilter] = useState<'Tous' | 'En cours' | 'Terminé'>('Tous');
+
 
   const [exportingPdf, setExportingPdf] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
@@ -133,6 +134,22 @@ export default function HrFileScreen() {
     fetchDetailsUser();
   }, []);
 
+  useEffect(() => {
+    const fetchContractHistory = async () => {
+      try {
+        const data = await getContractHistory();
+        setContractHistory(data); // Tu dois avoir ce state : const [contractHistory, setContractHistory] = useState([])
+      } catch (error) {
+        Toast.show({
+          type: 'error',
+          text1: 'Erreur',
+          text2: "Impossible de charger l'historique des contrats.",
+        });
+      }
+    };
+
+    fetchContractHistory();
+  }, []);
 
   const handleMenuPress = () => { Alert.alert(t("Menu"), t("Menu Dossier RH pressé !")); };
   const handleAvatarPress = () => { router.push('/(app)/profile-details'); };
@@ -151,13 +168,22 @@ export default function HrFileScreen() {
     setExportingPdf(true);
     setExportError(null);
     try {
-      await sendLocalNotification();
+      // Toast.show({
+      //   type: 'success',
+      //   text1: '✅ Téléchargement réussi',
+      //   text2: 'L’attestation est prête à être partagée.',
+      // });
       await getPdf(encryptedContratId); // Appel API pour télécharger le PDF
       Alert.alert(t("Succès"), t("Attestation téléchargée avec succès !"));
     } catch (err: any) {
       console.error("Erreur lors du téléchargement de l'attestation:", err);
       setExportError(err.message || t("Échec du téléchargement de l'attestation."));
       Alert.alert(t("Erreur"), err.message || t("Impossible de télécharger l'attestation."));
+      // Toast.show({
+      //   type: 'error',
+      //   text1: '❌ Erreur',
+      //   text2: 'Le téléchargement de l’attestation a échoué.',
+      // });
     } finally {
       setExportingPdf(false);
     }
@@ -236,14 +262,232 @@ export default function HrFileScreen() {
       </View>
     </View>
   );
+  const filteredContracts = contractHistory.filter((c) => {
+    return selectedFilter === 'Tous' || (c as { statut: string }).statut === selectedFilter;
+  });
+
+  const groupedByYear = filteredContracts.reduce((acc, contrat) => {
+    const year = new Date((contrat as { date_debut: string }).date_debut).getFullYear();
+    if (!acc[year]) acc[year] = [] as Array<{
+      statut: string;
+      society_name: string;
+      date_debut: string;
+      date_terminaison: string;
+      duration: number;
+      temps_ecoule: string;
+      rupture_motif?: string;
+    }>;
+    (acc as { [key: string]: Array<any> })[year].push(contrat);
+    return acc;
+  }, {});
+
+  const ModernContractTimeline = ({
+    contractHistory,
+    colors,
+    t,
+    styles
+  }: {
+    contractHistory: Array<{
+      statut: string;
+      society_name: string;
+      date_debut: string;
+      date_terminaison: string;
+      duration: number;
+      temps_ecoule: string;
+      rupture_motif?: string;
+    }>;
+    colors: {
+      primary: string;
+      secondary: string;
+      success: string;
+      warning: string;
+      error: string;
+      textPrimary: string;
+      textSecondary: string;
+      border: string;
+      cardBackground: string;
+    };
+    t: (key: string) => string;
+    styles: any;
+  }) => {
+    // Animation pour l'apparition des éléments
+    const fadeIn = new Animated.Value(0);
+
+    React.useEffect(() => {
+      Animated.timing(fadeIn, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }).start();
+    }, []);
+
+    const getStatusIcon = (statut: string) => {
+      switch (statut) {
+        case "En cours":
+          return "play-circle";
+        case "Terminé":
+          return "checkmark-circle";
+        default:
+          return "pause-circle";
+      }
+    };
+
+    const getStatusColor = (statut: string) => {
+      switch (statut) {
+        case "En cours":
+          return colors.success;
+        case "Terminé":
+          return colors.error;
+        default:
+          return colors.warning;
+      }
+    };
+
+    return (
+      <>
+        {contractHistory.length > 0 && (
+          <Animated.View style={[styles.section, { opacity: fadeIn }]}>
+            {/* En-tête moderne */}
+            <View style={modernStyles.headerContainer}>
+              <View style={modernStyles.headerIconContainer}>
+                <Ionicons name="git-branch-outline" size={24} color={colors.primary} />
+              </View>
+              <Text style={[modernStyles.headerTitle, { color: colors.textPrimary }]}>
+                {t("Historique des Contrats")}
+              </Text>
+              <View style={modernStyles.headerBadge}>
+                <Text style={[modernStyles.headerBadgeText, { color: colors.primary }]}>
+                  {contractHistory.length}
+                </Text>
+              </View>
+            </View>
+
+            {/* Timeline Container */}
+            <View style={modernStyles.timelineContainer}>
+              {Object.keys(groupedByYear)
+                .sort((a, b) => Number(b) - Number(a))
+                .map((year) => (
+                  <View key={year}>
+                    <Text style={[styles.sectionTitle, { marginBottom: 10, marginTop: 20, color: colors.textPrimary }]}>
+                      {year}
+                    </Text>
+
+                    {(groupedByYear as { [key: string]: Array<any> })[year].map((contrat, index) => {
+                      const statusColor = getStatusColor(contrat.statut);
+                      const isLast = index === (groupedByYear as { [key: string]: Array<any> })[year].length - 1;
+
+                      return (
+                        <View key={index} style={modernStyles.timelineItem}>
+                          {/* Ligne de connection */}
+                          {!isLast && (
+                            <View style={[modernStyles.timelineLine, { backgroundColor: colors.border }]} />
+                          )}
+
+                          {/* Point de timeline */}
+                          <View style={[modernStyles.timelinePoint, { borderColor: statusColor }]}>
+                            <View style={[modernStyles.timelinePointInner, { backgroundColor: statusColor }]}>
+                              <Ionicons
+                                name={getStatusIcon(contrat.statut)}
+                                size={12}
+                                color="white"
+                              />
+                            </View>
+                          </View>
+
+                          {/* Contenu de la carte */}
+                          <View style={[modernStyles.timelineCard, { backgroundColor: colors.cardBackground }]}>
+                            {/* Header de la carte */}
+                            <View style={modernStyles.cardHeader}>
+                              <View style={modernStyles.cardHeaderLeft}>
+                                <Ionicons name="business" size={18} color={colors.primary} />
+                                <Text style={[modernStyles.companyName, { color: colors.textPrimary }]}>
+                                  {contrat.society_name || t("Société inconnue")}
+                                </Text>
+                              </View>
+                              <View style={[modernStyles.statusBadge, { backgroundColor: statusColor + '20' }]}>
+                                <Text style={[modernStyles.statusText, { color: statusColor }]}>
+                                  {contrat.statut}
+                                </Text>
+                              </View>
+                            </View>
+
+                            {/* Dates */}
+                            <View style={modernStyles.dateSection}>
+                              <View style={modernStyles.dateItem}>
+                                <Ionicons name="calendar-outline" size={16} color={colors.textSecondary} />
+                                <Text style={[modernStyles.dateText, { color: colors.textSecondary }]}>
+                                  {contrat.date_debut}
+                                </Text>
+                              </View>
+                              <View style={modernStyles.dateArrow}>
+                                <Ionicons name="arrow-forward" size={16} color={colors.textSecondary} />
+                              </View>
+                              <View style={modernStyles.dateItem}>
+                                <Ionicons name="calendar-outline" size={16} color={colors.textSecondary} />
+                                <Text style={[modernStyles.dateText, { color: colors.textSecondary }]}>
+                                  {contrat.date_terminaison}
+                                </Text>
+                              </View>
+                            </View>
+
+                            {/* Durée et temps écoulé */}
+                            <View style={modernStyles.metricsRow}>
+                              <View style={modernStyles.metric}>
+                                <Text style={[modernStyles.metricLabel, { color: colors.textSecondary }]}>
+                                  {t("Durée")}
+                                </Text>
+                                <Text style={[modernStyles.metricValue, { color: colors.textPrimary }]}>
+                                  {contrat.duration} jours
+                                </Text>
+                              </View>
+
+                              <View style={modernStyles.metric}>
+                                <Text style={[modernStyles.metricLabel, { color: colors.textSecondary }]}>
+                                  {t(" Temps Écoulé")}
+                                </Text>
+                                <Text style={[modernStyles.metricValue, { color: colors.textPrimary }]}>
+                                  {contrat.temps_ecoule}
+                                </Text>
+                              </View>
+                            </View>
+
+                            {contrat.rupture_motif && (
+                              <View style={[modernStyles.alertSection, { backgroundColor: colors.error + '10' }]}>
+                                <Ionicons name="alert-circle" size={16} color={colors.error} />
+                                <Text style={[modernStyles.alertText, { color: colors.error }]}>
+                                  {t("Rupture :")} {contrat.rupture_motif}
+                                </Text>
+                              </View>
+                            )}
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </View>
+                ))}
+
+            </View>
+          </Animated.View>
+        )}
+      </>
+    );
+  };
+
+
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
       <CustomHeader title={t("Mon Dossier RH")} user={user} onMenuPress={handleMenuPress} onAvatarPress={handleAvatarPress} />
-      
+
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
+            <TouchableOpacity
+              onPress={() => router.back()}
+              style={{ flexDirection: 'row', alignItems: 'center' }}
+            >
+              <Ionicons name="arrow-back-outline" size={22} color={colors.primary} style={styles.sectionIcon} />
+            </TouchableOpacity>
             <Ionicons name="documents-outline" size={22} color={colors.primary} style={styles.sectionIcon} />
             <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{t('Mes Attestations')}</Text>
           </View>
@@ -251,7 +495,7 @@ export default function HrFileScreen() {
           {loading ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color={colors.secondary} />
-              <Text style={[styles.loadingText, { color: colors.textSecondary }]}>{t('Chargement des certificats...')}</Text>
+              <Text style={[styles.loadingText, { color: colors.textSecondary }]}>{t('Chargement des attestations...')}</Text>
             </View>
           ) : error ? (
             <View style={[styles.errorContainer, { backgroundColor: colors.error + '10' }]}>
@@ -276,8 +520,8 @@ export default function HrFileScreen() {
                 }}
               />
               <Ionicons name="file-tray-outline" size={48} color={colors.textSecondary} style={{ zIndex: 1 }} />
-              <Text style={[styles.emptyTitle, { color: colors.textPrimary, zIndex: 1 }]}>{t('Aucun certificat trouvé')}</Text>
-              <Text style={[styles.emptyText, { color: colors.textSecondary, zIndex: 1 }]}>{t('Vos certificats apparaîtront ici.')}</Text>
+              <Text style={[styles.emptyTitle, { color: colors.textPrimary, zIndex: 1 }]}>{t('Aucune attestation trouvée')}</Text>
+              <Text style={[styles.emptyText, { color: colors.textSecondary, zIndex: 1 }]}>{t('Vos attestations apparaîtront ici.')}</Text>
             </View>
           ) : (
             <FlatList
@@ -290,6 +534,34 @@ export default function HrFileScreen() {
           )}
 
         </View>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-around', marginBottom: 16 }}>
+          {['Tous', 'En cours', 'Terminé'].map((label) => (
+            <TouchableOpacity
+              key={label}
+              onPress={() => setSelectedFilter(label)}
+              style={{
+                paddingVertical: 6,
+                paddingHorizontal: 12,
+                borderRadius: 20,
+                backgroundColor: selectedFilter === label ? colors.primary : colors.cardBackground,
+                borderWidth: 1,
+                borderColor: selectedFilter === label ? colors.primary : colors.border,
+              }}
+            >
+              <Text style={{ color: selectedFilter === label ? '#fff' : colors.textPrimary }}>
+                {label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <ModernContractTimeline
+          contractHistory={contractHistory}
+          colors={colors}
+          t={t}
+          styles={styles}
+        />
+
       </ScrollView>
       {
         modalVisible && selectedCertificate && (
@@ -325,7 +597,20 @@ export default function HrFileScreen() {
                 </Text>
 
                 <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>
-                  <Ionicons name="document-outline" size={16} /> {t("Statut :")} {selectedCertificate.contract_status || t("Non renseigné")}
+                  <Ionicons name="document-outline" size={16} /> {t("Statut :")}
+                  <Text style={{
+                    color: selectedCertificate.contract_status === 1
+                      ? '#4CAF50' // Green for renewal
+                      : selectedCertificate.contract_status === 0
+                        ? '#2196F3' // Blue for new contract
+                        : colors.textSecondary // Default color for unknown status
+                  }}>
+                    {selectedCertificate.contract_status === 1
+                      ? t("Renouvellement")
+                      : selectedCertificate.contract_status === 0
+                        ? t("Nouveau contrat")
+                        : t("Non renseigné")}
+                  </Text>
                 </Text>
 
                 <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>
@@ -347,19 +632,41 @@ export default function HrFileScreen() {
                 <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>
                   <Ionicons name="book-outline" size={16} /> {t("Convention :")} {selectedCertificate.convention_label || t("Non renseigné")}
                 </Text>
-                
+
                 {selectedCertificate?.contrat_id_encrypted && (
                   <TouchableOpacity
                     onPress={() => handleDownloadPdf(selectedCertificate.contrat_id_encrypted)}
-                    style={[styles.actionButton, { backgroundColor: colors.secondary, marginTop: 15 }]}
+                    style={[{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: 'transparent',
+                      borderWidth: 1,
+                      borderColor: colors.secondary,
+                      paddingVertical: 10,
+                      paddingHorizontal: 16,
+                      borderRadius: 8,
+                      marginTop: 15
+                    }]}
                     disabled={exportingPdf}
                   >
                     {exportingPdf ? (
-                      <ActivityIndicator color="#FFFFFF" size="small" />
+                      <ActivityIndicator color={colors.secondary} size="small" />
                     ) : (
                       <>
-                        <Ionicons name="download-outline" size={18} color="#fff" style={{ marginRight: 6 }} />
-                        <Text style={styles.actionButtonText}>{t("Télécharger le PDF")}</Text>
+                        <Ionicons
+                          name="download-outline"
+                          size={16}
+                          color={colors.secondary}
+                        />
+                        <Text style={{
+                          marginLeft: 8,
+                          color: colors.secondary,
+                          fontSize: 14,
+                          fontWeight: '500'
+                        }}>
+                          {t("Télécharger l'attestation")}
+                        </Text>
                       </>
                     )}
                   </TouchableOpacity>
@@ -391,15 +698,33 @@ export default function HrFileScreen() {
                 );
               })()}
 
-              {/* Bouton de fermeture */}
-              <TouchableOpacity onPress={closeModal} style={{
-                marginTop: 15,
-                paddingVertical: 10,
-                alignItems: 'center',
-                backgroundColor: colors.primary,
-                borderRadius: 10,
-              }}>
-                <Text style={{ color: 'white', fontWeight: '600' }}>{t("Fermer")}</Text>
+              {/* Modern minimal close button */}
+              <TouchableOpacity
+                onPress={closeModal}
+                style={{
+                  marginTop: 20,
+                  paddingVertical: 12,
+                  paddingHorizontal: 24,
+                  backgroundColor: 'transparent',
+                  borderWidth: 1,
+                  borderColor: colors.primary + '40',
+                  borderRadius: 10,
+                  alignSelf: 'center',
+                  minWidth: 120,
+                  alignItems: 'center',
+                }}
+                activeOpacity={0.7}
+              >
+
+                <Text style={{
+                  color: colors.primary,
+                  fontSize: 15,
+                  fontWeight: '500',
+                  letterSpacing: 0.5
+                }}>
+
+                  {t("Fermer")}
+                </Text>
               </TouchableOpacity>
             </Animated.View>
           </Animated.View>
@@ -545,4 +870,138 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
+
 });
+const modernStyles = StyleSheet.create({
+  headerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    gap: 10
+  },
+  headerIconContainer: {
+    backgroundColor: '#E8F0FE',
+    borderRadius: 12,
+    padding: 6,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    flex: 1,
+  },
+  headerBadge: {
+    backgroundColor: '#E8F0FE',
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  headerBadgeText: {
+    fontWeight: '600',
+  },
+  timelineContainer: {
+    paddingLeft: 20,
+    borderLeftWidth: 2,
+    borderLeftColor: '#ccc',
+  },
+  timelineItem: {
+    marginBottom: 30,
+    marginLeft: -16,
+    flexDirection: 'row',
+  },
+  timelineLine: {
+    position: 'absolute',
+    top: 36,
+    left: 22,
+    width: 2,
+    height: '100%',
+  },
+  timelinePoint: {
+    width: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timelinePointInner: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  timelineCard: {
+    flex: 1,
+    padding: 14,
+    borderRadius: 10,
+    marginLeft: 6,
+    elevation: 2,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8
+  },
+  cardHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6
+  },
+  companyName: {
+    fontWeight: 'bold',
+    fontSize: 14
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  statusText: {
+    fontWeight: '600',
+    fontSize: 12,
+  },
+  dateSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+    gap: 6
+  },
+  dateItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  dateText: {
+    fontSize: 13
+  },
+  dateArrow: {
+    marginHorizontal: 6
+  },
+  metricsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 8,
+    marginBottom: 4
+  },
+  metric: {
+    flexDirection: 'column',
+    gap: 2,
+    alignItems: 'flex-start',
+  },
+  metricLabel: {
+    fontSize: 12
+  },
+  metricValue: {
+    fontWeight: '600'
+  },
+  alertSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 10,
+    gap: 6,
+    padding: 6,
+    borderRadius: 6,
+  },
+  alertText: {
+    fontSize: 13,
+  }
+});
+

@@ -5,6 +5,7 @@ import React from 'react';
 import { ThemeProvider, useTheme } from '../components/ThemeContext'; 
 import { LanguageProvider, useLanguage } from '../components/LanguageContext';
 import { StatusBar } from 'react-native'; 
+import Toast from 'react-native-toast-message';
 /**
  * Composant Layout Racine :
  * Ce composant est la racine de  l'application. Il fournit le AuthProvider
@@ -19,6 +20,7 @@ export default function RootLayout() {
         <LanguageProvider>
           <ThemeProvider>
             <RootLayoutContent />
+            <Toast />
           </ThemeProvider>
         </LanguageProvider>
       </AuthProvider>
