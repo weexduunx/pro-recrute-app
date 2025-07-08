@@ -54,9 +54,7 @@ function RootLayoutContent() {
     );
   }
 
-  // Si l'utilisateur est authentifié, affiche la navigation principale (app)
-  // Le groupe '(app)' est configuré dans app/(app)/_layout.tsx pour être un Drawer Navigator.
-  // On le rend en tant que 'Stack.Screen' ici pour s'assurer qu'il est dans une pile si besoin.
+
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(app)" />

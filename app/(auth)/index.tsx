@@ -183,7 +183,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#6B7280",
     fontWeight: "400",
-     marginBottom: 10,
+    marginBottom: 20,
   },
 
   // Section Formulaire

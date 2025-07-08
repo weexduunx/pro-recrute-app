@@ -43,6 +43,7 @@ const darkColors = {
   error: '#FF5252', // Rouge erreur
   success: '#69F0AE', // Vert succès
   warning: '#FFC107', // Jaune avertissement
+  danger: '#FF5722',
   // Couleurs spécifiques pour les éléments de paramètres
   settingIconBg: '#2C2C2C',
   settingItemBorder: '#2C2C2C',

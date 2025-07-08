@@ -557,6 +557,60 @@ export const getPdf = async (encryptedContratId) => {
   }
 };
 
+export const fetchEncryptedTypes = async () => {
+  try {
+    const response = await api.get('/interim/encrypted-types');
+    return response.data;
+  } catch (error) {
+    console.error('Erreur lors de la récupération des types chiffrés', error);
+    throw error;
+  }
+};
+
+export const getCertificatPdf = async (encryptedType, options = { share: true }) => {
+  try {
+    // MODIFIÉ : Requête GET et ID dans l'URL
+    const response = await api.get(`/interim/printCertificat/${encryptedType}`, { 
+      responseType: 'arraybuffer', // Indispensable pour recevoir des données binaires (le PDF)
+      headers: {
+        'Accept': 'application/pdf', // Demander un PDF
+      },
+    });
+
+     
+    const base64Content = arrayBufferToBase64(response.data);
+
+    const contentDisposition = response.headers['content-disposition'];
+    let fileName = `certificat_${encryptedType}.pdf`;
+    if (contentDisposition) {
+      const fileNameMatch = contentDisposition.match(/filename="(.+)"/);
+      if (fileNameMatch && fileNameMatch[1]) {
+        fileName = fileNameMatch[1];
+      }
+    }
+
+    const localUri = FileSystem.documentDirectory + fileName;
+
+    await FileSystem.writeAsStringAsync(localUri, base64Content, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+
+    console.log(`Certificat PDF téléchargé avec succès vers : ${localUri}`);
+
+ if (options.share && await Sharing.isAvailableAsync()) {
+    await Sharing.shareAsync(localUri);
+  } else if (!options.share) {
+    return { message: 'Certificat PDF téléchargé et partagée.', uri: localUri }; // Tu peux afficher dans un PDF Viewer natif ou fichier local
+  }
+    // return { message: 'Certificat PDF téléchargé et partagée.', uri: localUri };
+
+  } catch (error) {
+    console.error("Erreur téléchargement PDF:", error.response?.data || error.message);
+    Alert.alert("Erreur", error.response?.data?.message || "Le téléchargement du PDF a échoué.");
+    throw error;
+  }
+};
+
 export const getContractHistory = async () => {
   try {
     const response = await api.get('/interim/contrats/history');
@@ -566,5 +620,16 @@ export const getContractHistory = async () => {
     throw error;
   }
 };
+
+export const getCertificatInfo = async () => {
+  try {
+    const response = await api.get('/interim/certificats');
+    return response.data;
+  } catch (error) {
+    console.error("Erreur API certificat:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
 
 export default api;
