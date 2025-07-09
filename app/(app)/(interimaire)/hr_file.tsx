@@ -391,7 +391,7 @@ export default function HrFileScreen() {
 
               <TouchableOpacity
                 style={[styles.actionButton, { backgroundColor: colors.success }]}
-                onPress={() => handleDownloadCertificat(encryptedTypes?.regulier)}
+                onPress={() => encryptedTypes?.regulier && handleDownloadCertificat(encryptedTypes.regulier)}
                 disabled={exportingPdf}
               >
                 {exportingPdf ? (
@@ -436,7 +436,7 @@ export default function HrFileScreen() {
     colors,
     t,
     styles
-  }: {
+  }:{
     contractHistory: Array<{
       statut: string;
       society_name: string;

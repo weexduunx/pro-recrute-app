@@ -153,10 +153,6 @@ export const uploadCv = async (fileAsset) => {
   }
 };
 
-/**
- * Récupère les informations du CV parsé de l'utilisateur connecté.
- * @returns {Promise<object|null>} L'objet CV parsé ou null si non trouvé.
- */
 export const getParsedCvData = async () => {
   try {
     const response = await api.get('/user/parsed-cv'); // Laravel: GET /api/user/parsed-cv
@@ -171,10 +167,6 @@ export const getParsedCvData = async () => {
   }
 };
 
-/**
- * Récupère les candidatures de l'utilisateur connecté.
- * @returns {Promise<Array>} Un tableau d'objets candidature.
- */
 export const getUserApplications = async () => {
   try {
     const response = await api.get('/user/applications'); // Laravel: GET /api/user/applications
@@ -185,12 +177,6 @@ export const getUserApplications = async () => {
   }
 };
 
-/**
- * [NOUVEAU] Soumet une candidature pour une offre spécifique.
- * @param {string} offreId - L'ID de l'offre à laquelle postuler.
- * @param {object} [data] - Données additionnelles (ex: { motivation_letter: '...' }).
- * @returns {Promise<object>} La réponse de l'API avec la candidature soumise.
- */
 export const applyForOffre = async (offreId, data = {}) => {
   try {
     const response = await api.post(`/offres/${offreId}/apply`, data); // Laravel: POST /api/offres/{offre}/apply
@@ -201,12 +187,6 @@ export const applyForOffre = async (offreId, data = {}) => {
   }
 };
 
-/**
- * [MODIFIÉ] Envoie le code d'autorisation OAuth (reçu de WebBrowser) à votre backend Laravel.
- * @param {string} provider - Le nom du fournisseur ('google', 'linkedin').
- * @param {string} code - Le code d'autorisation reçu du fournisseur OAuth.
- * @returns {Promise<object>} - L'objet utilisateur et le jeton Sanctum.
- */
 export const socialLoginCallback = async (provider, code) => { // idToken remplacé par code
   try {
     // Laravel attend le 'code' dans les paramètres de requête GET pour le flux Socialite classique
@@ -220,10 +200,6 @@ export const socialLoginCallback = async (provider, code) => { // idToken rempla
   }
 };
 
-/**
- * [NOUVEAU] Récupère les offres recommandées pour l'utilisateur connecté.
- * @returns {Promise<Array>} Un tableau d'objets offre recommandés.
- */
 export const getRecommendedOffres = async () => {
   try {
     const response = await api.get('/offres/recommendations'); // Laravel: GET /api/offres/recommendations
@@ -234,11 +210,6 @@ export const getRecommendedOffres = async () => {
   }
 };
 
-/**
- * [NOUVEAU] Met à jour les informations du CV parsé de l'utilisateur.
- * @param {object} parsedCvData - Les données du CV parsé à mettre à jour.
- * @returns {Promise<object>} L'objet CV parsé mis à jour.
- */
 export const updateParsedCvData = async (parsedCvData) => {
   try {
     const response = await api.put('/user/parsed-cv', parsedCvData); // Laravel: PUT /api/user/parsed-cv
@@ -249,7 +220,6 @@ export const updateParsedCvData = async (parsedCvData) => {
   }
 };
 
-// Fonction utilitaire pour convertir un ArrayBuffer en chaîne Base64
 const arrayBufferToBase64 = (buffer) => {
   let binary = '';
   const bytes = new Uint8Array(buffer);
@@ -260,10 +230,6 @@ const arrayBufferToBase64 = (buffer) => {
   return btoa(binary); // btoa est disponible dans les environnements React Native/Expo
 };
 
-/**
- * Déclenche l'exportation du CV en PDF depuis le backend Laravel.
- * Télécharge le fichier et propose de l'ouvrir/partager.
-*/
 export const exportCvPdf = async () => {
   try {
     const response = await api.get('/user/export-cv-pdf', {
@@ -325,12 +291,6 @@ export const exportCvPdf = async () => {
   }
 };
 
-
-/**
- * Enregistre le token de notification push de l'utilisateur sur le backend.
- * @param {string} token - Le token Expo Push (ou autre token de notification).
- * @returns {Promise<object>} La réponse de l'API.
- */
 export const savePushToken = async (token) => {
   try {
     const response = await api.post('/user/save-push-token', { push_token: token });
@@ -342,9 +302,6 @@ export const savePushToken = async (token) => {
   }
 };
 
-/**
- * Récupère les informations du profil Candidat de l'utilisateur.
- */
 export const getCandidatProfile = async () => {
   try {
     const response = await api.get('/candidat'); // Laravel: GET /api/candidat
@@ -359,9 +316,6 @@ export const getCandidatProfile = async () => {
   }
 };
 
-/**
- * Crée ou met à jour le profil Candidat de l'utilisateur.
- */
 export const createOrUpdateCandidatProfile = async (candidatData) => {
   try {
     const response = await api.post('/candidat/create-update', candidatData); // Laravel: POST /api/candidat/create-update
@@ -372,10 +326,6 @@ export const createOrUpdateCandidatProfile = async (candidatData) => {
   }
 };
 
-/**
- *  Envoie une notification de test à l'utilisateur connecté via le backend.
- * @returns {Promise<object>} La réponse de l'API.
- */
 export const sendTestPushNotification = async () => {
   try {
     // Laravel: POST /api/user/send-test-push-notification
@@ -391,11 +341,6 @@ export const sendTestPushNotification = async () => {
   }
 };
 
-/**
- * Récupère toutes les actualités depuis le backend, avec des options de filtrage.
- * @param {object} [filters] - Un objet contenant les filtres (ex: { type: 'Conseil RH', category: 'RH' }).
- * @returns {Promise<Array>} Un tableau d'objets actualités.
- */
 export const getActualites = async (filters = {}) => {
   try {
     const params = new URLSearchParams();
@@ -417,11 +362,6 @@ export const getActualites = async (filters = {}) => {
   }
 };
 
-/**
- * Récupère une actualité spécifique par son ID depuis le backend.
- * @param {string} actualiteId - L'ID de l'actualité à récupérer.
- * @returns {Promise<object>} L'objet actualité.
- */
 export const getActualiteById = async (actualiteId) => {
   try {
     const response = await api.get(`/actualites/${actualiteId}`); // Laravel: GET /api/actualites/{id}
@@ -432,10 +372,6 @@ export const getActualiteById = async (actualiteId) => {
   }
 };
 
-/**
- *  Récupère le profil détaillé de l'utilisateur intérimaire.
- * @returns {Promise<object | null>} L'objet profil intérimaire ou null si non trouvé.
- */
 export const getInterimProfile = async () => {
   try {
     const response = await api.get('/interim/profile'); // Laravel: GET /api/interim/profile
@@ -450,11 +386,6 @@ export const getInterimProfile = async () => {
   }
 };
 
-/**
- * Crée ou met à jour le profil détaillé de l'utilisateur intérimaire.
- * @param {object} profileData - Les données du profil intérimaire à sauvegarder.
- * @returns {Promise<object>} L'objet profil intérimaire mis à jour.
- */
 export const createOrUpdateInterimProfile = async (profileData) => {
   try {
     const response = await api.post('/interim/create-update-profile', profileData); // Laravel: POST /api/interim/create-update-profile
@@ -465,10 +396,6 @@ export const createOrUpdateInterimProfile = async (profileData) => {
   }
 };
 
-/**
- * NOUVEAU : Récupère les attestations (certificats) de l'intérimaire connecté.
- * @returns {Promise<Array>} Un tableau d'objets attestation.
- */
 export const getInterimAttestations = async () => {
   try {
     const response = await api.get('/interim/attestations'); // Laravel: GET /api/interim/certificates
@@ -478,8 +405,6 @@ export const getInterimAttestations = async () => {
     throw error;
   }
 };
-
-
 
 export const getDetailsUserGbg = async () => {
   try {
@@ -491,11 +416,6 @@ export const getDetailsUserGbg = async () => {
   }
 };
 
-
-/**
- * NOUVEAU : Récupère les détails des prêts (échéanciers) de l'intérimaire connecté.
- * @returns {Promise<Array>} Un tableau d'objets échéancier de prêt.
- */
 export const getInterimLoans = async () => {
   try {
     const response = await api.get('/interim/loans'); // Laravel: GET /api/interim/loans
@@ -506,12 +426,6 @@ export const getInterimLoans = async () => {
   }
 };
 
-
-/**
- * NOUVEAU : Télécharge le PDF d'une attestation spécifique.
- * @param {string} encryptedContratId - L'ID du contrat encrypté.
- * @returns {Promise<object>} Message de succès et URI local du fichier.
- */
 export const getPdf = async (encryptedContratId) => {
   try {
     // MODIFIÉ : Requête GET et ID dans l'URL
@@ -569,11 +483,10 @@ export const fetchEncryptedTypes = async () => {
 
 export const getCertificatPdf = async (encryptedType, options = { share: true }) => {
   try {
-    // MODIFIÉ : Requête GET et ID dans l'URL
     const response = await api.get(`/interim/printCertificat/${encryptedType}`, { 
-      responseType: 'arraybuffer', // Indispensable pour recevoir des données binaires (le PDF)
+      responseType: 'arraybuffer', 
       headers: {
-        'Accept': 'application/pdf', // Demander un PDF
+        'Accept': 'application/pdf',
       },
     });
 
@@ -630,6 +543,5 @@ export const getCertificatInfo = async () => {
     throw error;
   }
 };
-
 
 export default api;
