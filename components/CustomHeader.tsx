@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, Platform, Modal, Pressable, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { FontAwesome5, MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
+import { FontAwesome5, Ionicons } from '@expo/vector-icons';
 import { useNavigation, DrawerActions } from '@react-navigation/native';
 import { router } from 'expo-router';
-import { useAuth } from '../components/AuthProvider';
+import { useAuth } from './AuthProvider';
 import { StatusBar } from 'expo-status-bar';
-import AntDesign from '@expo/vector-icons/AntDesign';
+// @ts-ignore
 import UserAvatar from 'react-native-user-avatar';
 
 /**
@@ -45,17 +45,22 @@ export default function CustomHeader({ title, user }: CustomHeaderProps) {
     router.push('/(app)/profile-details'); // Naviguer vers l'écran du tableau de bord
   };
 
-  const handleDropdownLogout = async () => {
-    closeAvatarDropdown();
-    Alert.alert(
-      "Déconnexion",
-      "Êtes-vous sûr de vouloir vous déconnecter ?",
-      [
-        { text: "Annuler", style: "cancel" },
-        { text: "Oui", onPress: async () => { await logout(); } }
-      ]
-    );
-  };
+const handleDropdownLogout = () => {
+  closeAvatarDropdown();
+  Alert.alert(
+    "Déconnexion",
+    "Êtes-vous sûr de vouloir vous déconnecter ?",
+    [
+      { text: "Annuler", style: "cancel" },
+      { text: "Oui", onPress: () => {
+        setTimeout(() => {
+          logout();
+        }, 200); // petit délai aussi ici
+      }}
+    ]
+  );
+};
+
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -78,7 +83,7 @@ export default function CustomHeader({ title, user }: CustomHeaderProps) {
             src={user?.profile_photo_path || undefined}
             bgColor="#0f8e35"
             bgColors={['#0f8e35', '#0f8e35', '#0f8e35']}
-            initials={user?.name ? user.name.split(' ').map(n => n[0]).join('') : ''}
+            initials={user?.name ? user.name.split(' ').map((n: string) => n[0]).join('') : ''}
             style={{ borderWidth: 2, borderColor: '#FFFFFF' }}
             textColor="#FFFFFF"
             borderRadius={30}

@@ -4,35 +4,32 @@ import React, {
   useState,
   useEffect,
   ReactNode,
-  useCallback, // Ajout de useCallback
+  useCallback,
 } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Device from 'expo-device';
 import * as SplashScreenExpo from 'expo-splash-screen';
-import { 
-  loginUser, 
-  fetchUserProfile, 
-  logoutUser, 
-  registerUser, // Ajout de registerUser
-  socialLoginCallback // Ajout de socialLoginCallback si utilisé
+import {
+  loginUser,
+  fetchUserProfile,
+  logoutUser,
+  registerUser,
+  socialLoginCallback
 } from '../utils/api';
-import { router, useSegments } from 'expo-router'; // Ajout de useSegments
+import { router, useSegments } from 'expo-router';
 
-// Garder le splash screen natif visible pendant le chargement des assets et la vérification de l'authentification
 SplashScreenExpo.preventAutoHideAsync();
 
-// Définir la forme de notre contexte d'authentification
 interface User {
   id: number;
   name: string;
   email: string;
-  role: string; // NOUVEAU : Ajout du rôle de l'utilisateur
+  role: string;
   email_verified_at?: string;
   created_at?: string;
   updated_at?: string;
-  expo_push_token?: string; // Si vous stockez le token sur le user
+  expo_push_token?: string;
   profile_photo_url?: string;
-  // Ajoutez d'autres champs de l'utilisateur ici
 }
 
 interface AuthContextType {
@@ -41,13 +38,13 @@ interface AuthContextType {
   isAuthenticated: boolean;
   loading: boolean;
   error: string | null;
-  login: (email: string, password: string, deviceName?: string) => Promise<void>; // deviceName optionnel car il peut être généré
-  register: (name: string, email: string, password: string, passwordConfirmation: string, role?: string) => Promise<void>; // rôle optionnel
+  login: (email: string, password: string, deviceName?: string) => Promise<void>;
+  register: (name: string, email: string, password: string, passwordConfirmation: string, role?: string) => Promise<void>;
   logout: () => Promise<void>;
-  socialLogin: (provider: string, code: string) => Promise<void>; // Ajout de socialLogin
+  socialLogin: (provider: string, code: string) => Promise<void>;
   clearError: () => void;
   isAppReady: boolean;
-  fetchUser: () => Promise<void>; // Exposer la fonction pour recharger le profil
+  fetchUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -71,7 +68,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [isAppReady, setIsAppReady] = useState(false);
 
   const segments = useSegments();
+  // Vérifie si nous sommes dans le groupe d'authentification (ex: /(auth)/)
   const inAuthGroup = segments[0] === '(auth)';
+  // Vérifie si nous sommes dans le groupe de l'application (ex: /(app)/)
   const inAppGroup = segments[0] === '(app)';
 
   // Fonction pour recharger le profil utilisateur depuis l'API
@@ -79,15 +78,35 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     try {
       const fetchedUser = await fetchUserProfile();
       setUser(fetchedUser);
-      return fetchedUser; // Retourne l'utilisateur pour une utilisation immédiate
+      return fetchedUser;
     } catch (e) {
       console.error("Échec de la récupération du profil utilisateur:", e);
-      await AsyncStorage.removeItem('user_token'); // Nettoie le token si invalide
+      await AsyncStorage.removeItem('user_token');
       setUser(null);
-      setToken(null); // Assurez-vous que le token local est aussi effacé
-      throw e; // Propager l'erreur pour le gestionnaire prepareApp
+      setToken(null);
+      throw e;
     }
   }, []);
+
+  // Logique de redirection centralisée
+  const handleRedirect = useCallback((authenticated: boolean, userRole: string | undefined) => {
+    if (authenticated) {
+      if (inAuthGroup) { // Si l'utilisateur est authentifié et dans le groupe auth
+        if (userRole === 'user') {
+          router.replace('/(app)/home');
+        } else if (userRole === 'interimaire') {
+          router.replace('/(app)/(interimaire)');
+        } else {
+          // Fallback pour les rôles non reconnus ou futurs rôles
+          router.replace('/(app)/home');
+        }
+      }
+    } else {
+      if (inAppGroup) { // Si l'utilisateur n'est pas authentifié et dans le groupe app
+        router.replace('/(auth)');
+      }
+    }
+  }, [inAuthGroup, inAppGroup]);
 
   // Effet pour effectuer la configuration initiale de l'application et la vérification de l'authentification.
   useEffect(() => {
@@ -98,16 +117,16 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
         if (storedToken) {
           setToken(storedToken);
-          const userData = await fetchUser(); // Utilise la fonction fetchUser
-          // Redirection basée sur le rôle après la récupération du profil
+          const userData = await fetchUser();
+          // Redirection initiale après la récupération du profil
           if (userData) {
-            handleRedirectBasedOnRole(userData.role);
+            handleRedirect(true, userData.role);
           } else {
             // Si userData est null (token invalide), redirige vers l'authentification
-            router.replace('/(auth)');
+            handleRedirect(false, undefined);
           }
         } else {
-          router.replace('/(auth)');
+          handleRedirect(false, undefined);
         }
       } catch (err: any) {
         console.error('App preparation or initial authentication failed:', err.response?.data || err.message || err);
@@ -115,7 +134,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         await AsyncStorage.removeItem('user_token');
         setUser(null);
         setToken(null);
-        router.replace('/(auth)');
+        handleRedirect(false, undefined); // Assure la redirection vers auth en cas d'erreur
       } finally {
         setLoading(false);
         setIsAppReady(true);
@@ -124,42 +143,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     }
 
     prepareApp();
-  }, [fetchUser]); // fetchUser est une dépendance car elle est utilisée dans cet useEffect
+  }, [fetchUser, handleRedirect]); // handleRedirect est une dépendance ici
 
-  // Redirection basée sur le rôle de l'utilisateur
-  const handleRedirectBasedOnRole = useCallback((role: string) => {
-    if (role === 'user') {
-      router.replace('/(app)/home'); // Redirige vers la navigation par onglets pour les candidats
-    } else if (role === 'interimaire') {
-      router.replace('/(app)/(interimaire)'); // Redirige vers l'espace intérimaire
-    } else {
-      // Rôle inconnu ou par défaut, redirige vers une page générique ou d'erreur
-      router.replace('/(app)/home'); 
-    }
-  }, []);
-
-  // Définir isAuthenticated à partir de l'état user
-  const isAuthenticated = !!user;
-
-  // Effet pour gérer les redirections après que l'état d'authentification change (ex: login/logout)
-  useEffect(() => {
-    if (isAppReady) {
-      if (isAuthenticated && inAuthGroup) {
-        // Si authentifié et dans le groupe d'authentification, redirige selon le rôle
-        if (user?.role) {
-          handleRedirectBasedOnRole(user.role);
-        } else {
-          // Fallback si le rôle n'est pas encore chargé
-          router.replace('/(app)/home'); 
-        }
-      } else if (!isAuthenticated && inAppGroup) {
-        // Si non authentifié et dans le groupe de l'application, redirige vers l'authentification
-        router.replace('/(auth)');
-      }
-    }
-  }, [isAppReady, isAuthenticated, inAuthGroup, inAppGroup, user?.role, handleRedirectBasedOnRole]);
-
-
+  // Fonction de connexion
   const login = async (email: string, password: string, deviceName?: string) => {
     setLoading(true);
     setError(null);
@@ -167,74 +153,83 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       const actualDeviceName = deviceName || Device.deviceName || 'UnknownDevice';
       const response = await loginUser(email, password, actualDeviceName);
       await AsyncStorage.setItem('user_token', response.token);
-      setUser(response.user); // L'objet user contient maintenant le rôle
+      setUser(response.user);
       setToken(response.token);
-      setIsAppReady(true); // Assurez-vous que l'app est prête pour la redirection
-      handleRedirectBasedOnRole(response.user.role); // Redirige immédiatement après la connexion
+      // Redirige immédiatement après la connexion réussie
+      handleRedirect(true, response.user.role);
     } catch (err: any) {
       console.error('Login failed:', err.response?.data || err.message);
       setError(err.response?.data?.message || 'Login failed. Please check your credentials.');
-      // Ne pas rediriger ici, laisser l'useEffect ou le composant de login gérer l'affichage de l'erreur
+      throw err;
     } finally {
       setLoading(false);
     }
   };
 
+  // Fonction d'enregistrement
   const register = async (name: string, email: string, password: string, passwordConfirmation: string, role?: string) => {
     setLoading(true);
     setError(null);
     try {
-      const actualDeviceName = Device.deviceName || 'UnknownDevice'; // Nécessaire pour Sanctum
+      const actualDeviceName = Device.deviceName || 'UnknownDevice';
       const response = await registerUser(name, email, password, passwordConfirmation, role);
       await AsyncStorage.setItem('user_token', response.token);
-      setUser(response.user); // L'objet user contient maintenant le rôle
+      setUser(response.user);
       setToken(response.token);
-      setIsAppReady(true); // Assurez-vous que l'app est prête pour la redirection
-      handleRedirectBasedOnRole(response.user.role); // Redirige immédiatement après l'enregistrement
+      // Redirige immédiatement après l'enregistrement réussi
+      handleRedirect(true, response.user.role);
     } catch (err: any) {
       console.error('Registration failed:', err.response?.data || err.message);
       setError(err.response?.data?.message || 'Registration failed. Please try again.');
-      throw err; // Propager l'erreur au formulaire d'inscription
+      throw err;
     } finally {
       setLoading(false);
     }
   };
 
+  // Fonction de déconnexion
   const logout = async () => {
-    setLoading(true);
-    setError(null);
     try {
-      await logoutUser();
+      setLoading(true);
+      setError(null);
+      await logoutUser(); // <- si backend, sinon supprime cette ligne
+
       await AsyncStorage.removeItem('user_token');
       setUser(null);
       setToken(null);
-      setIsAppReady(true); // Assurez-vous que l'app est prête pour la redirection
-      router.replace('/(auth)'); // Redirige vers la page d'authentification après déconnexion
+
+      // 👇 Protection contre appel `router.replace()` après un unmount
+      setTimeout(() => {
+        router.replace('/(auth)');
+      }, 100); // petit délai pour laisser React faire son clean-up
     } catch (err: any) {
       console.error('Logout failed:', err.response?.data || err.message);
-      setError(err.response?.data?.message || 'Logout failed. Please try again.');
-      await AsyncStorage.removeItem('user_token'); // Toujours nettoyer le token local même en cas d'erreur serveur
+      setError(err.response?.data?.message || 'Déconnexion échouée.');
+      await AsyncStorage.removeItem('user_token');
+      setUser(null);
+      setToken(null);
     } finally {
       setLoading(false);
     }
   };
 
+
+  // Fonction de connexion sociale
   const socialLogin = async (provider: string, code: string) => {
     setLoading(true);
     setError(null);
     try {
-        const response = await socialLoginCallback(provider, code) as { user: User; token: string };
-        await AsyncStorage.setItem('user_token', response.token);
-        setUser(response.user);
-        setToken(response.token);
-        setIsAppReady(true);
-        handleRedirectBasedOnRole(response.user.role);
+      const response = await socialLoginCallback(provider, code);
+      await AsyncStorage.setItem('user_token', response.token);
+      setUser(response.user);
+      setToken(response.token);
+      handleRedirect(true, response.user.role);
     } catch (err: any) {
-        console.error('Social login failed:', err.response?.data || err.message);
-        setError(err.response?.data?.message || 'Social login failed. Please try again.');
-        throw err;
+      console.error('Social login failed:', err.response?.data || err.message);
+      setError(err.response?.data?.message || 'Social login failed. Please try again.');
+      throw err;
     } finally {
-        setLoading(false);
+      setLoading(false);
     }
   };
 
@@ -243,7 +238,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const authContextValue = {
     user,
     token,
-    isAuthenticated: !!user, // Dépend de la présence de l'objet user
+    isAuthenticated: !!user,
     loading,
     error,
     login,
@@ -252,7 +247,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     socialLogin,
     clearError,
     isAppReady,
-    fetchUser, // Exposer la fonction fetchUser
+    fetchUser,
   };
 
   return (
