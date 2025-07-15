@@ -6,10 +6,10 @@ import * as Sharing from 'expo-sharing';
 import { Alert, TouchableOpacity, Text } from 'react-native';
 
 // **IMPORTANT: Mettez à jour cette URL avec l'adresse IP et le port du  backend Laravel**
-// const API_URL = proce;
+const API_URL = 'http://192.168.1.144:8000/api';
 
 const api = axios.create({
-  baseURL: process.env.EXPO_PUBLIC_API_URL,
+  baseURL: API_URL,
   withCredentials: true,
   headers: {
     'Accept': 'application/json',
@@ -187,12 +187,12 @@ export const applyForOffre = async (offreId, data = {}) => {
   }
 };
 
-export const socialLoginCallback = async (provider, code) => { // idToken remplacé par code
+export const socialLoginCallback = async (provider, code) => {
   try {
-    // Laravel attend le 'code' dans les paramètres de requête GET pour le flux Socialite classique
+    // L'URL ici correspond à votre route Laravel: /api/auth/{provider}/callback
     const response = await axios.get(`${API_URL}/auth/${provider}/callback?code=${code}`);
     const { token, user } = response.data;
-    await AsyncStorage.setItem('user_token', token);
+    await AsyncStorage.setItem('user_token', token); // Stocker le jeton Sanctum
     return { user, token };
   } catch (error) {
     console.error(`Échec de l'échange de jeton Socialite pour ${provider}:`, error.response?.data || error.message);

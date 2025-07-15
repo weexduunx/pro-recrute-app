@@ -6,6 +6,7 @@ import { useAuth } from '../../components/AuthProvider';
 import { useTheme } from '../../components/ThemeContext';
 import { useLanguage } from '../../components/LanguageContext';
 import { allowedDrawerRoutesByRole } from '../../components/drawer/drawerRoutes';
+import { Tabs } from 'expo-router';
 
 export default function AppDrawerLayout() {
   const { user } = useAuth();
@@ -42,10 +43,15 @@ export default function AppDrawerLayout() {
               drawerIcons[route] ? drawerIcons[route](color, size) : null,
           }}
         />
+        
       ))}
     </Drawer>
+
+
+
   );
 }
+
 
 // Traductions personnalisées si besoin
 function getDrawerLabel(route: string): string {

@@ -160,7 +160,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingVertical: 40,
   },
-  
+
   // Section Header
   headerSection: {
     alignItems: "center",

@@ -17,6 +17,8 @@ import {
   socialLoginCallback
 } from '../utils/api';
 import { router, useSegments } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser'; 
+import * as AuthSession from 'expo-auth-session';
 
 SplashScreenExpo.preventAutoHideAsync();
 
@@ -32,6 +34,10 @@ interface User {
   profile_photo_url?: string;
 }
 
+// IMPORTANT: Le SCHEME doit correspondre à celui que vous avez dans app.json pour votre application Expo
+const REDIRECT_URI = AuthSession.makeRedirectUri({ scheme: 'prorecruteapp' }); // makeRedirectUri for Expo Go
+console.log('AuthProvider: Redirect URI généré:', REDIRECT_URI);
+
 interface AuthContextType {
   user: User | null;
   token: string | null;
@@ -41,7 +47,7 @@ interface AuthContextType {
   login: (email: string, password: string, deviceName?: string) => Promise<void>;
   register: (name: string, email: string, password: string, passwordConfirmation: string, role?: string) => Promise<void>;
   logout: () => Promise<void>;
-  socialLogin: (provider: string, code: string) => Promise<void>;
+  socialLogin: (provider: string) => Promise<void>;
   clearError: () => void;
   isAppReady: boolean;
   fetchUser: () => Promise<void>;
@@ -214,25 +220,57 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   };
 
 
-  // Fonction de connexion sociale
-  const socialLogin = async (provider: string, code: string) => {
+  /**
+   * [NOUVEAU] Gère le processus de connexion sociale via OAuth.
+   * @param {string} provider - Le nom du fournisseur ('google', 'linkedin').
+   */
+  const socialLogin = async (provider: string) => {
     setLoading(true);
     setError(null);
+
+    // L'URL de redirection vers votre API Laravel pour initier le flux OAuth
+    // Assurez-vous que l'URL de votre API Laravel est correcte
+    const LARAVEL_SOCIAL_REDIRECT_URL = `http://192.168.1.144:8000/api/auth/${provider}/redirect`;
+
     try {
-      const response = await socialLoginCallback(provider, code);
-      await AsyncStorage.setItem('user_token', response.token);
-      setUser(response.user);
-      setToken(response.token);
-      handleRedirect(true, response.user.role);
+      // Ouvre le navigateur pour le flux OAuth
+      const result = await WebBrowser.openAuthSessionAsync(
+        LARAVEL_SOCIAL_REDIRECT_URL,
+        REDIRECT_URI // C'est l'URI de redirection configuré dans Google Cloud Console et app.json
+      );
+
+      // Vérifier si le flux a été annulé ou a échoué
+      if (result.type === 'success' && result.url) {
+        // Analyser l'URL de retour pour extraire le code d'autorisation
+        const url = new URL(result.url);
+        const code = url.searchParams.get('code');
+
+        if (code) {
+          console.log(`AuthProvider: Code d'autorisation reçu pour ${provider}:`, code);
+          // Échanger le code d'autorisation avec votre backend Laravel
+          const { user: loggedInUser, token: receivedToken } = await socialLoginCallback(provider, code);
+          
+          await AsyncStorage.setItem('user_token', receivedToken);
+          setUser(loggedInUser);
+          setToken(receivedToken);
+          router.replace('/(app)/home'); // Naviguer vers l'espace authentifié
+        } else {
+          setError('Code d\'autorisation manquant dans la réponse OAuth.');
+          console.error('AuthProvider: Code d\'autorisation manquant.');
+        }
+      } else if (result.type === 'cancel') {
+        setError('Connexion annulée par l\'utilisateur.');
+      } else {
+        setError('Échec de la connexion OAuth.');
+      }
     } catch (err: any) {
-      console.error('Social login failed:', err.response?.data || err.message);
-      setError(err.response?.data?.message || 'Social login failed. Please try again.');
-      throw err;
+      console.error(`Échec de la connexion sociale via ${provider}:`, err.response?.data || err.message);
+      setError(err.response?.data?.message || `Échec de la connexion via ${provider}. Veuillez réessayer.`);
     } finally {
       setLoading(false);
     }
   };
-
+  
   const clearError = () => setError(null);
 
   const authContextValue = {

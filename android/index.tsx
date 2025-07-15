@@ -14,13 +14,13 @@ import {
   Animated,
   StatusBar,
 } from "react-native";
-import CustomHeader from '../../../components/CustomHeader';
-import { useAuth } from '../../../components/AuthProvider';
-import { useTheme } from '../../../components/ThemeContext';
-import { useLanguage } from '../../../components/LanguageContext';
+import CustomHeader from '../components/CustomHeader';
+import { useAuth } from '../components/AuthProvider';
+import { useTheme } from '../components/ThemeContext';
+import { useLanguage } from '../components/LanguageContext';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { getOffres, getRecommendedOffres, getActualites } from "../../../utils/api";
+import { getOffres, getRecommendedOffres, getActualites } from "../utils/api";
 import EvilIcons from '@expo/vector-icons/EvilIcons';
 import { FontAwesome5, FontAwesome } from '@expo/vector-icons';
 import { Image } from 'expo-image';

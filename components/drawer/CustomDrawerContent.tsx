@@ -30,7 +30,7 @@ export default function CustomDrawerContent(props: any) {
             {t('Bienvenue')} {user?.name}
           </Text>
           <Text style={{ color: '#ccc', fontSize: 12 }}>
-            {user?.role === 'user' ? 'Candidat' : user?.role === 'intérimaire' ? 'Agent Intérimaire' : user?.role}
+            {user?.role === 'user' ? 'Candidat' : user?.role === 'interimaire' ? 'Agent Intérimaire' : user?.role}
           </Text>
         </View>
         <DrawerItemList {...props} state={filteredState} />
