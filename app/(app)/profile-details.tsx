@@ -13,6 +13,7 @@ import {
   Keyboard,
   StatusBar,
   Image,
+  Platform,
 } from 'react-native';
 import { useAuth } from '../../components/AuthProvider';
 import CustomHeader from '../../components/CustomHeader';
@@ -33,6 +34,8 @@ import { router } from 'expo-router';
 import { useTheme } from '../../components/ThemeContext';
 import { useLanguage } from '../../components/LanguageContext';
 import { Picker } from '@react-native-picker/picker';
+import DateTimePicker from '@react-native-community/datetimepicker'; // Expo-friendly
+// import dayjs from 'dayjs'; // facultatif, pour le format AAAA-MM-JJ
 
 const { width } = Dimensions.get('window');
 
@@ -78,6 +81,7 @@ interface CandidatProfileData {
   parsed_cv?: ParsedCvData;
 }
 
+
 interface InterimProfileData {
   matricule?: string;
   sexe?: number;
@@ -98,6 +102,7 @@ interface InterimProfileData {
   situation_matrimoniale_label?: string;
   taux_retenu_label?: string;
   taux_remboursse_label?: string;
+  is_contract_active?: boolean; // NOUVEAU : Statut du contrat
 }
 
 
@@ -111,6 +116,37 @@ export default function ProfileDetailsScreen() {
     return 'personal';
   });
 
+  
+const [showDatePicker, setShowDatePicker] = useState(false);
+
+// Fonction pour formater la date
+const formatDate = (date) => {
+  if (!date) return '';
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+// Fonction pour parser la date string
+const parseDate = (dateString) => {
+  if (!dateString) return new Date();
+  const [year, month, day] = dateString.split('-');
+  return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+};
+
+// Gestionnaire de changement de date
+const handleDateChange = (event, selectedDate) => {
+  setShowDatePicker(Platform.OS === 'ios');
+  
+  if (selectedDate) {
+    const formattedDate = formatDate(selectedDate);
+    setEditableCandidatProfile(prev => ({ 
+      ...prev!, 
+      date_naissance: formattedDate 
+    }));
+  }
+};
   // États profil personnel User
   const [personalEditMode, setPersonalEditMode] = useState(false);
   const [editableName, setEditableName] = useState(user?.name || '');
@@ -219,7 +255,7 @@ export default function ProfileDetailsScreen() {
           email: data?.parsed_cv?.email || user?.email || '',
           phone: data?.parsed_cv?.phone || '',
           summary: data?.parsed_cv?.summary || '',
-          education: Array.isArray(data?.parsed_cv?.education) ? data.parsed_cv.education : [],
+          education: Array.isArray(data?.parsed_cv?.education) ? data?.parsed_cv?.education : [],
         });
 
         if (data?.parsed_cv?.last_parsed_file) {
@@ -1565,6 +1601,428 @@ export default function ProfileDetailsScreen() {
 
 
   //  Rendu de la section Intérimaire
+  // const renderInterimSection = () => (
+  //   <View style={[styles.section, { backgroundColor: colors.cardBackground }]}>
+  //     <View style={styles.sectionHeader}>
+  //       <View style={styles.headerLeft}>
+  //         <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{t('Profil Intérimaire')}</Text>
+  //       </View>
+  //       <View style={styles.headerActions}>
+  //         <TouchableOpacity
+  //           style={[styles.actionButton, interimEditMode && styles.actionButtonActive, { backgroundColor: interimEditMode ? colors.secondary : colors.settingIconBg }]}
+  //           onPress={() => interimEditMode ? handleInterimProfileSave() : setInterimEditMode(true)}
+  //         >
+  //           <Ionicons
+  //             name={interimEditMode ? "checkmark" : "pencil"}
+  //             size={18}
+  //             color={interimEditMode ? "#ffffff" : colors.secondary}
+  //           />
+  //         </TouchableOpacity>
+  //         {interimEditMode && (
+  //           <TouchableOpacity
+  //             style={[styles.actionButton, styles.actionButtonCancel, { backgroundColor: colors.error }]}
+  //             onPress={() => {
+  //               setInterimEditMode(false);
+  //               loadInterimProfile();
+  //               setInterimUpdateError(null);
+  //             }}
+  //           >
+  //             <Ionicons name="close" size={18} color="#ffffff" />
+  //           </TouchableOpacity>
+  //         )}
+  //       </View>
+  //     </View>
+
+  //     {loadingInterimProfile ? (
+  //       <View style={styles.loadingContainer}>
+  //         <ActivityIndicator size="small" color={colors.secondary} />
+  //         <Text style={[styles.loadingText, { color: colors.textSecondary }]}>{t('Chargement du profil intérimaire...')}</Text>
+  //       </View>
+  //     ) : interimEditMode ? (
+  //       // Formulaire d'édition du profil Intérimaire
+  //       <View style={styles.editContainer}>
+  //         {/* Nom complet et Email de l'utilisateur principal (non modifiables ici) */}
+  //         <View style={styles.inputGroup}>
+  //           <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Nom complet')}</Text>
+  //           <TextInput
+  //             style={[styles.input, styles.disabledInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
+  //             value={user?.name || ''}
+  //             editable={false}
+  //             placeholder={t("Nom complet de l'utilisateur")}
+  //             placeholderTextColor={colors.textSecondary}
+  //           />
+  //         </View>
+  //         <View style={styles.inputGroup}>
+  //           <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Email')}</Text>
+  //           <TextInput
+  //             style={[styles.input, styles.disabledInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
+  //             value={user?.email || ''}
+  //             editable={false}
+  //             placeholder={t("Email de l'utilisateur")}
+  //             placeholderTextColor={colors.textSecondary}
+  //           />
+  //         </View>
+
+  //         {/* CHAMPS NON MODIFIABLES (Matricule, Statut agent, Diplôme, Taux retenue/remboursement) */}
+  //         <View style={styles.inputGroup}>
+  //           <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Matricule')}</Text>
+  //           <TextInput
+  //             style={[styles.input, styles.disabledInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
+  //             value={editableInterimProfile?.matricule || ''}
+  //             placeholder={t("Matricule de l'agent")}
+  //             placeholderTextColor={colors.textSecondary}
+  //             editable={false} // Rendu non modifiable
+  //           />
+  //         </View>
+
+  //         <View style={styles.inputGroup}>
+  //           <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Statut de l\'agent')}</Text>
+  //           <TextInput
+  //             style={[styles.input, styles.disabledInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
+  //             value={editableInterimProfile?.statut_agent_label || ''} // Utilise le label si disponible
+  //             placeholder={t("Actif, En congé, etc.")}
+  //             placeholderTextColor={colors.textSecondary}
+  //             editable={false} // Rendu non modifiable
+  //           />
+  //         </View>
+
+  //         <View style={styles.inputGroup}>
+  //           <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Diplôme')}</Text>
+  //           <TextInput
+  //             style={[styles.input, styles.disabledInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
+  //             value={editableInterimProfile?.diplome || ''}
+  //             placeholder={t("Ex: Licence en Informatique")}
+  //             placeholderTextColor={colors.textSecondary}
+  //             editable={false} // Rendu non modifiable
+  //           />
+  //         </View>
+
+  //         <View style={styles.inputGroup}>
+  //           <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Taux de retenue (%)')}</Text>
+  //           <TextInput
+  //             style={[styles.input, styles.disabledInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
+  //             value={editableInterimProfile?.taux_retenu_label || String(editableInterimProfile?.taux_retenu ?? '')} // Utilise le label
+  //             placeholder={t("Ex: 10.5")}
+  //             placeholderTextColor={colors.textSecondary}
+  //             keyboardType="numeric"
+  //             editable={false} // Rendu non modifiable
+  //           />
+  //         </View>
+
+  //         <View style={styles.inputGroup}>
+  //           <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Taux de remboursement (%)')}</Text>
+  //           <TextInput
+  //             style={[styles.input, styles.disabledInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
+  //             value={editableInterimProfile?.taux_remboursse_label || String(editableInterimProfile?.taux_remboursse ?? '')} // Utilise le label
+  //             placeholder={t("Ex: 5.0")}
+  //             placeholderTextColor={colors.textSecondary}
+  //             keyboardType="numeric"
+  //             editable={false} // Rendu non modifiable
+  //           />
+  //         </View>
+
+  //         {/* CHAMPS MODIFIABLES */}
+  //         <View style={styles.inputGroup}>
+  //           <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Sexe')}</Text>
+  //           <TextInput
+  //             style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
+  //             value={editableInterimProfile?.sexe_label || String(editableInterimProfile?.sexe ?? '')} // Utilise le label
+  //             onChangeText={(text) => setEditableInterimProfile(prev => ({ ...prev!, sexe: text as any }))} // Cast temporaire
+  //             placeholder={t("Homme, Femme")}
+  //             placeholderTextColor={colors.textSecondary}
+  //           />
+  //         </View>
+
+  //         <View style={styles.inputGroup}>
+  //           <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Situation matrimoniale')}</Text>
+  //           <TextInput
+  //             style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
+  //             value={editableInterimProfile?.situation_matrimoniale_label || String(editableInterimProfile?.matrimoniale ?? '')} // Utilise le label
+  //             onChangeText={(text) => setEditableInterimProfile(prev => ({ ...prev!, matrimoniale: text as any }))} // Cast temporaire
+  //             placeholder={t("Célibataire, Marié(e)...")}
+  //             placeholderTextColor={colors.textSecondary}
+  //           />
+  //         </View>
+
+  //         <View style={styles.inputGroup}>
+  //           <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Nationalité')}</Text>
+  //           <TextInput
+  //             style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
+  //             value={editableInterimProfile?.nationalite || ''}
+  //             onChangeText={(text) => setEditableInterimProfile(prev => ({ ...prev!, nationalite: text }))}
+  //             placeholder={t("Nationalité")}
+  //             placeholderTextColor={colors.textSecondary}
+  //           />
+  //         </View>
+
+  //         <View style={styles.inputGroup}>
+  //           <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Téléphone (Agent)')}</Text>
+  //           <TextInput
+  //             style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
+  //             value={editableInterimProfile?.phone || ''}
+  //             onChangeText={(text) => setEditableInterimProfile(prev => ({ ...prev!, phone: text }))}
+  //             placeholder={t("Numéro de téléphone de l'agent")}
+  //             placeholderTextColor={colors.textSecondary}
+  //             keyboardType="phone-pad"
+  //           />
+  //         </View>
+
+  //         <View style={styles.inputGroup}>
+  //           <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Date de naissance (Agent)')}</Text>
+  //           <TextInput
+  //             style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
+  //             value={editableInterimProfile?.date_naissance || ''}
+  //             onChangeText={(text) => setEditableInterimProfile(prev => ({ ...prev!, date_naissance: text }))}
+  //             placeholder={t("AAAA-MM-JJ")}
+  //             placeholderTextColor={colors.textSecondary}
+  //           />
+  //         </View>
+
+  //         <View style={styles.inputGroup}>
+  //           <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Lieu de naissance (Agent)')}</Text>
+  //           <TextInput
+  //             style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
+  //             value={editableInterimProfile?.lieu_naissance || ''}
+  //             onChangeText={(text) => setEditableInterimProfile(prev => ({ ...prev!, lieu_naissance: text }))}
+  //             placeholder={t("Lieu de naissance de l'agent")}
+  //             placeholderTextColor={colors.textSecondary}
+  //           />
+  //         </View>
+
+  //         <View style={styles.inputGroup}>
+  //           <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Numéro CNI')}</Text>
+  //           <TextInput
+  //             style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
+  //             value={editableInterimProfile?.cni || ''}
+  //             onChangeText={(text) => setEditableInterimProfile(prev => ({ ...prev!, cni: text }))}
+  //             placeholder={t("Numéro de carte d'identité")}
+  //             placeholderTextColor={colors.textSecondary}
+  //           />
+  //         </View>
+
+  //         <View style={styles.inputGroup}>
+  //           <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Adresse (Agent)')}</Text>
+  //           <TextInput
+  //             style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
+  //             value={editableInterimProfile?.adresse || ''}
+  //             onChangeText={(text) => setEditableInterimProfile(prev => ({ ...prev!, adresse: text }))}
+  //             placeholder={t("Adresse de l'agent")}
+  //             placeholderTextColor={colors.textSecondary}
+  //           />
+  //         </View>
+
+  //         <View style={styles.inputGroup}>
+  //           <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Chemin photo de profil')}</Text>
+  //           <TextInput
+  //             style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
+  //             value={editableInterimProfile?.profile_photo_path || ''}
+  //             onChangeText={(text) => setEditableInterimProfile(prev => ({ ...prev!, profile_photo_path: text }))}
+  //             placeholder={t("URL ou chemin de la photo")}
+  //             placeholderTextColor={colors.textSecondary}
+  //           />
+  //         </View>
+
+  //         {interimUpdateError && (
+  //           <View style={[styles.errorContainer, { backgroundColor: colors.error + '10' }]}>
+  //             <Ionicons name="alert-circle" size={18} color={colors.error} />
+  //             <Text style={[styles.errorText, { color: colors.error }]}>{interimUpdateError}</Text>
+  //           </View>
+  //         )}
+
+  //         <View style={styles.actionButtons}>
+  //           <TouchableOpacity
+  //             style={[styles.secondaryButton, { backgroundColor: colors.settingIconBg, borderColor: colors.border }]}
+  //             onPress={() => {
+  //               setInterimEditMode(false);
+  //               loadInterimProfile();
+  //               setInterimUpdateError(null);
+  //             }}
+  //           >
+  //             <Text style={{ color: colors.textSecondary, fontWeight: '700', fontSize: 16 }}>{t('Annuler')}</Text>
+  //           </TouchableOpacity>
+  //           <TouchableOpacity
+  //             style={[styles.primaryButton, { backgroundColor: colors.secondary }]}
+  //             onPress={handleInterimProfileSave}
+  //           >
+  //             <Text style={styles.primaryButtonText}>{t('Sauvegarder')}</Text>
+  //           </TouchableOpacity>
+  //         </View>
+  //       </View>
+  //     ) : (
+  //       // Mode affichage du profil Intérimaire
+  //       <View style={styles.infoContainer}>
+  //         <View style={styles.infoItem}>
+  //           <View style={styles.infoIcon}>
+  //             <Ionicons name="person" size={18} color={colors.secondary} />
+  //           </View>
+  //           <View style={styles.infoContent}>
+  //             <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Nom complet')}</Text>
+  //             <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{user?.name || t('Non renseigné')}</Text>
+  //           </View>
+  //         </View>
+  //         <View style={styles.infoItem}>
+  //           <View style={styles.infoIcon}>
+  //             <Ionicons name="mail" size={18} color={colors.secondary} />
+  //           </View>
+  //           <View style={styles.infoContent}>
+  //             <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Email')}</Text>
+  //             <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{user?.email || t('Non renseigné')}</Text>
+  //           </View>
+  //         </View>
+  //         <View style={styles.infoItem}>
+  //           <View style={styles.infoIcon}>
+  //             <Ionicons name="finger-print" size={18} color={colors.secondary} />
+  //           </View>
+  //           <View style={styles.infoContent}>
+  //             <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Matricule')}</Text>
+  //             <Text style={[styles.infoValue, { color: colors.textPrimary }]}>EMP-{interimProfile?.matricule || t('Non renseigné')}</Text>
+  //           </View>
+  //         </View>
+  //         <View style={styles.infoItem}>
+  //           <View style={styles.infoIcon}>
+  //             <Ionicons name="transgender" size={18} color={colors.secondary} />
+  //           </View>
+  //           <View style={styles.infoContent}>
+  //             <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Sexe')}</Text>
+  //             <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.sexe_label || t('Non renseigné')}</Text>
+  //           </View>
+  //         </View>
+  //         <View style={styles.infoItem}>
+  //           <View style={styles.infoIcon}>
+  //             <Ionicons name="heart" size={18} color={colors.secondary} />
+  //           </View>
+  //           <View style={styles.infoContent}>
+  //             <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Situation matrimoniale')}</Text>
+  //             <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.situation_matrimoniale_label || t('Non renseigné')}</Text>
+  //           </View>
+  //         </View>
+  //         <View style={styles.infoItem}>
+  //           <View style={styles.infoIcon}>
+  //             <Ionicons name="flag" size={18} color={colors.secondary} />
+  //           </View>
+  //           <View style={styles.infoContent}>
+  //             <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Nationalité')}</Text>
+  //             <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.nationalite || t('Non renseigné')}</Text>
+  //           </View>
+  //         </View>
+  //         <View style={styles.infoItem}>
+  //           <View style={styles.infoIcon}>
+  //             <Ionicons name="call" size={18} color={colors.secondary} />
+  //           </View>
+  //           <View style={styles.infoContent}>
+  //             <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Téléphone')}</Text>
+  //             <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.phone || t('Non renseigné')}</Text>
+  //           </View>
+  //         </View>
+  //         <View style={styles.infoItem}>
+  //           <View style={styles.infoIcon}>
+  //             <Ionicons name="calendar" size={18} color={colors.secondary} />
+  //           </View>
+  //           <View style={styles.infoContent}>
+  //             <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Date de naissance')}</Text>
+  //             <Text style={[styles.infoValue, { color: colors.textPrimary }]}>
+  //               {interimProfile?.date_naissance
+  //                 ? (() => {
+  //                   const date = new Date(interimProfile.date_naissance);
+  //                   if (isNaN(date.getTime())) return t('Non renseignée');
+  //                   const day = date.getDate().toString().padStart(2, '0');
+  //                   const month = date.toLocaleString('fr-FR', { month: 'short' });
+  //                   const year = date.getFullYear();
+  //                   return `${day} ${month.charAt(0).toUpperCase() + month.slice(1)}. ${year}`;
+  //                 })()
+  //                 : t('Non renseignée')}
+  //             </Text>
+  //           </View>
+  //         </View>
+  //         <View style={styles.infoItem}>
+  //           <View style={styles.infoIcon}>
+  //             <Ionicons name="map" size={18} color={colors.secondary} />
+  //           </View>
+  //           <View style={styles.infoContent}>
+  //             <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Lieu de naissance')}</Text>
+  //             <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.lieu_naissance || t('Non renseigné')}</Text>
+  //           </View>
+  //         </View>
+  //         <View style={styles.infoItem}>
+  //           <View style={styles.infoIcon}>
+  //             <Ionicons name="id-card" size={18} color={colors.secondary} />
+  //           </View>
+  //           <View style={styles.infoContent}>
+  //             <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Numéro CNI')}</Text>
+  //             <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.cni || t('Non renseigné')}</Text>
+  //           </View>
+  //         </View>
+  //         <View style={styles.infoItem}>
+  //           <View style={styles.infoIcon}>
+  //             <Ionicons name="home" size={18} color={colors.secondary} />
+  //           </View>
+  //           <View style={styles.infoContent}>
+  //             <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Adresse ')}</Text>
+  //             <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.adresse || t('Non renseigné')}</Text>
+  //           </View>
+  //         </View>
+  //         {/* <View style={styles.infoItem}>
+  //           <View style={styles.infoIcon}>
+  //             <Ionicons name="image" size={18} color={colors.textSecondary} />
+  //           </View>
+  //           <View style={styles.infoContent}>
+  //             <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Chemin photo de profil')}</Text>
+  //             <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.profile_photo_path || t('Non renseigné')}</Text>
+  //           </View>
+  //         </View> */}
+  //         <View style={styles.infoItem}>
+  //           <View style={styles.infoIcon}>
+  //             <Ionicons name="briefcase" size={18} color={colors.secondary} />
+  //           </View>
+  //           <View style={styles.infoContent}>
+  //             <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Statut de l\'agent')}</Text>
+  //             <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.statut_agent_label || t('Non renseigné')}</Text>
+  //           </View>
+  //         </View>
+  //         <View style={styles.infoItem}>
+  //           <View style={styles.infoIcon}>
+  //             <Ionicons name="school" size={18} color={colors.secondary} />
+  //           </View>
+  //           <View style={styles.infoContent}>
+  //             <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Diplôme')}</Text>
+  //             <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.diplome || t('Non renseigné')}</Text>
+  //           </View>
+  //         </View>
+  //         <View style={styles.infoItem}>
+  //           <View style={styles.infoIcon}>
+  //             <Ionicons name="wallet" size={18} color={colors.secondary} />
+  //           </View>
+  //           <View style={styles.infoContent}>
+  //             <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Taux de retenue (%)')}</Text>
+  //             <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.taux_retenu_label || t('Non renseigné')}</Text>
+  //           </View>
+  //         </View>
+  //         <View style={styles.infoItem}>
+  //           <View style={styles.infoIcon}>
+  //             <Ionicons name="receipt" size={18} color={colors.secondary} />
+  //           </View>
+  //           <View style={styles.infoContent}>
+  //             <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Taux de remboursement (%)')}</Text>
+  //             <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.taux_remboursse_label || t('Non renseigné')}</Text>
+  //           </View>
+  //         </View>
+  //       </View>
+  //     )}
+  //     {!interimProfile && !loadingInterimProfile && (
+  //       <View style={styles.emptyState}>
+  //         <Ionicons name="business-outline" size={48} color={colors.textSecondary} />
+  //         <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>{t('Pas de profil intérimaire')}</Text>
+  //         <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+  //           {t('Créez votre profil intérimaire pour gérer les offres et les candidats.')}
+  //         </Text>
+  //         <TouchableOpacity style={[styles.primaryButton, { backgroundColor: colors.secondary }]} onPress={() => setInterimEditMode(true)}>
+  //           <Text style={styles.primaryButtonText}>{t('Créer mon profil intérimaire')}</Text>
+  //         </TouchableOpacity>
+  //       </View>
+  //     )}
+  //   </View>
+  // );
+  //  Rendu de la section Intérimaire
   const renderInterimSection = () => (
     <View style={[styles.section, { backgroundColor: colors.cardBackground }]}>
       <View style={styles.sectionHeader}>
@@ -1601,6 +2059,17 @@ export default function ProfileDetailsScreen() {
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="small" color={colors.secondary} />
           <Text style={[styles.loadingText, { color: colors.textSecondary }]}>{t('Chargement du profil intérimaire...')}</Text>
+        </View>
+      ) : interimProfile?.is_contract_active === false ? ( // NOUVEAU : Si contrat inactif
+        <View style={styles.emptyState}>
+          <Ionicons name="alert-circle-outline" size={48} color={colors.error} />
+          <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>{t('Accès restreint')}</Text>
+          <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+            {t('Votre contrat intérimaire est terminé ou inactif. Vous n\'avez plus accès à cet espace.')}
+          </Text>
+          <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+            {t('Veuillez contacter l\'administration pour plus d\'informations.')}
+          </Text>
         </View>
       ) : interimEditMode ? (
         // Formulaire d'édition du profil Intérimaire
@@ -1815,161 +2284,176 @@ export default function ProfileDetailsScreen() {
       ) : (
         // Mode affichage du profil Intérimaire
         <View style={styles.infoContainer}>
-          <View style={styles.infoItem}>
-            <View style={styles.infoIcon}>
-              <Ionicons name="person" size={18} color={colors.secondary} />
-            </View>
-            <View style={styles.infoContent}>
-              <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Nom complet')}</Text>
-              <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{user?.name || t('Non renseigné')}</Text>
-            </View>
-          </View>
-          <View style={styles.infoItem}>
-            <View style={styles.infoIcon}>
-              <Ionicons name="mail" size={18} color={colors.secondary} />
-            </View>
-            <View style={styles.infoContent}>
-              <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Email')}</Text>
-              <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{user?.email || t('Non renseigné')}</Text>
-            </View>
-          </View>
-          <View style={styles.infoItem}>
-            <View style={styles.infoIcon}>
-              <Ionicons name="finger-print" size={18} color={colors.secondary} />
-            </View>
-            <View style={styles.infoContent}>
-              <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Matricule')}</Text>
-              <Text style={[styles.infoValue, { color: colors.textPrimary }]}>EMP-{interimProfile?.matricule || t('Non renseigné')}</Text>
-            </View>
-          </View>
-          <View style={styles.infoItem}>
-            <View style={styles.infoIcon}>
-              <Ionicons name="transgender" size={18} color={colors.secondary} />
-            </View>
-            <View style={styles.infoContent}>
-              <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Sexe')}</Text>
-              <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.sexe_label || t('Non renseigné')}</Text>
-            </View>
-          </View>
-          <View style={styles.infoItem}>
-            <View style={styles.infoIcon}>
-              <Ionicons name="heart" size={18} color={colors.secondary} />
-            </View>
-            <View style={styles.infoContent}>
-              <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Situation matrimoniale')}</Text>
-              <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.situation_matrimoniale_label || t('Non renseigné')}</Text>
-            </View>
-          </View>
-          <View style={styles.infoItem}>
-            <View style={styles.infoIcon}>
-              <Ionicons name="flag" size={18} color={colors.secondary} />
-            </View>
-            <View style={styles.infoContent}>
-              <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Nationalité')}</Text>
-              <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.nationalite || t('Non renseigné')}</Text>
-            </View>
-          </View>
-          <View style={styles.infoItem}>
-            <View style={styles.infoIcon}>
-              <Ionicons name="call" size={18} color={colors.secondary} />
-            </View>
-            <View style={styles.infoContent}>
-              <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Téléphone')}</Text>
-              <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.phone || t('Non renseigné')}</Text>
-            </View>
-          </View>
-          <View style={styles.infoItem}>
-            <View style={styles.infoIcon}>
-              <Ionicons name="calendar" size={18} color={colors.secondary} />
-            </View>
-            <View style={styles.infoContent}>
-              <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Date de naissance')}</Text>
-              <Text style={[styles.infoValue, { color: colors.textPrimary }]}>
-                {interimProfile?.date_naissance
-                  ? (() => {
-                    const date = new Date(interimProfile.date_naissance);
-                    if (isNaN(date.getTime())) return t('Non renseignée');
-                    const day = date.getDate().toString().padStart(2, '0');
-                    const month = date.toLocaleString('fr-FR', { month: 'short' });
-                    const year = date.getFullYear();
-                    return `${day} ${month.charAt(0).toUpperCase() + month.slice(1)}. ${year}`;
-                  })()
-                  : t('Non renseignée')}
+          {interimProfile?.is_contract_active === false ? (
+            <View style={styles.emptyState}>
+              <Ionicons name="alert-circle-outline" size={48} color={colors.error} />
+              <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>{t('Accès restreint')}</Text>
+              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+                {t('Votre contrat intérimaire est terminé ou inactif. Vous n\'avez plus accès à cet espace.')}
+              </Text>
+              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+                {t('Veuillez contacter l\'administration pour plus d\'informations.')}
               </Text>
             </View>
-          </View>
-          <View style={styles.infoItem}>
-            <View style={styles.infoIcon}>
-              <Ionicons name="map" size={18} color={colors.secondary} />
-            </View>
-            <View style={styles.infoContent}>
-              <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Lieu de naissance')}</Text>
-              <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.lieu_naissance || t('Non renseigné')}</Text>
-            </View>
-          </View>
-          <View style={styles.infoItem}>
-            <View style={styles.infoIcon}>
-              <Ionicons name="id-card" size={18} color={colors.secondary} />
-            </View>
-            <View style={styles.infoContent}>
-              <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Numéro CNI')}</Text>
-              <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.cni || t('Non renseigné')}</Text>
-            </View>
-          </View>
-          <View style={styles.infoItem}>
-            <View style={styles.infoIcon}>
-              <Ionicons name="home" size={18} color={colors.secondary} />
-            </View>
-            <View style={styles.infoContent}>
-              <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Adresse ')}</Text>
-              <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.adresse || t('Non renseigné')}</Text>
-            </View>
-          </View>
-          {/* <View style={styles.infoItem}>
-            <View style={styles.infoIcon}>
-              <Ionicons name="image" size={18} color={colors.textSecondary} />
-            </View>
-            <View style={styles.infoContent}>
-              <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Chemin photo de profil')}</Text>
-              <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.profile_photo_path || t('Non renseigné')}</Text>
-            </View>
-          </View> */}
-          <View style={styles.infoItem}>
-            <View style={styles.infoIcon}>
-              <Ionicons name="briefcase" size={18} color={colors.secondary} />
-            </View>
-            <View style={styles.infoContent}>
-              <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Statut de l\'agent')}</Text>
-              <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.statut_agent_label || t('Non renseigné')}</Text>
-            </View>
-          </View>
-          <View style={styles.infoItem}>
-            <View style={styles.infoIcon}>
-              <Ionicons name="school" size={18} color={colors.secondary} />
-            </View>
-            <View style={styles.infoContent}>
-              <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Diplôme')}</Text>
-              <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.diplome || t('Non renseigné')}</Text>
-            </View>
-          </View>
-          <View style={styles.infoItem}>
-            <View style={styles.infoIcon}>
-              <Ionicons name="wallet" size={18} color={colors.secondary} />
-            </View>
-            <View style={styles.infoContent}>
-              <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Taux de retenue (%)')}</Text>
-              <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.taux_retenu_label || t('Non renseigné')}</Text>
-            </View>
-          </View>
-          <View style={styles.infoItem}>
-            <View style={styles.infoIcon}>
-              <Ionicons name="receipt" size={18} color={colors.secondary} />
-            </View>
-            <View style={styles.infoContent}>
-              <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Taux de remboursement (%)')}</Text>
-              <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.taux_remboursse_label || t('Non renseigné')}</Text>
-            </View>
-          </View>
+          ) : (
+            <>
+              <View style={styles.infoItem}>
+                <View style={styles.infoIcon}>
+                  <Ionicons name="person" size={18} color={colors.secondary} />
+                </View>
+                <View style={styles.infoContent}>
+                  <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Nom complet')}</Text>
+                  <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{user?.name || t('Non renseigné')}</Text>
+                </View>
+              </View>
+              <View style={styles.infoItem}>
+                <View style={styles.infoIcon}>
+                  <Ionicons name="mail" size={18} color={colors.secondary} />
+                </View>
+                <View style={styles.infoContent}>
+                  <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Email')}</Text>
+                  <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{user?.email || t('Non renseigné')}</Text>
+                </View>
+              </View>
+              <View style={styles.infoItem}>
+                <View style={styles.infoIcon}>
+                  <Ionicons name="finger-print" size={18} color={colors.secondary} />
+                </View>
+                <View style={styles.infoContent}>
+                  <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Matricule')}</Text>
+                  <Text style={[styles.infoValue, { color: colors.textPrimary }]}>EMP-{interimProfile?.matricule || t('Non renseigné')}</Text>
+                </View>
+              </View>
+              <View style={styles.infoItem}>
+                <View style={styles.infoIcon}>
+                  <Ionicons name="transgender" size={18} color={colors.secondary} />
+                </View>
+                <View style={styles.infoContent}>
+                  <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Sexe')}</Text>
+                  <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.sexe_label || t('Non renseigné')}</Text>
+                </View>
+              </View>
+              <View style={styles.infoItem}>
+                <View style={styles.infoIcon}>
+                  <Ionicons name="heart" size={18} color={colors.secondary} />
+                </View>
+                <View style={styles.infoContent}>
+                  <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Situation matrimoniale')}</Text>
+                  <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.situation_matrimoniale_label || t('Non renseigné')}</Text>
+                </View>
+              </View>
+              <View style={styles.infoItem}>
+                <View style={styles.infoIcon}>
+                  <Ionicons name="flag" size={18} color={colors.secondary} />
+                </View>
+                <View style={styles.infoContent}>
+                  <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Nationalité')}</Text>
+                  <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.nationalite || t('Non renseigné')}</Text>
+                </View>
+              </View>
+              <View style={styles.infoItem}>
+                <View style={styles.infoIcon}>
+                  <Ionicons name="call" size={18} color={colors.secondary} />
+                </View>
+                <View style={styles.infoContent}>
+                  <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Téléphone')}</Text>
+                  <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.phone || t('Non renseigné')}</Text>
+                </View>
+              </View>
+              <View style={styles.infoItem}>
+                <View style={styles.infoIcon}>
+                  <Ionicons name="calendar" size={18} color={colors.secondary} />
+                </View>
+                <View style={styles.infoContent}>
+                  <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Date de naissance')}</Text>
+                  <Text style={[styles.infoValue, { color: colors.textPrimary }]}>
+                    {interimProfile?.date_naissance
+                      ? (() => {
+                        const date = new Date(interimProfile.date_naissance);
+                        if (isNaN(date.getTime())) return t('Non renseignée');
+                        const day = date.getDate().toString().padStart(2, '0');
+                        const month = date.toLocaleString('fr-FR', { month: 'short' });
+                        const year = date.getFullYear();
+                        return `${day} ${month.charAt(0).toUpperCase() + month.slice(1)}. ${year}`;
+                      })()
+                      : t('Non renseignée')}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.infoItem}>
+                <View style={styles.infoIcon}>
+                  <Ionicons name="map" size={18} color={colors.secondary} />
+                </View>
+                <View style={styles.infoContent}>
+                  <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Lieu de naissance')}</Text>
+                  <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.lieu_naissance || t('Non renseigné')}</Text>
+                </View>
+              </View>
+              <View style={styles.infoItem}>
+                <View style={styles.infoIcon}>
+                  <Ionicons name="id-card" size={18} color={colors.secondary} />
+                </View>
+                <View style={styles.infoContent}>
+                  <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Numéro CNI')}</Text>
+                  <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.cni || t('Non renseigné')}</Text>
+                </View>
+              </View>
+              <View style={styles.infoItem}>
+                <View style={styles.infoIcon}>
+                  <Ionicons name="home" size={18} color={colors.secondary} />
+                </View>
+                <View style={styles.infoContent}>
+                  <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Adresse ')}</Text>
+                  <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.adresse || t('Non renseigné')}</Text>
+                </View>
+              </View>
+              {/* <View style={styles.infoItem}>
+                <View style={styles.infoIcon}>
+                  <Ionicons name="image" size={18} color={colors.textSecondary} />
+                </View>
+                <View style={styles.infoContent}>
+                  <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Chemin photo de profil')}</Text>
+                  <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.profile_photo_path || t('Non renseigné')}</Text>
+                </View>
+              </View> */}
+              <View style={styles.infoItem}>
+                <View style={styles.infoIcon}>
+                  <Ionicons name="briefcase" size={18} color={colors.secondary} />
+                </View>
+                <View style={styles.infoContent}>
+                  <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Statut de l\'agent')}</Text>
+                  <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.statut_agent_label || t('Non renseigné')}</Text>
+                </View>
+              </View>
+              <View style={styles.infoItem}>
+                <View style={styles.infoIcon}>
+                  <Ionicons name="school" size={18} color={colors.secondary} />
+                </View>
+                <View style={styles.infoContent}>
+                  <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Diplôme')}</Text>
+                  <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.diplome || t('Non renseigné')}</Text>
+                </View>
+              </View>
+              <View style={styles.infoItem}>
+                <View style={styles.infoIcon}>
+                  <Ionicons name="wallet" size={18} color={colors.secondary} />
+                </View>
+                <View style={styles.infoContent}>
+                  <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Taux de retenue (%)')}</Text>
+                  <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.taux_retenu_label || t('Non renseigné')}</Text>
+                </View>
+              </View>
+              <View style={styles.infoItem}>
+                <View style={styles.infoIcon}>
+                  <Ionicons name="receipt" size={18} color={colors.secondary} />
+                </View>
+                <View style={styles.infoContent}>
+                  <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Taux de remboursement (%)')}</Text>
+                  <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.taux_remboursse_label || t('Non renseigné')}</Text>
+                </View>
+              </View>
+            </>
+          )}
         </View>
       )}
       {!interimProfile && !loadingInterimProfile && (
@@ -1986,7 +2470,6 @@ export default function ProfileDetailsScreen() {
       )}
     </View>
   );
-
   const renderTabContent = () => {
     if (user?.role === 'user') {
       if (activeTab === 'personal') return renderPersonalInfo();

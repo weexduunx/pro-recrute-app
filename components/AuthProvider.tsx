@@ -32,6 +32,7 @@ interface User {
   updated_at?: string;
   expo_push_token?: string;
   profile_photo_url?: string;
+   is_contract_active?: boolean;
 }
 
 // IMPORTANT: Le SCHEME doit correspondre à celui que vous avez dans app.json pour votre application Expo
@@ -59,13 +60,7 @@ interface AuthProviderProps {
   children: ReactNode;
 }
 
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
-};
+
 export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
@@ -80,13 +75,37 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const inAppGroup = segments[0] === '(app)';
 
   // Fonction pour recharger le profil utilisateur depuis l'API
+  // const fetchUser = useCallback(async () => {
+  //   try {
+  //     const fetchedUser = await fetchUserProfile();
+  //     setUser(fetchedUser);
+  //     return fetchedUser;
+  //   } catch (e) {
+  //     console.error("Échec de la récupération du profil utilisateur:", e);
+  //     await AsyncStorage.removeItem('user_token');
+  //     setUser(null);
+  //     setToken(null);
+  //     throw e;
+  //   }
+  // }, []);
   const fetchUser = useCallback(async () => {
+    console.log("AuthProvider: Début fetchUser.");
     try {
       const fetchedUser = await fetchUserProfile();
+      // Si l'utilisateur est un intérimaire, récupérer aussi son profil intérimaire pour is_contract_active
+      if (fetchedUser && fetchedUser.role === 'interimaire') {
+        const interimProfile = await (await import('../utils/api')).getInterimProfile();
+        if (interimProfile) {
+          fetchedUser.is_contract_active = interimProfile.is_contract_active;
+        } else {
+          fetchedUser.is_contract_active = false; // Pas de profil intérimaire = pas de contrat actif
+        }
+      }
       setUser(fetchedUser);
+      console.log("AuthProvider: fetchUser réussi, utilisateur:", fetchedUser?.email, "Rôle:", fetchedUser?.role, "Contrat actif:", fetchedUser?.is_contract_active);
       return fetchedUser;
     } catch (e) {
-      console.error("Échec de la récupération du profil utilisateur:", e);
+      console.error("AuthProvider: Échec de fetchUser:", e);
       await AsyncStorage.removeItem('user_token');
       setUser(null);
       setToken(null);
@@ -95,74 +114,208 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   }, []);
 
   // Logique de redirection centralisée
-  const handleRedirect = useCallback((authenticated: boolean, userRole: string | undefined) => {
+  // const handleRedirect = useCallback((authenticated: boolean, userRole: string | undefined) => {
+  //   if (authenticated) {
+  //     if (inAuthGroup) { // Si l'utilisateur est authentifié et dans le groupe auth
+  //       if (userRole === 'user') {
+  //         router.replace('/(app)/home');
+  //       } else if (userRole === 'interimaire') {
+  //         router.replace('/(app)/(interimaire)');
+  //       } else {
+  //         // Fallback pour les rôles non reconnus ou futurs rôles
+  //         router.replace('/(app)/home');
+  //       }
+  //     }
+  //   } else {
+  //     if (inAppGroup) { // Si l'utilisateur n'est pas authentifié et dans le groupe app
+  //       router.replace('/(auth)');
+  //     }
+  //   }
+  // }, [inAuthGroup, inAppGroup]);
+  // Logique de redirection centralisée
+  const handleRedirect = useCallback((authenticated: boolean, userRole: string | undefined, isContractActive: boolean | undefined) => {
+    console.log(`AuthProvider: handleRedirect appelé. Authenticated: ${authenticated}, Role: ${userRole}, Contrat Actif: ${isContractActive}, inAuthGroup: ${inAuthGroup}, inAppGroup: ${inAppGroup}`);
     if (authenticated) {
-      if (inAuthGroup) { // Si l'utilisateur est authentifié et dans le groupe auth
+      if (inAuthGroup) {
         if (userRole === 'user') {
+          console.log("AuthProvider: Redirection vers / (app) / home (candidat).");
           router.replace('/(app)/home');
         } else if (userRole === 'interimaire') {
-          router.replace('/(app)/(interimaire)');
+          // NOUVEAU : Redirection conditionnelle pour l'intérimaire
+          if (isContractActive === false) { // Si le contrat est inactif
+            console.log("AuthProvider: Contrat intérimaire inactif, redirection vers espace candidat.");
+            router.replace('/(app)/(interimaire)'); // Redirige vers l'espace candidat de l'intérimaire
+          } else {
+            console.log("AuthProvider: Contrat intérimaire actif, redirection vers espace intérimaire.");
+            router.replace('/(app)/(interimaire)'); // Redirige vers l'espace intérimaire
+          }
         } else {
-          // Fallback pour les rôles non reconnus ou futurs rôles
+          console.log("AuthProvider: Rôle non reconnu, redirection vers / (app) / home.");
           router.replace('/(app)/home');
         }
+      } else {
+        console.log("AuthProvider: Déjà dans le groupe app et authentifié, pas de redirection.");
       }
     } else {
-      if (inAppGroup) { // Si l'utilisateur n'est pas authentifié et dans le groupe app
+      if (inAppGroup) {
+        console.log("AuthProvider: Redirection vers / (auth) / (non authentifié).");
         router.replace('/(auth)');
+      } else {
+        console.log("AuthProvider: Déjà dans le groupe auth et non authentifié, pas de redirection.");
       }
     }
   }, [inAuthGroup, inAppGroup]);
 
   // Effet pour effectuer la configuration initiale de l'application et la vérification de l'authentification.
-  useEffect(() => {
+  // useEffect(() => {
+  //   async function prepareApp() {
+  //     try {
+  //       setLoading(true);
+  //       const storedToken = await AsyncStorage.getItem('user_token');
+
+  //       if (storedToken) {
+  //         setToken(storedToken);
+  //         const userData = await fetchUser();
+  //         // Redirection initiale après la récupération du profil
+  //         if (userData) {
+  //           handleRedirect(true, userData.role);
+  //         } else {
+  //           // Si userData est null (token invalide), redirige vers l'authentification
+  //           handleRedirect(false, undefined);
+  //         }
+  //       } else {
+  //         handleRedirect(false, undefined);
+  //       }
+  //     } catch (err: any) {
+  //       console.error('App preparation or initial authentication failed:', err.response?.data || err.message || err);
+  //       setError('Failed to load session. Please log in.');
+  //       await AsyncStorage.removeItem('user_token');
+  //       setUser(null);
+  //       setToken(null);
+  //       handleRedirect(false, undefined); // Assure la redirection vers auth en cas d'erreur
+  //     } finally {
+  //       setLoading(false);
+  //       setIsAppReady(true);
+  //       await SplashScreenExpo.hideAsync();
+  //     }
+  //   }
+
+  //   prepareApp();
+  // }, [fetchUser, handleRedirect]); // handleRedirect est une dépendance ici
+
+    useEffect(() => {
     async function prepareApp() {
+      console.log("AuthProvider: Début prepareApp.");
       try {
         setLoading(true);
         const storedToken = await AsyncStorage.getItem('user_token');
+        console.log("AuthProvider: Token stocké:", storedToken ? "Présent" : "Absent");
 
         if (storedToken) {
           setToken(storedToken);
           const userData = await fetchUser();
-          // Redirection initiale après la récupération du profil
           if (userData) {
-            handleRedirect(true, userData.role);
+            console.log("AuthProvider: userData après fetchUser:", userData.email, "Rôle:", userData.role, "Contrat actif:", userData.is_contract_active);
+            handleRedirect(true, userData.role, userData.is_contract_active);
           } else {
-            // Si userData est null (token invalide), redirige vers l'authentification
-            handleRedirect(false, undefined);
+            console.log("AuthProvider: Pas de userData, token probablement invalide.");
+            handleRedirect(false, undefined, undefined);
           }
         } else {
-          handleRedirect(false, undefined);
+          handleRedirect(false, undefined, undefined);
         }
       } catch (err: any) {
-        console.error('App preparation or initial authentication failed:', err.response?.data || err.message || err);
+        console.error('AuthProvider: Erreur dans prepareApp:', err);
         setError('Failed to load session. Please log in.');
         await AsyncStorage.removeItem('user_token');
         setUser(null);
         setToken(null);
-        handleRedirect(false, undefined); // Assure la redirection vers auth en cas d'erreur
+        handleRedirect(false, undefined, undefined);
       } finally {
         setLoading(false);
         setIsAppReady(true);
+        console.log("AuthProvider: setIsAppReady(true) et SplashScreen.hideAsync().");
         await SplashScreenExpo.hideAsync();
       }
     }
 
     prepareApp();
-  }, [fetchUser, handleRedirect]); // handleRedirect est une dépendance ici
+  }, [fetchUser, handleRedirect]);
 
+   // Ce useEffect gère les redirections après que isAppReady soit true ou que l'état d'authentification change
+  useEffect(() => {
+    if (isAppReady) {
+      if (user) { // Si l'utilisateur est authentifié
+        if (inAuthGroup) { // Si dans le groupe d'authentification
+          handleRedirect(true, user.role, user.is_contract_active);
+        }
+      } else { // Si non authentifié
+        if (inAppGroup) { // Si dans le groupe de l'application
+          handleRedirect(false, undefined, undefined);
+        }
+      }
+    }
+  }, [isAppReady, user, inAuthGroup, inAppGroup, handleRedirect]);
   // Fonction de connexion
+  // const login = async (email: string, password: string, deviceName?: string) => {
+  //   setLoading(true);
+  //   setError(null);
+  //   try {
+  //     const actualDeviceName = deviceName || Device.deviceName || 'UnknownDevice';
+  //     const response = await loginUser(email, password, actualDeviceName);
+  //     await AsyncStorage.setItem('user_token', response.token);
+  //     setUser(response.user);
+  //     setToken(response.token);
+  //     // Redirige immédiatement après la connexion réussie
+  //     handleRedirect(true, response.user.role);
+  //   } catch (err: any) {
+  //     console.error('Login failed:', err.response?.data || err.message);
+  //     setError(err.response?.data?.message || 'Login failed. Please check your credentials.');
+  //     throw err;
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
+
+  // // Fonction d'enregistrement
+  // const register = async (name: string, email: string, password: string, passwordConfirmation: string, role?: string) => {
+  //   setLoading(true);
+  //   setError(null);
+  //   try {
+  //     const actualDeviceName = Device.deviceName || 'UnknownDevice';
+  //     const response = await registerUser(name, email, password, passwordConfirmation, role);
+  //     await AsyncStorage.setItem('user_token', response.token);
+  //     setUser(response.user);
+  //     setToken(response.token);
+  //     // Redirige immédiatement après l'enregistrement réussi
+  //     handleRedirect(true, response.user.role);
+  //   } catch (err: any) {
+  //     console.error('Registration failed:', err.response?.data || err.message);
+  //     setError(err.response?.data?.message || 'Registration failed. Please try again.');
+  //     throw err;
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
   const login = async (email: string, password: string, deviceName?: string) => {
     setLoading(true);
     setError(null);
     try {
       const actualDeviceName = deviceName || Device.deviceName || 'UnknownDevice';
       const response = await loginUser(email, password, actualDeviceName);
+      // Récupérer le profil intérimaire après login pour is_contract_active
+      if (response.user && response.user.role === 'interimaire') {
+        const interimProfile = await (await import('../utils/api')).getInterimProfile();
+        if (interimProfile) {
+          response.user.is_contract_active = interimProfile.is_contract_active;
+        } else {
+          response.user.is_contract_active = false;
+        }
+      }
       await AsyncStorage.setItem('user_token', response.token);
       setUser(response.user);
       setToken(response.token);
-      // Redirige immédiatement après la connexion réussie
-      handleRedirect(true, response.user.role);
+      handleRedirect(true, response.user.role, response.user.is_contract_active);
     } catch (err: any) {
       console.error('Login failed:', err.response?.data || err.message);
       setError(err.response?.data?.message || 'Login failed. Please check your credentials.');
@@ -172,18 +325,25 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     }
   };
 
-  // Fonction d'enregistrement
   const register = async (name: string, email: string, password: string, passwordConfirmation: string, role?: string) => {
     setLoading(true);
     setError(null);
     try {
       const actualDeviceName = Device.deviceName || 'UnknownDevice';
       const response = await registerUser(name, email, password, passwordConfirmation, role);
+      // Récupérer le profil intérimaire après register pour is_contract_active
+      if (response.user && response.user.role === 'interimaire') {
+        const interimProfile = await (await import('../utils/api')).getInterimProfile();
+        if (interimProfile) {
+          response.user.is_contract_active = interimProfile.is_contract_active;
+        } else {
+          response.user.is_contract_active = false;
+        }
+      }
       await AsyncStorage.setItem('user_token', response.token);
       setUser(response.user);
       setToken(response.token);
-      // Redirige immédiatement après l'enregistrement réussi
-      handleRedirect(true, response.user.role);
+      handleRedirect(true, response.user.role, response.user.is_contract_active);
     } catch (err: any) {
       console.error('Registration failed:', err.response?.data || err.message);
       setError(err.response?.data?.message || 'Registration failed. Please try again.');
@@ -293,4 +453,11 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       {children}
     </AuthContext.Provider>
   );
+};
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
 };

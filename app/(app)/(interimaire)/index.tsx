@@ -22,7 +22,7 @@ import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { getOffres, getRecommendedOffres, getActualites } from "../../../utils/api";
 import EvilIcons from '@expo/vector-icons/EvilIcons';
-import { FontAwesome5, FontAwesome } from '@expo/vector-icons';
+import { FontAwesome5, FontAwesome, Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { format } from "date-fns";
 import { Feather } from '@expo/vector-icons';
@@ -294,99 +294,113 @@ export default function InterimDashboardScreen() {
       />
       <ScrollView contentContainerStyle={styles.scrollContent}>
 
+        {user?.is_contract_active === false ? ( // NOUVEAU : Si contrat inactif
+          <View style={[styles.emptyState, { backgroundColor: colors.cardBackground }]}>
+            <Ionicons name="alert-circle-outline" size={48} color={colors.error} />
+            <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>{t('Accès restreint')}</Text>
+            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+              {t('Votre contrat intérimaire est terminé ou inactif. Vous n\'avez plus accès à cet espace.')}
+            </Text>
+            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+              {t('Veuillez contacter l\'administration pour plus d\'informations.')}
+            </Text>
+          </View>
+        ) : (
+          <>
+            <View style={styles.welcomeContainer}>
+              <LinearGradient
+                colors={['#1c6003', '#13af3f']}
+                style={styles.welcomeGradient}
+              >
+                <Text style={styles.welcomeText}>
+                  {t("Bonjour")}, {user?.name || t("Intérimaire")}! ! 👋
+                </Text>
+                <Text style={styles.welcomeSubtext}>
+                  Bienvenue sur l'app Pro Recrute de <Text style={{ fontWeight: "bold" }}>GBG</Text>, ici vous pouvez gérer vos informations et accéder à vos dossiers RH et IPM.
+                </Text>
+              </LinearGradient>
+            </View>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
+              <View
+                style={[
+                  styles.card,
+                  {
+                    backgroundColor: colors.cardBackground,
+                    width: '48%',
+                    marginBottom: 20,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  },
+                ]}
+                onTouchEnd={() => router.push('/(app)/(interimaire)/hr_file')}
+              >
+                <FontAwesome name="folder" size={40} color={colors.secondary} style={{ marginBottom: 10 }} />
+                <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
+                  {t("Dossier RH")}
+                </Text>
+                <Text style={[{ fontSize: 14, color: colors.textSecondary, textAlign: 'center' }]}>
+                  {t("Gérez vos documents RH.")}
+                </Text>
+              </View>
+              <View
+                style={[
+                  styles.card,
+                  {
+                    backgroundColor: colors.cardBackground,
+                    width: '48%',
+                    marginBottom: 20,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  },
+                ]}
+                onTouchEnd={() => router.push('/(app)/(interimaire)/ipm_file')}
+              >
+                <FontAwesome name="medkit" size={40} color={colors.secondary} style={{ marginBottom: 10 }} />
+                <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
+                  {t("Dossier IPM")}
+                </Text>
+                <Text style={[{ fontSize: 14, color: colors.textSecondary, textAlign: 'center' }]}>
+                  {t("Accédez à vos informations IPM.")}
+                </Text>
+              </View>
+            </View>
+            {/* Section Dernières Actualités */}
+            <View style={styles.sectionContainer}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Dernières Actualités</Text>
+                <TouchableOpacity style={styles.viewAllButton} onPress={() => router.push('/(app)/actualites')}>
+                  <Text style={styles.viewAllText}>Voir tout</Text>
+                </TouchableOpacity>
+              </View>
 
-        <View style={styles.welcomeContainer}>
-          <LinearGradient
-            colors={['#1c6003', '#13af3f']}
-            style={styles.welcomeGradient}
-          >
-            <Text style={styles.welcomeText}>
-              {t("Bonjour")}, {user?.name || t("Intérimaire")}! ! 👋
-            </Text>
-            <Text style={styles.welcomeSubtext}>
-              Bienvenue sur l'app Pro Recrute de <Text style={{ fontWeight: "bold" }}>GBG</Text>, ici vous pouvez gérer vos informations et accéder à vos dossiers RH et IPM.
-            </Text>
-          </LinearGradient>
-        </View>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
-          <View
-            style={[
-              styles.card,
-              {
-                backgroundColor: colors.cardBackground,
-                width: '48%',
-                marginBottom: 20,
-                alignItems: 'center',
-                justifyContent: 'center',
-              },
-            ]}
-            onTouchEnd={() => router.push('/(app)/(interimaire)/hr_file')}
-          >
-            <FontAwesome name="folder" size={40} color={colors.secondary} style={{ marginBottom: 10 }} />
-            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-              {t("Dossier RH")}
-            </Text>
-            <Text style={[{ fontSize: 14, color: colors.textSecondary, textAlign: 'center' }]}>
-              {t("Gérez vos documents RH.")}
-            </Text>
-          </View>
-          <View
-            style={[
-              styles.card,
-              {
-                backgroundColor: colors.cardBackground,
-                width: '48%',
-                marginBottom: 20,
-                alignItems: 'center',
-                justifyContent: 'center',
-              },
-            ]}
-            onTouchEnd={() => router.push('/(app)/(interimaire)/ipm_file')}
-          >
-            <FontAwesome name="medkit" size={40} color={colors.secondary} style={{ marginBottom: 10 }} />
-            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-              {t("Dossier IPM")}
-            </Text>
-            <Text style={[{ fontSize: 14, color: colors.textSecondary, textAlign: 'center' }]}>
-              {t("Accédez à vos informations IPM.")}
-            </Text>
-          </View>
-        </View>
-        {/* Section Dernières Actualités */}
-        <View style={styles.sectionContainer}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Dernières Actualités</Text>
-            <TouchableOpacity style={styles.viewAllButton} onPress={() => router.push('/(app)/actualites')}>
-              <Text style={styles.viewAllText}>Voir tout</Text>
-            </TouchableOpacity>
-          </View>
-
-          {loadingNews ? ( // NOUVEAU: Ajout de l'état de chargement pour les actualités
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#0f8e35" />
-              <Text style={styles.loadingText}>Chargement des actualités...</Text>
+              {loadingNews ? ( // NOUVEAU: Ajout de l'état de chargement pour les actualités
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="large" color="#0f8e35" />
+                  <Text style={styles.loadingText}>Chargement des actualités...</Text>
+                </View>
+              ) : errorNews ? ( // NOUVEAU: Ajout de l'état d'erreur pour les actualités
+                <View style={styles.errorContainer}>
+                  <Text style={styles.errorIcon}>⚠️</Text>
+                  <Text style={styles.errorText}>{errorNews}</Text>
+                </View>
+              ) : newsData.length > 0 ? ( // NOUVEAU: Utilisation de newsData
+                <AutoSlider
+                  data={newsData}
+                  renderItem={renderNews}
+                  onPress={handlePressNews}
+                  autoScrollInterval={6000}
+                />
+              ) : (
+                <View style={styles.emptyStateContainer}>
+                  <Text style={styles.emptyStateIcon}>📰</Text>
+                  <Text style={styles.emptyStateText}>
+                    Aucune actualité disponible pour le moment.
+                  </Text>
+                </View>
+              )}
             </View>
-          ) : errorNews ? ( // NOUVEAU: Ajout de l'état d'erreur pour les actualités
-            <View style={styles.errorContainer}>
-              <Text style={styles.errorIcon}>⚠️</Text>
-              <Text style={styles.errorText}>{errorNews}</Text>
-            </View>
-          ) : newsData.length > 0 ? ( // NOUVEAU: Utilisation de newsData
-            <AutoSlider
-              data={newsData}
-              renderItem={renderNews}
-              onPress={handlePressNews}
-              autoScrollInterval={6000}
-            />
-          ) : (
-            <View style={styles.emptyStateContainer}>
-              <Text style={styles.emptyStateIcon}>📰</Text>
-              <Text style={styles.emptyStateText}>
-                Aucune actualité disponible pour le moment.
-              </Text>
-            </View>
-          )}
-        </View>
+          </>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -677,5 +691,29 @@ const styles = StyleSheet.create({
     padding: 6,
     borderRadius: 20,
     marginLeft: 8,
+  },
+    emptyState: { // Styles pour le message d'accès restreint
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+    paddingHorizontal: 20,
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  emptyText: {
+    fontSize: 16,
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 10,
   },
 });
