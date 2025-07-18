@@ -14,6 +14,7 @@ import {
   StatusBar,
   Image,
   Platform,
+  Button,
 } from 'react-native';
 import { useAuth } from '../../components/AuthProvider';
 import CustomHeader from '../../components/CustomHeader';
@@ -35,7 +36,7 @@ import { useTheme } from '../../components/ThemeContext';
 import { useLanguage } from '../../components/LanguageContext';
 import { Picker } from '@react-native-picker/picker';
 import DateTimePicker from '@react-native-community/datetimepicker'; // Expo-friendly
-// import dayjs from 'dayjs'; // facultatif, pour le format AAAA-MM-JJ
+import DatePicker from 'react-native-date-picker'
 
 const { width } = Dimensions.get('window');
 
@@ -47,13 +48,27 @@ interface ExperienceItem {
   date_debut: string;
   date_fin: string;
   missions?: string;
-  type_contrat_id?: number; // ID du type de contrat
-  type_contrat_label?: string; //Libellé du type de contrat (pour affichage)
+  type_contrat_id?: number;
+  type_contrat_label?: string;
+  competences?: { id: number; libelle_competence: string; pivot?: { niveau_competence?: number } }[]; // NOUVEAU : Compétences liées à l'expérience
 }
 
 interface EducationItem {
   name: string;
   dates: string;
+}
+
+// MODIFIÉ : Interface pour les formations
+interface FormationItem {
+  id?: number; // Ajout de l'ID pour la clé
+  nomDiplome: string;
+  universite: string;
+  dateDebut?: string;
+  dateFin?: string;
+  niveau_etude_id?: number;
+  niveau_etude_label?: string;
+  description?: string;
+  competences?: { id: number; libelle_competence: string }[]; // NOUVEAU : Compétences liées à la formation
 }
 
 // ParsedCvData ne contient plus skills et experience directement
@@ -62,7 +77,7 @@ interface ParsedCvData {
   email?: string;
   phone?: string;
   summary?: string;
-  education?: EducationItem[];
+  // education?: EducationItem[];
   last_parsed_file?: string;
   cv_path?: string;
 }
@@ -77,7 +92,8 @@ interface CandidatProfileData {
   status: number;
   disponibilite: string;
   competences?: { id: number; libelle_competence: string; pivot?: { niveau_competence?: number } }[];
-  experiences?: { id: number; titre: string; entreprise: string; lieux?: string; date_debut: string; date_fin: string; missions?: string; type_contrat_id?: number; type_contrat_label?: string; }[];
+  experiences?: ExperienceItem[]; // Utilise la nouvelle interface ExperienceItem
+  formations?: FormationItem[]; // NOUVEAU : Formations
   parsed_cv?: ParsedCvData;
 }
 
@@ -116,37 +132,25 @@ export default function ProfileDetailsScreen() {
     return 'personal';
   });
 
-  
-const [showDatePicker, setShowDatePicker] = useState(false);
 
-// Fonction pour formater la date
-const formatDate = (date) => {
-  if (!date) return '';
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
+  // Etats Date Picker
+  const [datePickerOpen, setDatePickerOpen] = useState(false);
 
-// Fonction pour parser la date string
-const parseDate = (dateString) => {
-  if (!dateString) return new Date();
-  const [year, month, day] = dateString.split('-');
-  return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-};
+  // Fonction pour convertir la date en string AAAA-MM-JJ
+  const formatDateToString = (date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
 
-// Gestionnaire de changement de date
-const handleDateChange = (event, selectedDate) => {
-  setShowDatePicker(Platform.OS === 'ios');
-  
-  if (selectedDate) {
-    const formattedDate = formatDate(selectedDate);
-    setEditableCandidatProfile(prev => ({ 
-      ...prev!, 
-      date_naissance: formattedDate 
-    }));
-  }
-};
+  // Fonction pour convertir la string en Date
+  const parseStringToDate = (dateString) => {
+    if (!dateString) return new Date();
+    const [year, month, day] = dateString.split('-');
+    return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+  };
+
   // États profil personnel User
   const [personalEditMode, setPersonalEditMode] = useState(false);
   const [editableName, setEditableName] = useState(user?.name || '');
@@ -186,21 +190,31 @@ const handleDateChange = (event, selectedDate) => {
   // --- editableParsedCv reflète la nouvelle structure (pas de skills/experience directs)
   const [editableParsedCv, setEditableParsedCv] = useState<ParsedCvData>({
     full_name: '', email: '', phone: '', summary: '',
-    education: [] as EducationItem[],
   });
+  //  États pour les compétences, formations et expériences du candidat (séparées de parsedCv)
+  // const [editableCompetences, setEditableCompetences] = useState<{ libelle_competence: string; niveau_competence?: number }[]>([]);
+  const [editableExperiences, setEditableExperiences] = useState<ExperienceItem[]>([]);
+  const [editableFormations, setEditableFormations] = useState<FormationItem[]>([]); // État pour les formations
+  // const [niveauEtudes, setNiveauEtudes] = useState<{ id: number, libelle_niveau_etude: string }[]>([]);
+
+
   // --- États pour les compétences et expériences du candidat (séparées de parsedCv)
   const [editableSkills, setEditableSkills] = useState<{ libelle_competence: string; niveau_competence?: number }[]>([]);
+
   //--- Noms des champs pour les expériences
-  const [editableExperiences, setEditableExperiences] = useState<ExperienceItem[]>([]);
-
   const [newSkillText, setNewSkillText] = useState('');
+  const [newExpCompetenceText, setNewExpCompetenceText] = useState(''); // Pour compétences liées à l'expérience
+  const [newFormCompetenceText, setNewFormCompetenceText] = useState(''); // Pour compétences liées à la formation
 
-  // NOUVEAU : Options pour le Picker du type de contrat
+  const [showPersonalInfo, setShowPersonalInfo] = useState(true);
+
+  // Options pour le Picker du type de contrat
   const contractTypeOptions = [
     { label: t('Sélectionner un type'), value: null }, // Option par défaut
     { label: t('CDI'), value: 1 },
     { label: t('CDD'), value: 2 },
     { label: t('Stage'), value: 3 },
+    { label: t('CTT'), value: 4 },
   ];
 
   // Fonction utilitaire pour obtenir le libellé du type de contrat
@@ -209,12 +223,32 @@ const handleDateChange = (event, selectedDate) => {
     return option ? option.label : t('Non spécifié');
   };
 
+  const niveauEtudeOptions = [
+    { label: t('Sélectionner un niveau'), value: null }, // Option par défaut
+    { label: t('CFEE'), value: 1 },
+    { label: t('BFEM'), value: 2 },
+    { label: t('BAC'), value: 3 },
+    { label: t('LICENCE'), value: 4 },
+    { label: t('MASTER'), value: 5 },
+    { label: t('DOCTORAT'), value: 6 },
+    { label: t('BTS'), value: 7 },
+    { label: t('DTS'), value: 8 },
+    { label: t('DUT'), value: 9 },
+    { label: t('CAP'), value: 10 },
+    { label: t('BEP'), value: 11 },
+  ];
+
+  // Fonction utilitaire pour obtenir le libellé du type de contrat
+  const getNiveauEtudeLabel = (id: number | null | undefined) => {
+    const option = niveauEtudeOptions.find(opt => opt.value === id);
+    return option ? option.label : t('Non spécifié');
+  };
   // --- Callbacks de chargement de données ---
   const loadCandidatProfile = useCallback(async () => {
     if (user && (user.role === 'user' || user.role === 'interimaire')) {
       setLoadingCandidatProfile(true);
       try {
-        // Charger le candidat AVEC ses relations competences, experiences et parsed_cv
+        // Charge le candidat AVEC ses relations competences, experiences, formations et parsed_cv
         const data: CandidatProfileData = await getCandidatProfile();
         setCandidatProfile(data);
 
@@ -245,8 +279,17 @@ const handleDateChange = (event, selectedDate) => {
           };
         }) || [];
 
+
         setEditableSkills(skillsWithLevels);
-        setEditableExperiences(data?.experiences || []);
+        // setEditableExperiences(data?.experiences || []);
+        setEditableExperiences(data?.experiences?.map((exp: any) => ({
+          ...exp,
+          competences: exp.competences?.map((c: any) => ({ libelle_competence: c.libelle_competence, niveau_competence: c.pivot?.niveau_competence })) || [],
+        })) || []);
+        setEditableFormations(data?.formations?.map((form: any) => ({
+          ...form,
+          competences: form.competences?.map((c: any) => ({ libelle_competence: c.libelle_competence })) || [],
+        })) || []);
 
         // Initialiser parsedCv et editableParsedCv à partir de la relation parsed_cv
         setParsedCv(data?.parsed_cv || null);
@@ -255,7 +298,7 @@ const handleDateChange = (event, selectedDate) => {
           email: data?.parsed_cv?.email || user?.email || '',
           phone: data?.parsed_cv?.phone || '',
           summary: data?.parsed_cv?.summary || '',
-          education: Array.isArray(data?.parsed_cv?.education) ? data?.parsed_cv?.education : [],
+          // education: Array.isArray(data?.parsed_cv?.education) ? data?.parsed_cv?.education : [],
         });
 
         if (data?.parsed_cv?.last_parsed_file) {
@@ -265,7 +308,6 @@ const handleDateChange = (event, selectedDate) => {
         }
 
       } catch (error: any) {
-        console.error("Erreur de chargement du profil candidat:", error);
         setCandidatProfile(null);
         setEditableCandidatProfile({
           date_naissance: '',
@@ -279,6 +321,7 @@ const handleDateChange = (event, selectedDate) => {
         });
         setEditableSkills([]);
         setEditableExperiences([]);
+        setEditableFormations([]);
         setParsedCv(null);
         setCvFileName(null);
       } finally {
@@ -298,6 +341,7 @@ const handleDateChange = (event, selectedDate) => {
       });
       setEditableSkills([]);
       setEditableExperiences([]);
+      setEditableFormations([]);
       setParsedCv(null);
       setCvFileName(null);
       setLoadingCandidatProfile(false);
@@ -352,7 +396,7 @@ const handleDateChange = (event, selectedDate) => {
           email: data?.email || user?.email || '',
           phone: data?.phone || '',
           summary: data?.summary || '',
-          education: Array.isArray(data?.education) ? data.education : [],
+          // education:  [],
         });
         if (data && data.last_parsed_file) {
           setCvFileName(data.last_parsed_file);
@@ -418,7 +462,7 @@ const handleDateChange = (event, selectedDate) => {
             ? parseInt(editableCandidatProfile.status, 10) || 0
             : editableCandidatProfile.status,
         };
-
+        console.log(editableCandidatProfile.status)
         await createOrUpdateCandidatProfile(candidatDataToSave);
         await loadCandidatProfile();
 
@@ -441,11 +485,11 @@ const handleDateChange = (event, selectedDate) => {
 
       // 1. Préparer les données à sauvegarder
       const parsedCvDataToSave: ParsedCvData = {
-        full_name: editableParsedCv.full_name,
-        email: editableParsedCv.email,
-        phone: editableParsedCv.phone,
+        full_name: user?.name || '',
+        email: user?.email || '',
+        phone: candidatProfile?.telephone || '',
         summary: editableParsedCv.summary,
-        education: editableParsedCv.education,
+        // education: editableParsedCv.education,
       };
 
       const competencesToSave = editableSkills.map((s) => {
@@ -466,6 +510,19 @@ const handleDateChange = (event, selectedDate) => {
         lieux: e.lieux,
         missions: e.missions,
         type_contrat_id: e.type_contrat_id,
+        competences: e.competences?.map(c => ({ libelle_competence: c.libelle_competence, niveau_competence: c.pivot?.niveau_competence })),
+      }));
+
+      // Préparer les données pour formations
+      const formationsToSave = editableFormations.map(f => ({
+        nomDiplome: f.nomDiplome,
+        universite: f.universite,
+        dateDebut: f.dateDebut,
+        dateFin: f.dateFin,
+        niveau_etude_id: f.niveau_etude_id,
+        description: f.description,
+        // Compétences liées à la formation
+        competences: f.competences?.map(c => ({ libelle_competence: c.libelle_competence })),
       }));
 
       // 2. Combine avec le profil existant (en forçant status à un entier)
@@ -481,6 +538,7 @@ const handleDateChange = (event, selectedDate) => {
         parsed_cv: parsedCvDataToSave,
         competences: competencesToSave,
         experiences: experiencesToSave,
+        formations: formationsToSave,
       };
 
       await createOrUpdateCandidatProfile(combinedData);
@@ -509,8 +567,8 @@ const handleDateChange = (event, selectedDate) => {
         setInterimUpdateError(t("Aucune donnée de profil intérimaire à sauvegarder."));
         return;
       }
-      if (!editableInterimProfile.matricule || !editableInterimProfile.phone || !editableInterimProfile.cni || !editableInterimProfile.adresse || !editableInterimProfile.statut_agent || !editableInterimProfile.diplome) {
-        Alert.alert(t("Erreur"), t("Veuillez remplir tous les champs obligatoires (Matricule, Téléphone, CNI, Adresse, Statut Agent, Diplôme)."));
+      if (!editableInterimProfile.phone || !editableInterimProfile.cni || !editableInterimProfile.adresse) {
+        Alert.alert(t("Erreur"), t("Veuillez remplir tous les champs obligatoires (Téléphone, CNI, Adresse)."));
         setInterimUpdateError(t("Veuillez remplir les champs obligatoires du profil intérimaire."));
         return;
       }
@@ -556,7 +614,7 @@ const handleDateChange = (event, selectedDate) => {
         setCvFileName(pickedAsset.name);
         await uploadCv(pickedAsset);
         Alert.alert(t("Succès"), t("CV \"") + pickedAsset.name + t("\" téléchargé !"));
-        await loadCandidatProfile(); // Recharger après upload pour mettre à jour l'affichage (inclut parsed_cv)
+        await loadCandidatProfile();
       }
     } catch (err: any) {
       console.error("Erreur upload CV:", err);
@@ -574,7 +632,7 @@ const handleDateChange = (event, selectedDate) => {
         !candidatProfile.parsed_cv.full_name && !candidatProfile.parsed_cv.email && !candidatProfile.parsed_cv.phone &&
         !candidatProfile.parsed_cv.summary && (!candidatProfile.competences || candidatProfile.competences.length === 0) &&
         (!candidatProfile.experiences || candidatProfile.experiences.length === 0) &&
-        (!candidatProfile.parsed_cv.education || candidatProfile.parsed_cv.education.length === 0)
+        (!candidatProfile.formations || candidatProfile.formations.length === 0)
       )) {
         Alert.alert(t("Erreur"), t("Aucune donnée de CV à exporter. Veuillez d'abord saisir ou télécharger un CV."));
         return;
@@ -600,14 +658,13 @@ const handleDateChange = (event, selectedDate) => {
   };
 
   const removeSkill = (skillToRemove: string) => {
-    // MODIFIÉ : Utilise libelle_competence
     setEditableSkills((prev) => prev.filter((skill) => skill.libelle_competence.toLowerCase() !== skillToRemove.toLowerCase()));
   };
 
   // Gestion expérience
   const addExperience = () => {
     // Utilise les noms de champs français
-    setEditableExperiences((prev) => [...prev, { titre: '', entreprise: '', date_debut: '', date_fin: '', lieux: '', missions: '', type_contrat_id: 1 }]);
+    setEditableExperiences((prev) => [...prev, { titre: '', entreprise: '', date_debut: '', date_fin: '', lieux: '', missions: '', type_contrat_id: 1, competences: [] }]);
   };
 
   const updateExperience = (index: number, field: keyof ExperienceItem, value: string) => {
@@ -622,27 +679,78 @@ const handleDateChange = (event, selectedDate) => {
     setEditableExperiences((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // Gestion formation
-  const addEducation = () => {
-    setEditableParsedCv((prev) => ({
-      ...prev,
-      education: [...(prev.education || []), { name: '', dates: '' }],
-    }));
+  // Gestion des compétences liées à l'expérience
+  const addExpCompetence = (expIndex: number) => {
+    const competenceText = newExpCompetenceText.trim();
+    if (competenceText) {
+      setEditableExperiences(prevExperiences => {
+        const updatedExperiences = [...prevExperiences];
+        const currentExp = updatedExperiences[expIndex];
+        if (currentExp && !currentExp.competences?.some(c => c.libelle_competence.toLowerCase() === competenceText.toLowerCase())) {
+          currentExp.competences = [...(currentExp.competences || []), { id: 0, libelle_competence: competenceText, pivot: { niveau_competence: 1 } }];
+        }
+        return updatedExperiences;
+      });
+      setNewExpCompetenceText('');
+      Keyboard.dismiss();
+    }
   };
 
-  const updateEducation = (index: number, field: keyof EducationItem, value: string) => {
-    setEditableParsedCv((prev) => {
-      const updatedEducation = [...(prev.education || [])];
-      updatedEducation[index] = { ...updatedEducation[index], [field]: value };
-      return { ...prev, education: updatedEducation };
+  const removeExpCompetence = (expIndex: number, compToRemove: string) => {
+    setEditableExperiences(prevExperiences => {
+      const updatedExperiences = [...prevExperiences];
+      const currentExp = updatedExperiences[expIndex];
+      if (currentExp?.competences) {
+        currentExp.competences = currentExp.competences.filter(c => c.libelle_competence.toLowerCase() !== compToRemove.toLowerCase());
+      }
+      return updatedExperiences;
+    });
+  };
+
+  // Gestion formation
+  const addEducation = () => {
+    setEditableFormations((prev) => [...prev, { nomDiplome: '', universite: '', dateDebut: '', dateFin: '', description: '', competences: [] }]); // NOUVEAU : Ajouter un tableau de compétences vides
+
+  };
+
+  const updateEducation = (index: number, field: keyof FormationItem, value: string) => {
+    setEditableFormations((prev) => {
+      const updatedFormations = [...prev];
+      updatedFormations[index] = { ...updatedFormations[index], [field]: value };
+      return updatedFormations;
     });
   };
 
   const removeEducation = (index: number) => {
-    setEditableParsedCv((prev) => ({
-      ...prev,
-      education: prev.education?.filter((_, i) => i !== index) || [],
-    }));
+    setEditableFormations((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  //  Gestion des compétences liées à la formation
+  const addFormCompetence = (formIndex: number) => {
+    const competenceText = newFormCompetenceText.trim();
+    if (competenceText) {
+      setEditableFormations(prevFormations => {
+        const updatedFormations = [...prevFormations];
+        const currentForm = updatedFormations[formIndex];
+        if (currentForm && !currentForm.competences?.some(c => c.libelle_competence.toLowerCase() === competenceText.toLowerCase())) {
+          currentForm.competences = [...(currentForm.competences || []), { id: 0, libelle_competence: competenceText }];
+        }
+        return updatedFormations;
+      });
+      setNewFormCompetenceText('');
+      Keyboard.dismiss();
+    }
+  };
+
+  const removeFormCompetence = (formIndex: number, compToRemove: string) => {
+    setEditableFormations(prevFormations => {
+      const updatedFormations = [...prevFormations];
+      const currentForm = updatedFormations[formIndex];
+      if (currentForm?.competences) {
+        currentForm.competences = currentForm.competences.filter(c => c.libelle_competence.toLowerCase() !== compToRemove.toLowerCase());
+      }
+      return updatedFormations;
+    });
   };
 
 
@@ -781,16 +889,12 @@ const handleDateChange = (event, selectedDate) => {
       ) : personalEditMode ? (
         <View style={styles.editContainer}>
           <View style={styles.inputGroup}>
-            <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Nom complet')}</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
-              value={editableName}
-              onChangeText={setEditableName}
-              placeholder={t("Votre nom complet")}
-              placeholderTextColor={colors.textSecondary}
-            />
+            <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Nom Complet')}</Text>
+            <View style={[styles.disabledInput, { backgroundColor: colors.background, borderColor: colors.border }]}>
+              <Text style={[styles.disabledText, { color: colors.textSecondary }]}>{user?.name}</Text>
+              <Ionicons name="lock-closed" size={18} color={colors.textSecondary} />
+            </View>
           </View>
-
           <View style={styles.inputGroup}>
             <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Email')}</Text>
             <View style={[styles.disabledInput, { backgroundColor: colors.background, borderColor: colors.border }]}>
@@ -825,13 +929,53 @@ const handleDateChange = (event, selectedDate) => {
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Date de naissance (AAAA-MM-JJ)')}</Text>
-                <TextInput
-                  style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
-                  value={editableCandidatProfile?.date_naissance || ''}
-                  onChangeText={(text) => setEditableCandidatProfile(prev => ({ ...prev!, date_naissance: text }))}
-                  placeholder={t("AAAA-MM-JJ")}
-                  placeholderTextColor={colors.textSecondary}
+                <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
+                  {t('Date de naissance (JJ MM AAAA)')}
+                </Text>
+
+                <TouchableOpacity
+                  style={[
+                    styles.input,
+                    {
+                      backgroundColor: colors.background,
+                      borderColor: colors.border,
+                      justifyContent: 'center',
+                      paddingVertical: 12,
+                    }
+                  ]}
+                  onPress={() => setDatePickerOpen(true)}
+                >
+                  <Text
+                    style={{
+                      color: editableCandidatProfile?.date_naissance
+                        ? colors.textPrimary
+                        : colors.textSecondary,
+                      fontSize: 16,
+                    }}
+                  >
+                    {formatDateOfBirth(editableCandidatProfile?.date_naissance) || t("JJ-MM-AAAA")}
+                  </Text>
+                </TouchableOpacity>
+
+                <DatePicker
+                  modal
+                  open={datePickerOpen}
+                  date={parseStringToDate(editableCandidatProfile?.date_naissance)}
+                  mode="date"
+                  onConfirm={(selectedDate) => {
+                    setDatePickerOpen(false);
+                    const formattedDate = formatDateToString(selectedDate);
+                    setEditableCandidatProfile(prev => ({
+                      ...prev!,
+                      date_naissance: formattedDate
+                    }));
+                  }}
+                  onCancel={() => {
+                    setDatePickerOpen(false);
+                  }}
+                  title={t('Sélectionner la date de naissance')}
+                  confirmText={t('Confirmer')}
+                  cancelText={t('Annuler')}
                 />
               </View>
 
@@ -867,7 +1011,6 @@ const handleDateChange = (event, selectedDate) => {
                   placeholderTextColor={colors.textSecondary}
                 />
               </View>
-
               <View style={styles.inputGroup}>
                 <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Statut')}</Text>
                 <View style={styles.statusContainer}>
@@ -935,15 +1078,6 @@ const handleDateChange = (event, selectedDate) => {
             <>
               <View style={styles.infoItem}>
                 <View style={styles.infoIcon}>
-                  <Ionicons name="briefcase" size={18} color={colors.secondary} />
-                </View>
-                <View style={styles.infoContent}>
-                  <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Titre professionnel')}</Text>
-                  <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{candidatProfile?.titreProfil || t('Non renseigné')}</Text>
-                </View>
-              </View>
-              <View style={styles.infoItem}>
-                <View style={styles.infoIcon}>
                   <Ionicons name="call" size={18} color={colors.secondary} />
                 </View>
                 <View style={styles.infoContent}>
@@ -951,6 +1085,16 @@ const handleDateChange = (event, selectedDate) => {
                   <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{candidatProfile?.telephone || t('Non renseigné')}</Text>
                 </View>
               </View>
+              <View style={styles.infoItem}>
+                <View style={styles.infoIcon}>
+                  <Ionicons name="briefcase" size={18} color={colors.secondary} />
+                </View>
+                <View style={styles.infoContent}>
+                  <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Titre professionnel')}</Text>
+                  <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{candidatProfile?.titreProfil || t('Non renseigné')}</Text>
+                </View>
+              </View>
+
               <View style={styles.infoItem}>
                 <View style={styles.infoIcon}>
                   <Ionicons name="calendar" size={18} color={colors.secondary} />
@@ -989,12 +1133,12 @@ const handleDateChange = (event, selectedDate) => {
               </View>
               <View style={styles.infoItem}>
                 <View style={styles.infoIcon}>
-                  <View style={[styles.statusIndicator, { backgroundColor: candidatProfile?.status === 1 ? colors.secondary : colors.error }]} />
+                  <View style={[styles.statusIndicator, { backgroundColor: candidatProfile?.status === 'En Écoute' ? colors.secondary : colors.error }]} />
                 </View>
                 <View style={styles.infoContent}>
                   <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Statut')}</Text>
-                  <Text style={[styles.infoValue, { color: candidatProfile?.status === 1 ? colors.secondary : colors.error }]}>
-                    {candidatProfile?.status === 1 ? t('En Écoute') : t('Indisponible')}
+                  <Text style={[styles.infoValue, { color: candidatProfile?.status === 'En Écoute' ? colors.secondary : colors.error }]}>
+                    {candidatProfile?.status === 'En Écoute' ? t('En Écoute') : t('Indisponible')}
                   </Text>
                 </View>
               </View>
@@ -1016,7 +1160,6 @@ const handleDateChange = (event, selectedDate) => {
       )}
     </View>
   );
-  const [showPersonalInfo, setShowPersonalInfo] = useState(true);
 
   const renderCvSection = () => (
     <>
@@ -1093,12 +1236,12 @@ const handleDateChange = (event, selectedDate) => {
           </View>
         </View>
 
-        {cvFileName && (
+        {/* {cvFileName && (
           <View style={[styles.fileInfo, { backgroundColor: colors.success + '10' }]}>
             <Ionicons name="document" size={16} color={colors.success} />
             <Text style={[styles.fileName, { color: colors.success }]}>{cvFileName}</Text>
           </View>
-        )}
+        )} */}
 
         {cvUploadError && (
           <View style={[styles.errorContainer, { backgroundColor: colors.error + '10' }]}>
@@ -1134,38 +1277,25 @@ const handleDateChange = (event, selectedDate) => {
         <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{t('Informations personnelles')}</Text>
 
         <View style={styles.inputGroup}>
-          <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Nom complet')}</Text>
-          <TextInput
-            style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
-            value={editableParsedCv.full_name}
-            onChangeText={(text) => setEditableParsedCv({ ...editableParsedCv, full_name: text })}
-            placeholder={t("Nom complet")}
-            placeholderTextColor={colors.textSecondary}
-          />
+          <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Nom Complet')}</Text>
+          <View style={[styles.disabledInput, { backgroundColor: colors.background, borderColor: colors.border }]}>
+            <Text style={[styles.disabledText, { color: colors.textSecondary }]}>{user?.name}</Text>
+            <Ionicons name="lock-closed" size={18} color={colors.textSecondary} />
+          </View>
         </View>
-
         <View style={styles.inputGroup}>
           <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Email')}</Text>
-          <TextInput
-            style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
-            value={editableParsedCv.email}
-            onChangeText={(text) => setEditableParsedCv({ ...editableParsedCv, email: text })}
-            placeholder={t("Email")}
-            placeholderTextColor={colors.textSecondary}
-            keyboardType="email-address"
-          />
+          <View style={[styles.disabledInput, { backgroundColor: colors.background, borderColor: colors.border }]}>
+            <Text style={[styles.disabledText, { color: colors.textSecondary }]}>{user?.email}</Text>
+            <Ionicons name="lock-closed" size={18} color={colors.textSecondary} />
+          </View>
         </View>
-
         <View style={styles.inputGroup}>
           <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Téléphone')}</Text>
-          <TextInput
-            style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
-            value={editableParsedCv.phone}
-            onChangeText={(text) => setEditableParsedCv({ ...editableParsedCv, phone: text })}
-            placeholder={t("Téléphone")}
-            placeholderTextColor={colors.textSecondary}
-            keyboardType="phone-pad"
-          />
+          <View style={[styles.disabledInput, { backgroundColor: colors.background, borderColor: colors.border }]}>
+            <Text style={[styles.disabledText, { color: colors.textSecondary }]}>{candidatProfile?.telephone}</Text>
+            <Ionicons name="lock-closed" size={18} color={colors.textSecondary} />
+          </View>
         </View>
 
         <View style={styles.inputGroup}>
@@ -1256,13 +1386,13 @@ const handleDateChange = (event, selectedDate) => {
           </TouchableOpacity>
         </View>
 
-        {editableExperiences.map((exp, index) => (
-          <View key={index} style={[styles.experienceItem, { backgroundColor: colors.background, borderColor: colors.border }]}>
+        {editableExperiences.map((exp, expIndex) => ( // MODIFIÉ : Ajout de expIndex
+          <View key={expIndex} style={[styles.experienceItem, { backgroundColor: colors.background, borderColor: colors.border }]}>
             <View style={styles.experienceHeader}>
-              <Text style={[styles.experienceIndex, { color: colors.secondary }]}>#{index + 1}</Text>
+              <Text style={[styles.experienceIndex, { color: colors.secondary }]}>#{expIndex + 1}</Text>
               <TouchableOpacity
                 style={[styles.removeButton, { backgroundColor: colors.error + '15' }]}
-                onPress={() => removeExperience(index)}
+                onPress={() => removeExperience(expIndex)}
               >
                 <Ionicons name="trash" size={14} color={colors.error} />
               </TouchableOpacity>
@@ -1273,7 +1403,7 @@ const handleDateChange = (event, selectedDate) => {
               <TextInput
                 style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
                 value={exp.titre}
-                onChangeText={(text) => updateExperience(index, 'titre', text)}
+                onChangeText={(text) => updateExperience(expIndex, 'titre', text)}
                 placeholder={t("Poste")}
                 placeholderTextColor={colors.textSecondary}
               />
@@ -1283,7 +1413,7 @@ const handleDateChange = (event, selectedDate) => {
               <TextInput
                 style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
                 value={exp.entreprise}
-                onChangeText={(text) => updateExperience(index, 'entreprise', text)}
+                onChangeText={(text) => updateExperience(expIndex, 'entreprise', text)}
                 placeholder={t("Entreprise")}
                 placeholderTextColor={colors.textSecondary}
               />
@@ -1293,7 +1423,7 @@ const handleDateChange = (event, selectedDate) => {
               <TextInput
                 style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
                 value={exp.date_debut}
-                onChangeText={(text) => updateExperience(index, 'date_debut', text)}
+                onChangeText={(text) => updateExperience(expIndex, 'date_debut', text)}
                 placeholder={t("AAAA-MM-JJ")}
                 placeholderTextColor={colors.textSecondary}
               />
@@ -1303,7 +1433,7 @@ const handleDateChange = (event, selectedDate) => {
               <TextInput
                 style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
                 value={exp.date_fin}
-                onChangeText={(text) => updateExperience(index, 'date_fin', text)}
+                onChangeText={(text) => updateExperience(expIndex, 'date_fin', text)}
                 placeholder={t("AAAA-MM-JJ")}
                 placeholderTextColor={colors.textSecondary}
               />
@@ -1313,7 +1443,7 @@ const handleDateChange = (event, selectedDate) => {
               <TextInput
                 style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
                 value={exp.lieux || ''}
-                onChangeText={(text) => updateExperience(index, 'lieux', text)}
+                onChangeText={(text) => updateExperience(expIndex, 'lieux', text)}
                 placeholder={t("Lieu")}
                 placeholderTextColor={colors.textSecondary}
               />
@@ -1323,7 +1453,7 @@ const handleDateChange = (event, selectedDate) => {
               <TextInput
                 style={[styles.input, styles.textArea, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
                 value={exp.missions || ''}
-                onChangeText={(text) => updateExperience(index, 'missions', text)}
+                onChangeText={(text) => updateExperience(expIndex, 'missions', text)}
                 placeholder={t("Missions")}
                 placeholderTextColor={colors.textSecondary}
                 multiline
@@ -1345,7 +1475,7 @@ const handleDateChange = (event, selectedDate) => {
                 <Picker
                   selectedValue={exp.type_contrat_id ?? null}
                   onValueChange={(itemValue: number | null) =>
-                    updateExperience(index, 'type_contrat_id', itemValue ? itemValue.toString() : '')
+                    updateExperience(expIndex, 'type_contrat_id', itemValue ? itemValue.toString() : '')
                   }
                   style={{ height: 50, width: '100%', color: colors.textPrimary }}
                   itemStyle={{ color: colors.textPrimary }}
@@ -1357,9 +1487,36 @@ const handleDateChange = (event, selectedDate) => {
               </View>
             </View>
 
+            {/* Compétences liées à cette expérience */}
+            <View style={styles.subSectionHeader}>
+              <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Compétences de l\'expérience')}</Text>
+            </View>
+            <View style={styles.skillsInputContainer}>
+              <TextInput
+                style={[styles.input, styles.skillInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
+                value={newExpCompetenceText}
+                onChangeText={setNewExpCompetenceText}
+                placeholder={t("Ajouter une compétence à cette expérience")}
+                placeholderTextColor={colors.textSecondary}
+                onSubmitEditing={() => addExpCompetence(expIndex)}
+                returnKeyType="done"
+              />
+              <TouchableOpacity style={[styles.addSkillButton, { backgroundColor: colors.secondary }]} onPress={() => addExpCompetence(expIndex)}>
+                <Ionicons name="add" size={20} color="#fff" />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.skillsContainer}>
+              {exp.competences?.map((comp, compIndex) => (
+                <TouchableOpacity key={compIndex} style={[styles.skillChip, { backgroundColor: colors.primary + '15', borderColor: colors.primary }]} onPress={() => removeExpCompetence(expIndex, comp.libelle_competence)}>
+                  <Text style={[styles.skillText, { color: colors.primary }]}>{comp.libelle_competence}</Text>
+                  <Ionicons name="close-circle" size={16} color={colors.primary} />
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
         ))}
       </View>
+
 
       {/* Formation */}
       <View style={styles.formSection}>
@@ -1371,13 +1528,13 @@ const handleDateChange = (event, selectedDate) => {
           </TouchableOpacity>
         </View>
 
-        {editableParsedCv.education?.map((edu, index) => (
-          <View key={index} style={[styles.educationItem, { backgroundColor: colors.background, borderColor: colors.border }]}>
+        {editableFormations.map((edu, formIndex) => ( // Utilise editableFormations et formIndex
+          <View key={formIndex} style={[styles.educationItem, { backgroundColor: colors.background, borderColor: colors.border }]}>
             <View style={[styles.sectionHeader, { borderBottomColor: colors.border }]}>
-              <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{t('Formation')} #{index + 1}</Text>
+              <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{t('Formation')} #{formIndex + 1}</Text>
               <TouchableOpacity
                 style={[styles.removeButton, { backgroundColor: colors.error + '15' }]}
-                onPress={() => removeEducation(index)}
+                onPress={() => removeEducation(formIndex)}
               >
                 <Ionicons name="trash" size={18} color={colors.error} />
               </TouchableOpacity>
@@ -1387,21 +1544,106 @@ const handleDateChange = (event, selectedDate) => {
               <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Nom de l\'établissement/diplôme')}</Text>
               <TextInput
                 style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
-                value={edu.name}
-                onChangeText={(text) => updateEducation(index, 'name', text)}
+                value={edu.nomDiplome} // nomDiplome
+                onChangeText={(text) => updateEducation(formIndex, 'nomDiplome', text)}
                 placeholder={t("Nom de l'établissement/diplôme")}
                 placeholderTextColor={colors.textSecondary}
               />
             </View>
             <View style={styles.inputGroup}>
-              <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Période')}</Text>
+              <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Université')}</Text>
               <TextInput
                 style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
-                value={edu.dates}
-                onChangeText={(text) => updateEducation(index, 'dates', text)}
-                placeholder={t("Période")}
+                value={edu.universite} //  universite
+                onChangeText={(text) => updateEducation(formIndex, 'universite', text)}
+                placeholder={t("Université")}
                 placeholderTextColor={colors.textSecondary}
               />
+            </View>
+            <View style={styles.inputGroup}>
+              <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Niveau d\'Etude')}</Text>
+              <View style={[{
+                borderWidth: 1,
+                borderRadius: 8,
+                marginVertical: 4,
+                overflow: 'hidden',
+              }, {
+                backgroundColor: colors.background,
+                borderColor: colors.border,
+              }]}>
+                <Picker
+                  selectedValue={edu.niveau_etude_id ?? null}
+                  onValueChange={(itemValue: number | null) =>
+                    updateEducation(formIndex, 'niveau_etude_id', itemValue ? itemValue.toString() : '')
+                  }
+                  style={{ height: 50, width: '100%', color: colors.textPrimary }}
+                  itemStyle={{ color: colors.textPrimary }}
+                >
+                  {niveauEtudeOptions.map(option => (
+                    <Picker.Item key={option.value ?? 'default'} label={option.label} value={option.value} />
+                  ))}
+                </Picker>
+              </View>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Date début formation')}</Text>
+              <TextInput
+                style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
+                value={edu.dateDebut || ''} // MODIFIÉ : dateDebut
+                onChangeText={(text) => updateEducation(formIndex, 'dateDebut', text)}
+                placeholder={t("AAAA-MM-JJ")}
+                placeholderTextColor={colors.textSecondary}
+              />
+            </View>
+            <View style={styles.inputGroup}>
+              <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Date fin formation')}</Text>
+              <TextInput
+                style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
+                value={edu.dateFin || ''} // MODIFIÉ : dateFin
+                onChangeText={(text) => updateEducation(formIndex, 'dateFin', text)}
+                placeholder={t("AAAA-MM-JJ")}
+                placeholderTextColor={colors.textSecondary}
+              />
+            </View>
+            <View style={styles.inputGroup}>
+              <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Description formation')}</Text>
+              <TextInput
+                style={[styles.input, styles.textArea, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
+                value={edu.description || ''} // MODIFIÉ : description
+                onChangeText={(text) => updateEducation(formIndex, 'description', text)}
+                placeholder={t("Description de la formation")}
+                placeholderTextColor={colors.textSecondary}
+                multiline
+                numberOfLines={2}
+                textAlignVertical="top"
+              />
+            </View>
+            {/* NOUVEAU : Compétences liées à cette formation */}
+            <View style={styles.subSectionHeader}>
+              <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Compétences de la formation')}</Text>
+            </View>
+            <View style={styles.skillsInputContainer}>
+              <TextInput
+                style={[styles.input, styles.skillInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
+                value={newFormCompetenceText}
+                onChangeText={setNewFormCompetenceText}
+                placeholder={t("Ajouter une compétence à cette formation")}
+                placeholderTextColor={colors.textSecondary}
+                onSubmitEditing={() => addFormCompetence(formIndex)}
+                returnKeyType="done"
+              />
+              <TouchableOpacity style={[styles.addSkillButton, { backgroundColor: colors.secondary }]} onPress={() => addFormCompetence(formIndex)}>
+                <Ionicons name="add" size={20} color="#fff" />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.skillsContainer}>
+              {edu.competences?.map((comp, compIndex) => (
+                <TouchableOpacity key={compIndex} style={[styles.skillChip, { backgroundColor: colors.primary + '15', borderColor: colors.primary }]} onPress={() => removeFormCompetence(formIndex, comp.libelle_competence)}>
+                  <Text style={[styles.skillText, { color: colors.primary }]}>{comp.libelle_competence}</Text>
+                  <Ionicons name="close-circle" size={16} color={colors.primary} />
+                </TouchableOpacity>
+              ))}
             </View>
           </View>
         ))}
@@ -1420,7 +1662,7 @@ const handleDateChange = (event, selectedDate) => {
           onPress={() => {
             setCvEditMode(false);
             setCandidatEditMode(false);
-            loadCandidatProfile(); // Recharger pour annuler les modifications
+            loadCandidatProfile();
             setCvUpdateError(null);
             setCandidatUpdateError(null);
           }}
@@ -1436,592 +1678,236 @@ const handleDateChange = (event, selectedDate) => {
       </View>
     </View>
   );
+  const renderCvDisplay = () => {
+    // Fonction pour vérifier si le CV a du contenu
+    const hasCvContent = () => {
+      const hasPersonalInfo = candidatProfile?.parsed_cv?.full_name ||
+        candidatProfile?.parsed_cv?.email ||
+        candidatProfile?.parsed_cv?.phone ||
+        candidatProfile?.parsed_cv?.summary;
 
- const renderCvDisplay = () => (
-  <View style={styles.cvViewContainer}>
-    {/* Informations personnelles CV */}
-    {(candidatProfile?.parsed_cv?.full_name || candidatProfile?.parsed_cv?.email || candidatProfile?.parsed_cv?.phone || candidatProfile?.parsed_cv?.summary) && (
-      <View style={[styles.cvViewSection, { borderBottomColor: colors.border }]}>
-        <Text style={[styles.cvViewSectionTitle, { color: colors.textPrimary }]}>{t('Informations')}</Text>
+      const hasCompetences = candidatProfile?.competences && candidatProfile.competences.length > 0;
 
-        {candidatProfile?.parsed_cv?.full_name && (
-          <View style={styles.cvViewItem}>
-            <Ionicons name="person" size={16} color={colors.textSecondary} />
-            <Text style={[styles.cvViewText, { color: colors.textPrimary }]}>{candidatProfile.parsed_cv.full_name}</Text>
-          </View>
-        )}
+      const hasExperiences = candidatProfile?.experiences && candidatProfile.experiences.length > 0;
 
-        {candidatProfile?.parsed_cv?.email && (
-          <View style={styles.cvViewItem}>
-            <Ionicons name="mail" size={16} color={colors.textSecondary} />
-            <Text style={[styles.cvViewText, { color: colors.textPrimary }]}>{candidatProfile.parsed_cv.email}</Text>
-          </View>
-        )}
+      const hasEducation = candidatProfile?.formations && candidatProfile.formations.length > 0;
 
-        {candidatProfile?.parsed_cv?.phone && (
-          <View style={styles.cvViewItem}>
-            <Ionicons name="call" size={16} color={colors.textSecondary} />
-            <Text style={[styles.cvViewText, { color: colors.textPrimary }]}>{candidatProfile.parsed_cv.phone}</Text>
-          </View>
-        )}
+      const hasFile = candidatProfile?.parsed_cv?.last_parsed_file;
 
-        {candidatProfile?.parsed_cv?.summary && (
-          <View style={styles.cvViewItem}>
-            <Ionicons name="document-text" size={16} color={colors.textSecondary} />
-            <Text style={[styles.cvViewText, { color: colors.textPrimary }]}>{candidatProfile.parsed_cv.summary}</Text>
-          </View>
-        )}
-      </View>
-    )}
+      // Retourne true s'il y a au moins une section avec du contenu
+      return hasCompetences || hasExperiences || hasEducation;
+    };
 
-    {/* Compétences */}
-    {candidatProfile?.competences && candidatProfile.competences.length > 0 && (
-      <View style={[styles.cvViewSection, { borderBottomColor: colors.border }]}>
-        <Text style={[styles.cvViewSectionTitle, { color: colors.textPrimary }]}>{t('Compétences')}</Text>
-        <View style={styles.skillsContainer}>
-          {candidatProfile.competences.map((skill: any, index: number) => (
-            <View key={skill.id || index} style={[styles.skillChipView, { backgroundColor: colors.secondary + '15' }]}>
-              {/* Nom de la compétence */}
-              <Text style={[styles.skillTextView, { color: colors.secondary }]}>{skill.libelle_competence}</Text>
+    return (
+      <View style={styles.cvViewContainer}>
+        {/* Informations personnelles CV */}
+        {(candidatProfile?.parsed_cv?.full_name || candidatProfile?.parsed_cv?.email || candidatProfile?.parsed_cv?.phone || candidatProfile?.parsed_cv?.summary) && (
+          <View style={[styles.cvViewSection, { borderBottomColor: colors.border }]}>
+            <Text style={[styles.cvViewSectionTitle, { color: colors.textPrimary }]}>{t('Informations')}</Text>
 
-              {/* Étoiles pour le niveau */}
-              <View style={{ flexDirection: 'row', marginLeft: 8 }}>
-                {[1, 2, 3, 4, 5].map((level) => (
-                  <Ionicons
-                    key={level}
-                    name={
-                      (skill.niveau_competence ?? 0) >= level
-                        ? 'star'
-                        : 'star-outline'
-                    }
-                    size={14}
-                    color="#FFD700"
-                    style={{ marginHorizontal: 0.5 }}
-                  />
-                ))}
-              </View>
-            </View>
-          ))}
-        </View>
-      </View>
-    )}
-
-    {/* Expérience professionnelle */}
-    {candidatProfile?.experiences && candidatProfile.experiences.length > 0 && (
-      <View style={[styles.cvViewSection, { borderBottomColor: colors.border }]}>
-        <Text style={[styles.cvViewSectionTitle, { color: colors.textPrimary }]}>{t('Expérience Professionnelle')}</Text>
-        {candidatProfile.experiences.map((exp: ExperienceItem, index: number) => (
-          <View key={exp.titre + index} style={[styles.experienceViewItem, { backgroundColor: colors.background, borderColor: colors.border }]}>
-            <View style={styles.experienceViewHeader}>
-              <Text style={[styles.experienceTitle, { color: colors.textPrimary }]}>{exp.titre}</Text>
-              <Text style={[styles.experienceDates, { color: colors.textSecondary }]}>{new Date(exp.date_debut).getFullYear()} - {new Date(exp.date_fin).getFullYear()}</Text>
-            </View>
-             <View style={styles.cvViewItem}>
-              <Ionicons name="business" size={16} color={colors.textSecondary} />
-                <Text style={[styles.cvViewText, { color: colors.secondary }]}>{exp.entreprise}</Text>
-              </View>
-            {exp.lieux && (
+            {candidatProfile?.parsed_cv?.full_name && (
               <View style={styles.cvViewItem}>
-                <Ionicons name="location" size={16} color={colors.textSecondary} />
-                <Text style={[styles.cvViewText, { color: colors.textSecondary }]}>{exp.lieux}</Text>
+                <Ionicons name="person" size={16} color={colors.textSecondary} />
+                <Text style={[styles.cvViewText, { color: colors.textPrimary }]}>{candidatProfile.parsed_cv.full_name}</Text>
               </View>
             )}
 
-            {exp.missions && (
-              <Text style={[styles.experienceDescription, { color: colors.textPrimary }, { paddingBottom: 10 }]}>
-                <Text style={{ fontWeight: '600', color: colors.textSecondary }}>
-                  {t('Missions:')} 
-                </Text>
-                {exp.missions}
-              </Text>
+            {candidatProfile?.parsed_cv?.email && (
+              <View style={styles.cvViewItem}>
+                <Ionicons name="mail" size={16} color={colors.textSecondary} />
+                <Text style={[styles.cvViewText, { color: colors.textPrimary }]}>{candidatProfile.parsed_cv.email}</Text>
+              </View>
             )}
 
-            <View style={styles.contractTypeContainer}>
-              <Text style={{ fontWeight: '600', color: colors.textSecondary }}>
-                {t('Type de contrat:')}
-              </Text>
-              <View style={styles.contractTypeTag}>
-                <Text style={styles.contractTypeText}>
-                  {exp.type_contrat_id ? getContractTypeLabel(exp.type_contrat_id) : t('Non spécifié')}
-                </Text>
+            {candidatProfile?.parsed_cv?.phone && (
+              <View style={styles.cvViewItem}>
+                <Ionicons name="call" size={16} color={colors.textSecondary} />
+                <Text style={[styles.cvViewText, { color: colors.textPrimary }]}>{candidatProfile.parsed_cv.phone}</Text>
               </View>
+            )}
+
+            {candidatProfile?.parsed_cv?.summary && (
+              <View style={styles.cvViewItem}>
+                <Ionicons name="document-text" size={16} color={colors.textSecondary} />
+                <Text style={[styles.cvViewText, { color: colors.textPrimary }]}>{candidatProfile.parsed_cv.summary}</Text>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Compétences */}
+        {candidatProfile?.competences && candidatProfile.competences.length > 0 && (
+          <View style={[styles.cvViewSection, { borderBottomColor: colors.border }]}>
+            <Text style={[styles.cvViewSectionTitle, { color: colors.textPrimary }]}>{t('Compétences')}</Text>
+            <View style={styles.skillsContainer}>
+              {candidatProfile.competences.map((skill: any, index: number) => (
+                <View key={skill.id || index} style={[styles.skillChipView, { backgroundColor: colors.secondary + '15' }]}>
+                  {/* Nom de la compétence */}
+                  <Text style={[styles.skillTextView, { color: colors.secondary }]}>{skill.libelle_competence}</Text>
+
+                  {/* Étoiles pour le niveau */}
+                  <View style={{ flexDirection: 'row', marginLeft: 8 }}>
+                    {[1, 2, 3, 4, 5].map((level) => (
+                      <Ionicons
+                        key={level}
+                        name={
+                          (skill.niveau_competence ?? 0) >= level
+                            ? 'star'
+                            : 'star-outline'
+                        }
+                        size={14}
+                        color="#FFD700"
+                        style={{ marginHorizontal: 0.5 }}
+                      />
+                    ))}
+                  </View>
+                </View>
+              ))}
             </View>
           </View>
-        ))}
-      </View>
-    )}
+        )}
 
-    {/* Formation */}
-    {candidatProfile?.parsed_cv?.education && candidatProfile.parsed_cv.education.length > 0 && (
-      <View style={[styles.cvViewSection, { borderBottomColor: colors.border }]}>
-        <Text style={[styles.cvViewSectionTitle, { color: colors.textPrimary }]}>{t('Formation')}</Text>
-        {candidatProfile.parsed_cv.education.map((edu: EducationItem, index: number) => (
-          <View key={index} style={[styles.educationViewItem, { backgroundColor: colors.background, borderColor: colors.border }]}>
-            <View style={styles.educationHeader}>
-              <Text style={[styles.educationName, { color: colors.textPrimary }]}>{edu.name}</Text>
-              <Text style={[styles.educationDates, { color: colors.textSecondary }]}>{edu.dates}</Text>
+        {/* Expérience professionnelle */}
+        {candidatProfile?.experiences && candidatProfile.experiences.length > 0 && (
+          <View style={[styles.cvViewSection, { borderBottomColor: colors.border }]}>
+            <Text style={[styles.cvViewSectionTitle, { color: colors.textPrimary }]}>{t('Expérience Professionnelle')}</Text>
+            {candidatProfile.experiences.map((exp: ExperienceItem, index: number) => (
+              <View key={exp.titre + index} style={[styles.experienceViewItem, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                <View style={styles.experienceViewHeader}>
+                  <Text style={[styles.experienceTitle, { color: colors.textPrimary }]}>{exp.titre}</Text>
+                  <Text style={[styles.experienceDates, { color: colors.textSecondary }]}>{new Date(exp.date_debut).getFullYear()} - {new Date(exp.date_fin).getFullYear()}</Text>
+                </View>
+                <View style={styles.cvViewItem}>
+                  <Ionicons name="business" size={16} color={colors.textSecondary} />
+                  <Text style={[styles.cvViewText, { color: colors.secondary }]}>{exp.entreprise}</Text>
+                </View>
+                {exp.lieux && (
+                  <View style={styles.cvViewItem}>
+                    <Ionicons name="location" size={16} color={colors.textSecondary} />
+                    <Text style={[styles.cvViewText, { color: colors.textSecondary }]}>{exp.lieux}</Text>
+                  </View>
+                )}
+
+                {exp.missions && (
+                  <Text style={[styles.experienceDescription, { color: colors.textPrimary }, { paddingBottom: 10 }]}>
+                    <Text style={{ fontWeight: '600', color: colors.textSecondary }}>
+                      {t('Missions:')}
+                    </Text>
+                    {exp.missions}
+                  </Text>
+                )}
+                {exp.competences && exp.competences.length > 0 && (
+                  <View style={styles.expContainer}>
+                    <Text style={[styles.cvInfoLabel, { color: colors.textSecondary }]}>{t('Compétences :')}</Text>
+                    {exp.competences.map((comp, compIndex) => (
+                      <View key={comp.id || compIndex} style={styles.expTag}>
+                        <Text style={styles.expText}>{comp.libelle_competence}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+                <View style={styles.contractTypeContainer}>
+                  <Text style={[styles.cvInfoLabel, { color: colors.textSecondary }]}>
+                    {t('Type de contrat:')}
+                  </Text>
+                  <View style={styles.contractTypeTag}>
+                    <Text style={styles.contractTypeText}>
+                      {exp.type_contrat_id ? getContractTypeLabel(exp.type_contrat_id) : t('Non spécifié')}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* Formation */}
+        {candidatProfile?.formations && candidatProfile.formations.length > 0 && ( // NOUVEAU : Affichage des formations
+          <View style={[styles.cvViewSection, { borderBottomColor: colors.border }]}>
+            <Text style={[styles.cvViewSectionTitle, { color: colors.textPrimary }]}>{t('Formation')}</Text>
+            {candidatProfile.formations.map((edu: FormationItem, index: number) => (
+              <View key={edu.id || index} style={[styles.educationViewItem, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                <Text style={[styles.educationName, { color: colors.textPrimary }]}>{edu.nomDiplome}</Text>
+                <Text style={[styles.educationDates, { color: colors.textSecondary }]}>{edu.universite}</Text>
+                <Text style={[styles.educationDates, { color: colors.textSecondary }]}>{edu.dateDebut} - {edu.dateFin}</Text>
+                {edu.description && (
+                  <Text style={[styles.experienceDescription, { color: colors.textPrimary }]}>{edu.description}</Text>
+                )}
+                <View style={styles.contractTypeContainer}>
+                  <Text style={[styles.cvInfoLabel, { color: colors.textSecondary }]}>
+                    {t('Niveau d\'Etude:')}
+                  </Text>
+                  <View style={styles.contractTypeTag}>
+                    <Text style={styles.contractTypeText}>
+                      {edu.niveau_etude_id ? getNiveauEtudeLabel(edu.niveau_etude_id) : t('Non spécifié')}
+                    </Text>
+                  </View>
+                </View>
+                {/*  Affichage des compétences liées à la formation */}
+                {edu.competences && edu.competences.length > 0 && (
+                  <View style={styles.expContainer}>
+                    <Text style={[styles.cvInfoLabel, { color: colors.textSecondary }]}>{t('Compétences :')}</Text>
+                    {edu.competences.map((comp, compIndex) => (
+                      <View key={comp.id || compIndex} style={styles.expTag}>
+                        <Text style={styles.expText}>{comp.libelle_competence}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* Nom du fichier CV téléchargé */}
+        {candidatProfile?.parsed_cv?.last_parsed_file && (
+          <View style={[styles.cvViewSection, { borderBottomColor: colors.border }]}>
+            <Text style={[styles.cvViewSectionTitle, { color: colors.textPrimary }]}>{t('Autres Ressources')}</Text>
+            <View style={[styles.currentFileContainer, { backgroundColor: colors.success + '10' }]}>
+              <Ionicons name="document" size={16} color={colors.success} />
+              <Text style={[styles.fileName, { color: colors.success }]}>{candidatProfile.parsed_cv.last_parsed_file}</Text>
             </View>
           </View>
-        ))}
+        )}
+
+        {/* Bouton d'exportation du CV - affiché seulement s'il y a du contenu */}
+        {hasCvContent() && (
+          <TouchableOpacity style={[styles.exportButton, { backgroundColor: colors.secondary }]} onPress={handleExportCv} disabled={exportingCv}>
+            {exportingCv ? (
+              <ActivityIndicator color="#FFFFFF" size="small" />
+            ) : (
+              <>
+                <FontAwesome5 name="file-download" size={18} color="#FFFFFF" />
+                <Text style={styles.exportButtonText}>{t('Exporter le CV (PDF)')}</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        )}
+
+        {exportError && (
+          <View style={[styles.errorContainer, { backgroundColor: colors.error + '10' }]}>
+            <Ionicons name="alert-circle" size={16} color={colors.error} />
+            <Text style={[styles.errorText, { color: colors.error }]}>{exportError}</Text>
+          </View>
+        )}
       </View>
-    )}
+    );
+  };
 
-    {/* Nom du fichier CV téléchargé */}
-    {candidatProfile?.parsed_cv?.last_parsed_file && (
-      <View style={[styles.cvViewSection, { borderBottomColor: colors.border }]}>
-        <Text style={[styles.cvViewSectionTitle, { color: colors.textPrimary }]}>{t('Fichier CV téléchargé')}</Text>
-        <View style={[styles.currentFileContainer, { backgroundColor: colors.success + '10' }]}>
-          <Ionicons name="document" size={16} color={colors.success} />
-          <Text style={[styles.fileName, { color: colors.success }]}>{candidatProfile.parsed_cv.last_parsed_file}</Text>
-        </View>
-      </View>
-    )}
+  const getSexeLabel = (sexe: number | null | undefined) => {
+    if (sexe === 1) return 'Homme';
+    if (sexe === 2) return 'Femme';
+    return '';
+  };
 
-    {/* Bouton d'exportation du CV */}
-    <TouchableOpacity style={[styles.exportButton, { backgroundColor: colors.secondary }]} onPress={handleExportCv} disabled={exportingCv}>
-      {exportingCv ? (
-        <ActivityIndicator color="#FFFFFF" size="small" />
-      ) : (
-        <>
-          <FontAwesome5 name="file-download" size={18} color="#FFFFFF" />
-          <Text style={styles.exportButtonText}>{t('Exporter le CV (PDF)')}</Text>
-        </>
-      )}
-    </TouchableOpacity>
-    
-    {exportError && (
-      <View style={[styles.errorContainer, { backgroundColor: colors.error + '10' }]}>
-        <Ionicons name="alert-circle" size={16} color={colors.error} />
-        <Text style={[styles.errorText, { color: colors.error }]}>{exportError}</Text>
-      </View>
-    )}
-  </View>
-);
+  const getSituationMat = (situation_matrimoniale: number | null | undefined) => {
+    if (situation_matrimoniale === 1) return 'Célibataire';
+    if (situation_matrimoniale === 2) return 'Divorcé(e)';
+    if (situation_matrimoniale === 3) return 'Veuf(ve)';
+    if (situation_matrimoniale === 0) return 'Marié(e)';
+    return '';
+  };
 
-
-
-  //  Rendu de la section Intérimaire
-  // const renderInterimSection = () => (
-  //   <View style={[styles.section, { backgroundColor: colors.cardBackground }]}>
-  //     <View style={styles.sectionHeader}>
-  //       <View style={styles.headerLeft}>
-  //         <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{t('Profil Intérimaire')}</Text>
-  //       </View>
-  //       <View style={styles.headerActions}>
-  //         <TouchableOpacity
-  //           style={[styles.actionButton, interimEditMode && styles.actionButtonActive, { backgroundColor: interimEditMode ? colors.secondary : colors.settingIconBg }]}
-  //           onPress={() => interimEditMode ? handleInterimProfileSave() : setInterimEditMode(true)}
-  //         >
-  //           <Ionicons
-  //             name={interimEditMode ? "checkmark" : "pencil"}
-  //             size={18}
-  //             color={interimEditMode ? "#ffffff" : colors.secondary}
-  //           />
-  //         </TouchableOpacity>
-  //         {interimEditMode && (
-  //           <TouchableOpacity
-  //             style={[styles.actionButton, styles.actionButtonCancel, { backgroundColor: colors.error }]}
-  //             onPress={() => {
-  //               setInterimEditMode(false);
-  //               loadInterimProfile();
-  //               setInterimUpdateError(null);
-  //             }}
-  //           >
-  //             <Ionicons name="close" size={18} color="#ffffff" />
-  //           </TouchableOpacity>
-  //         )}
-  //       </View>
-  //     </View>
-
-  //     {loadingInterimProfile ? (
-  //       <View style={styles.loadingContainer}>
-  //         <ActivityIndicator size="small" color={colors.secondary} />
-  //         <Text style={[styles.loadingText, { color: colors.textSecondary }]}>{t('Chargement du profil intérimaire...')}</Text>
-  //       </View>
-  //     ) : interimEditMode ? (
-  //       // Formulaire d'édition du profil Intérimaire
-  //       <View style={styles.editContainer}>
-  //         {/* Nom complet et Email de l'utilisateur principal (non modifiables ici) */}
-  //         <View style={styles.inputGroup}>
-  //           <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Nom complet')}</Text>
-  //           <TextInput
-  //             style={[styles.input, styles.disabledInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
-  //             value={user?.name || ''}
-  //             editable={false}
-  //             placeholder={t("Nom complet de l'utilisateur")}
-  //             placeholderTextColor={colors.textSecondary}
-  //           />
-  //         </View>
-  //         <View style={styles.inputGroup}>
-  //           <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Email')}</Text>
-  //           <TextInput
-  //             style={[styles.input, styles.disabledInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
-  //             value={user?.email || ''}
-  //             editable={false}
-  //             placeholder={t("Email de l'utilisateur")}
-  //             placeholderTextColor={colors.textSecondary}
-  //           />
-  //         </View>
-
-  //         {/* CHAMPS NON MODIFIABLES (Matricule, Statut agent, Diplôme, Taux retenue/remboursement) */}
-  //         <View style={styles.inputGroup}>
-  //           <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Matricule')}</Text>
-  //           <TextInput
-  //             style={[styles.input, styles.disabledInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
-  //             value={editableInterimProfile?.matricule || ''}
-  //             placeholder={t("Matricule de l'agent")}
-  //             placeholderTextColor={colors.textSecondary}
-  //             editable={false} // Rendu non modifiable
-  //           />
-  //         </View>
-
-  //         <View style={styles.inputGroup}>
-  //           <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Statut de l\'agent')}</Text>
-  //           <TextInput
-  //             style={[styles.input, styles.disabledInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
-  //             value={editableInterimProfile?.statut_agent_label || ''} // Utilise le label si disponible
-  //             placeholder={t("Actif, En congé, etc.")}
-  //             placeholderTextColor={colors.textSecondary}
-  //             editable={false} // Rendu non modifiable
-  //           />
-  //         </View>
-
-  //         <View style={styles.inputGroup}>
-  //           <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Diplôme')}</Text>
-  //           <TextInput
-  //             style={[styles.input, styles.disabledInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
-  //             value={editableInterimProfile?.diplome || ''}
-  //             placeholder={t("Ex: Licence en Informatique")}
-  //             placeholderTextColor={colors.textSecondary}
-  //             editable={false} // Rendu non modifiable
-  //           />
-  //         </View>
-
-  //         <View style={styles.inputGroup}>
-  //           <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Taux de retenue (%)')}</Text>
-  //           <TextInput
-  //             style={[styles.input, styles.disabledInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
-  //             value={editableInterimProfile?.taux_retenu_label || String(editableInterimProfile?.taux_retenu ?? '')} // Utilise le label
-  //             placeholder={t("Ex: 10.5")}
-  //             placeholderTextColor={colors.textSecondary}
-  //             keyboardType="numeric"
-  //             editable={false} // Rendu non modifiable
-  //           />
-  //         </View>
-
-  //         <View style={styles.inputGroup}>
-  //           <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Taux de remboursement (%)')}</Text>
-  //           <TextInput
-  //             style={[styles.input, styles.disabledInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
-  //             value={editableInterimProfile?.taux_remboursse_label || String(editableInterimProfile?.taux_remboursse ?? '')} // Utilise le label
-  //             placeholder={t("Ex: 5.0")}
-  //             placeholderTextColor={colors.textSecondary}
-  //             keyboardType="numeric"
-  //             editable={false} // Rendu non modifiable
-  //           />
-  //         </View>
-
-  //         {/* CHAMPS MODIFIABLES */}
-  //         <View style={styles.inputGroup}>
-  //           <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Sexe')}</Text>
-  //           <TextInput
-  //             style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
-  //             value={editableInterimProfile?.sexe_label || String(editableInterimProfile?.sexe ?? '')} // Utilise le label
-  //             onChangeText={(text) => setEditableInterimProfile(prev => ({ ...prev!, sexe: text as any }))} // Cast temporaire
-  //             placeholder={t("Homme, Femme")}
-  //             placeholderTextColor={colors.textSecondary}
-  //           />
-  //         </View>
-
-  //         <View style={styles.inputGroup}>
-  //           <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Situation matrimoniale')}</Text>
-  //           <TextInput
-  //             style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
-  //             value={editableInterimProfile?.situation_matrimoniale_label || String(editableInterimProfile?.matrimoniale ?? '')} // Utilise le label
-  //             onChangeText={(text) => setEditableInterimProfile(prev => ({ ...prev!, matrimoniale: text as any }))} // Cast temporaire
-  //             placeholder={t("Célibataire, Marié(e)...")}
-  //             placeholderTextColor={colors.textSecondary}
-  //           />
-  //         </View>
-
-  //         <View style={styles.inputGroup}>
-  //           <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Nationalité')}</Text>
-  //           <TextInput
-  //             style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
-  //             value={editableInterimProfile?.nationalite || ''}
-  //             onChangeText={(text) => setEditableInterimProfile(prev => ({ ...prev!, nationalite: text }))}
-  //             placeholder={t("Nationalité")}
-  //             placeholderTextColor={colors.textSecondary}
-  //           />
-  //         </View>
-
-  //         <View style={styles.inputGroup}>
-  //           <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Téléphone (Agent)')}</Text>
-  //           <TextInput
-  //             style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
-  //             value={editableInterimProfile?.phone || ''}
-  //             onChangeText={(text) => setEditableInterimProfile(prev => ({ ...prev!, phone: text }))}
-  //             placeholder={t("Numéro de téléphone de l'agent")}
-  //             placeholderTextColor={colors.textSecondary}
-  //             keyboardType="phone-pad"
-  //           />
-  //         </View>
-
-  //         <View style={styles.inputGroup}>
-  //           <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Date de naissance (Agent)')}</Text>
-  //           <TextInput
-  //             style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
-  //             value={editableInterimProfile?.date_naissance || ''}
-  //             onChangeText={(text) => setEditableInterimProfile(prev => ({ ...prev!, date_naissance: text }))}
-  //             placeholder={t("AAAA-MM-JJ")}
-  //             placeholderTextColor={colors.textSecondary}
-  //           />
-  //         </View>
-
-  //         <View style={styles.inputGroup}>
-  //           <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Lieu de naissance (Agent)')}</Text>
-  //           <TextInput
-  //             style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
-  //             value={editableInterimProfile?.lieu_naissance || ''}
-  //             onChangeText={(text) => setEditableInterimProfile(prev => ({ ...prev!, lieu_naissance: text }))}
-  //             placeholder={t("Lieu de naissance de l'agent")}
-  //             placeholderTextColor={colors.textSecondary}
-  //           />
-  //         </View>
-
-  //         <View style={styles.inputGroup}>
-  //           <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Numéro CNI')}</Text>
-  //           <TextInput
-  //             style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
-  //             value={editableInterimProfile?.cni || ''}
-  //             onChangeText={(text) => setEditableInterimProfile(prev => ({ ...prev!, cni: text }))}
-  //             placeholder={t("Numéro de carte d'identité")}
-  //             placeholderTextColor={colors.textSecondary}
-  //           />
-  //         </View>
-
-  //         <View style={styles.inputGroup}>
-  //           <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Adresse (Agent)')}</Text>
-  //           <TextInput
-  //             style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
-  //             value={editableInterimProfile?.adresse || ''}
-  //             onChangeText={(text) => setEditableInterimProfile(prev => ({ ...prev!, adresse: text }))}
-  //             placeholder={t("Adresse de l'agent")}
-  //             placeholderTextColor={colors.textSecondary}
-  //           />
-  //         </View>
-
-  //         <View style={styles.inputGroup}>
-  //           <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Chemin photo de profil')}</Text>
-  //           <TextInput
-  //             style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
-  //             value={editableInterimProfile?.profile_photo_path || ''}
-  //             onChangeText={(text) => setEditableInterimProfile(prev => ({ ...prev!, profile_photo_path: text }))}
-  //             placeholder={t("URL ou chemin de la photo")}
-  //             placeholderTextColor={colors.textSecondary}
-  //           />
-  //         </View>
-
-  //         {interimUpdateError && (
-  //           <View style={[styles.errorContainer, { backgroundColor: colors.error + '10' }]}>
-  //             <Ionicons name="alert-circle" size={18} color={colors.error} />
-  //             <Text style={[styles.errorText, { color: colors.error }]}>{interimUpdateError}</Text>
-  //           </View>
-  //         )}
-
-  //         <View style={styles.actionButtons}>
-  //           <TouchableOpacity
-  //             style={[styles.secondaryButton, { backgroundColor: colors.settingIconBg, borderColor: colors.border }]}
-  //             onPress={() => {
-  //               setInterimEditMode(false);
-  //               loadInterimProfile();
-  //               setInterimUpdateError(null);
-  //             }}
-  //           >
-  //             <Text style={{ color: colors.textSecondary, fontWeight: '700', fontSize: 16 }}>{t('Annuler')}</Text>
-  //           </TouchableOpacity>
-  //           <TouchableOpacity
-  //             style={[styles.primaryButton, { backgroundColor: colors.secondary }]}
-  //             onPress={handleInterimProfileSave}
-  //           >
-  //             <Text style={styles.primaryButtonText}>{t('Sauvegarder')}</Text>
-  //           </TouchableOpacity>
-  //         </View>
-  //       </View>
-  //     ) : (
-  //       // Mode affichage du profil Intérimaire
-  //       <View style={styles.infoContainer}>
-  //         <View style={styles.infoItem}>
-  //           <View style={styles.infoIcon}>
-  //             <Ionicons name="person" size={18} color={colors.secondary} />
-  //           </View>
-  //           <View style={styles.infoContent}>
-  //             <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Nom complet')}</Text>
-  //             <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{user?.name || t('Non renseigné')}</Text>
-  //           </View>
-  //         </View>
-  //         <View style={styles.infoItem}>
-  //           <View style={styles.infoIcon}>
-  //             <Ionicons name="mail" size={18} color={colors.secondary} />
-  //           </View>
-  //           <View style={styles.infoContent}>
-  //             <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Email')}</Text>
-  //             <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{user?.email || t('Non renseigné')}</Text>
-  //           </View>
-  //         </View>
-  //         <View style={styles.infoItem}>
-  //           <View style={styles.infoIcon}>
-  //             <Ionicons name="finger-print" size={18} color={colors.secondary} />
-  //           </View>
-  //           <View style={styles.infoContent}>
-  //             <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Matricule')}</Text>
-  //             <Text style={[styles.infoValue, { color: colors.textPrimary }]}>EMP-{interimProfile?.matricule || t('Non renseigné')}</Text>
-  //           </View>
-  //         </View>
-  //         <View style={styles.infoItem}>
-  //           <View style={styles.infoIcon}>
-  //             <Ionicons name="transgender" size={18} color={colors.secondary} />
-  //           </View>
-  //           <View style={styles.infoContent}>
-  //             <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Sexe')}</Text>
-  //             <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.sexe_label || t('Non renseigné')}</Text>
-  //           </View>
-  //         </View>
-  //         <View style={styles.infoItem}>
-  //           <View style={styles.infoIcon}>
-  //             <Ionicons name="heart" size={18} color={colors.secondary} />
-  //           </View>
-  //           <View style={styles.infoContent}>
-  //             <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Situation matrimoniale')}</Text>
-  //             <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.situation_matrimoniale_label || t('Non renseigné')}</Text>
-  //           </View>
-  //         </View>
-  //         <View style={styles.infoItem}>
-  //           <View style={styles.infoIcon}>
-  //             <Ionicons name="flag" size={18} color={colors.secondary} />
-  //           </View>
-  //           <View style={styles.infoContent}>
-  //             <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Nationalité')}</Text>
-  //             <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.nationalite || t('Non renseigné')}</Text>
-  //           </View>
-  //         </View>
-  //         <View style={styles.infoItem}>
-  //           <View style={styles.infoIcon}>
-  //             <Ionicons name="call" size={18} color={colors.secondary} />
-  //           </View>
-  //           <View style={styles.infoContent}>
-  //             <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Téléphone')}</Text>
-  //             <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.phone || t('Non renseigné')}</Text>
-  //           </View>
-  //         </View>
-  //         <View style={styles.infoItem}>
-  //           <View style={styles.infoIcon}>
-  //             <Ionicons name="calendar" size={18} color={colors.secondary} />
-  //           </View>
-  //           <View style={styles.infoContent}>
-  //             <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Date de naissance')}</Text>
-  //             <Text style={[styles.infoValue, { color: colors.textPrimary }]}>
-  //               {interimProfile?.date_naissance
-  //                 ? (() => {
-  //                   const date = new Date(interimProfile.date_naissance);
-  //                   if (isNaN(date.getTime())) return t('Non renseignée');
-  //                   const day = date.getDate().toString().padStart(2, '0');
-  //                   const month = date.toLocaleString('fr-FR', { month: 'short' });
-  //                   const year = date.getFullYear();
-  //                   return `${day} ${month.charAt(0).toUpperCase() + month.slice(1)}. ${year}`;
-  //                 })()
-  //                 : t('Non renseignée')}
-  //             </Text>
-  //           </View>
-  //         </View>
-  //         <View style={styles.infoItem}>
-  //           <View style={styles.infoIcon}>
-  //             <Ionicons name="map" size={18} color={colors.secondary} />
-  //           </View>
-  //           <View style={styles.infoContent}>
-  //             <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Lieu de naissance')}</Text>
-  //             <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.lieu_naissance || t('Non renseigné')}</Text>
-  //           </View>
-  //         </View>
-  //         <View style={styles.infoItem}>
-  //           <View style={styles.infoIcon}>
-  //             <Ionicons name="id-card" size={18} color={colors.secondary} />
-  //           </View>
-  //           <View style={styles.infoContent}>
-  //             <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Numéro CNI')}</Text>
-  //             <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.cni || t('Non renseigné')}</Text>
-  //           </View>
-  //         </View>
-  //         <View style={styles.infoItem}>
-  //           <View style={styles.infoIcon}>
-  //             <Ionicons name="home" size={18} color={colors.secondary} />
-  //           </View>
-  //           <View style={styles.infoContent}>
-  //             <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Adresse ')}</Text>
-  //             <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.adresse || t('Non renseigné')}</Text>
-  //           </View>
-  //         </View>
-  //         {/* <View style={styles.infoItem}>
-  //           <View style={styles.infoIcon}>
-  //             <Ionicons name="image" size={18} color={colors.textSecondary} />
-  //           </View>
-  //           <View style={styles.infoContent}>
-  //             <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Chemin photo de profil')}</Text>
-  //             <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.profile_photo_path || t('Non renseigné')}</Text>
-  //           </View>
-  //         </View> */}
-  //         <View style={styles.infoItem}>
-  //           <View style={styles.infoIcon}>
-  //             <Ionicons name="briefcase" size={18} color={colors.secondary} />
-  //           </View>
-  //           <View style={styles.infoContent}>
-  //             <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Statut de l\'agent')}</Text>
-  //             <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.statut_agent_label || t('Non renseigné')}</Text>
-  //           </View>
-  //         </View>
-  //         <View style={styles.infoItem}>
-  //           <View style={styles.infoIcon}>
-  //             <Ionicons name="school" size={18} color={colors.secondary} />
-  //           </View>
-  //           <View style={styles.infoContent}>
-  //             <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Diplôme')}</Text>
-  //             <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.diplome || t('Non renseigné')}</Text>
-  //           </View>
-  //         </View>
-  //         <View style={styles.infoItem}>
-  //           <View style={styles.infoIcon}>
-  //             <Ionicons name="wallet" size={18} color={colors.secondary} />
-  //           </View>
-  //           <View style={styles.infoContent}>
-  //             <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Taux de retenue (%)')}</Text>
-  //             <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.taux_retenu_label || t('Non renseigné')}</Text>
-  //           </View>
-  //         </View>
-  //         <View style={styles.infoItem}>
-  //           <View style={styles.infoIcon}>
-  //             <Ionicons name="receipt" size={18} color={colors.secondary} />
-  //           </View>
-  //           <View style={styles.infoContent}>
-  //             <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Taux de remboursement (%)')}</Text>
-  //             <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.taux_remboursse_label || t('Non renseigné')}</Text>
-  //           </View>
-  //         </View>
-  //       </View>
-  //     )}
-  //     {!interimProfile && !loadingInterimProfile && (
-  //       <View style={styles.emptyState}>
-  //         <Ionicons name="business-outline" size={48} color={colors.textSecondary} />
-  //         <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>{t('Pas de profil intérimaire')}</Text>
-  //         <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-  //           {t('Créez votre profil intérimaire pour gérer les offres et les candidats.')}
-  //         </Text>
-  //         <TouchableOpacity style={[styles.primaryButton, { backgroundColor: colors.secondary }]} onPress={() => setInterimEditMode(true)}>
-  //           <Text style={styles.primaryButtonText}>{t('Créer mon profil intérimaire')}</Text>
-  //         </TouchableOpacity>
-  //       </View>
-  //     )}
-  //   </View>
-  // );
   //  Rendu de la section Intérimaire
   const renderInterimSection = () => (
     <View style={[styles.section, { backgroundColor: colors.cardBackground }]}>
@@ -2029,7 +1915,7 @@ const handleDateChange = (event, selectedDate) => {
         <View style={styles.headerLeft}>
           <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{t('Profil Intérimaire')}</Text>
         </View>
-        <View style={styles.headerActions}>
+        {/* <View style={styles.headerActions}>
           <TouchableOpacity
             style={[styles.actionButton, interimEditMode && styles.actionButtonActive, { backgroundColor: interimEditMode ? colors.secondary : colors.settingIconBg }]}
             onPress={() => interimEditMode ? handleInterimProfileSave() : setInterimEditMode(true)}
@@ -2052,7 +1938,7 @@ const handleDateChange = (event, selectedDate) => {
               <Ionicons name="close" size={18} color="#ffffff" />
             </TouchableOpacity>
           )}
-        </View>
+        </View> */}
       </View>
 
       {loadingInterimProfile ? (
@@ -2060,7 +1946,7 @@ const handleDateChange = (event, selectedDate) => {
           <ActivityIndicator size="small" color={colors.secondary} />
           <Text style={[styles.loadingText, { color: colors.textSecondary }]}>{t('Chargement du profil intérimaire...')}</Text>
         </View>
-      ) : interimProfile?.is_contract_active === false ? ( // NOUVEAU : Si contrat inactif
+      ) : user?.role !== 'interimaire' || interimProfile?.is_contract_active === false ? (
         <View style={styles.emptyState}>
           <Ionicons name="alert-circle-outline" size={48} color={colors.error} />
           <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>{t('Accès restreint')}</Text>
@@ -2075,48 +1961,29 @@ const handleDateChange = (event, selectedDate) => {
         // Formulaire d'édition du profil Intérimaire
         <View style={styles.editContainer}>
           {/* Nom complet et Email de l'utilisateur principal (non modifiables ici) */}
+
           <View style={styles.inputGroup}>
-            <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Nom complet')}</Text>
-            <TextInput
-              style={[styles.input, styles.disabledInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
-              value={user?.name || ''}
-              editable={false}
-              placeholder={t("Nom complet de l'utilisateur")}
-              placeholderTextColor={colors.textSecondary}
-            />
+            <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Nom Complet')}</Text>
+            <View style={[styles.disabledInput, { backgroundColor: colors.background, borderColor: colors.border }]}>
+              <Text style={[styles.disabledText, { color: colors.textSecondary }]}>{user?.name}</Text>
+              <Ionicons name="lock-closed" size={18} color={colors.textSecondary} />
+            </View>
           </View>
           <View style={styles.inputGroup}>
             <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Email')}</Text>
-            <TextInput
-              style={[styles.input, styles.disabledInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
-              value={user?.email || ''}
-              editable={false}
-              placeholder={t("Email de l'utilisateur")}
-              placeholderTextColor={colors.textSecondary}
-            />
+            <View style={[styles.disabledInput, { backgroundColor: colors.background, borderColor: colors.border }]}>
+              <Text style={[styles.disabledText, { color: colors.textSecondary }]}>{user?.email}</Text>
+              <Ionicons name="lock-closed" size={18} color={colors.textSecondary} />
+            </View>
           </View>
 
           {/* CHAMPS NON MODIFIABLES (Matricule, Statut agent, Diplôme, Taux retenue/remboursement) */}
           <View style={styles.inputGroup}>
             <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Matricule')}</Text>
-            <TextInput
-              style={[styles.input, styles.disabledInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
-              value={editableInterimProfile?.matricule || ''}
-              placeholder={t("Matricule de l'agent")}
-              placeholderTextColor={colors.textSecondary}
-              editable={false} // Rendu non modifiable
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Statut de l\'agent')}</Text>
-            <TextInput
-              style={[styles.input, styles.disabledInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
-              value={editableInterimProfile?.statut_agent_label || ''} // Utilise le label si disponible
-              placeholder={t("Actif, En congé, etc.")}
-              placeholderTextColor={colors.textSecondary}
-              editable={false} // Rendu non modifiable
-            />
+            <View style={[styles.disabledInput, { backgroundColor: colors.background, borderColor: colors.border }]}>
+              <Text style={[styles.disabledText, { color: colors.textSecondary }]}>EMP-{interimProfile?.matricule}</Text>
+              <Ionicons name="lock-closed" size={18} color={colors.textSecondary} />
+            </View>
           </View>
 
           <View style={styles.inputGroup}>
@@ -2126,43 +1993,21 @@ const handleDateChange = (event, selectedDate) => {
               value={editableInterimProfile?.diplome || ''}
               placeholder={t("Ex: Licence en Informatique")}
               placeholderTextColor={colors.textSecondary}
-              editable={false} // Rendu non modifiable
+              editable={false}
             />
           </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Taux de retenue (%)')}</Text>
-            <TextInput
-              style={[styles.input, styles.disabledInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
-              value={editableInterimProfile?.taux_retenu_label || String(editableInterimProfile?.taux_retenu ?? '')} // Utilise le label
-              placeholder={t("Ex: 10.5")}
-              placeholderTextColor={colors.textSecondary}
-              keyboardType="numeric"
-              editable={false} // Rendu non modifiable
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Taux de remboursement (%)')}</Text>
-            <TextInput
-              style={[styles.input, styles.disabledInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
-              value={editableInterimProfile?.taux_remboursse_label || String(editableInterimProfile?.taux_remboursse ?? '')} // Utilise le label
-              placeholder={t("Ex: 5.0")}
-              placeholderTextColor={colors.textSecondary}
-              keyboardType="numeric"
-              editable={false} // Rendu non modifiable
-            />
-          </View>
 
           {/* CHAMPS MODIFIABLES */}
           <View style={styles.inputGroup}>
             <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Sexe')}</Text>
             <TextInput
               style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
-              value={editableInterimProfile?.sexe_label || String(editableInterimProfile?.sexe ?? '')} // Utilise le label
+              value={getSexeLabel(parseInt(editableInterimProfile?.sexe))}
               onChangeText={(text) => setEditableInterimProfile(prev => ({ ...prev!, sexe: text as any }))} // Cast temporaire
               placeholder={t("Homme, Femme")}
               placeholderTextColor={colors.textSecondary}
+              editable={false}
             />
           </View>
 
@@ -2170,10 +2015,11 @@ const handleDateChange = (event, selectedDate) => {
             <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Situation matrimoniale')}</Text>
             <TextInput
               style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
-              value={editableInterimProfile?.situation_matrimoniale_label || String(editableInterimProfile?.matrimoniale ?? '')} // Utilise le label
+              value={getSituationMat(parseInt(editableInterimProfile?.matrimoniale))} // Utilise le label
               onChangeText={(text) => setEditableInterimProfile(prev => ({ ...prev!, matrimoniale: text as any }))} // Cast temporaire
               placeholder={t("Célibataire, Marié(e)...")}
               placeholderTextColor={colors.textSecondary}
+              editable={false}
             />
           </View>
 
@@ -2185,6 +2031,7 @@ const handleDateChange = (event, selectedDate) => {
               onChangeText={(text) => setEditableInterimProfile(prev => ({ ...prev!, nationalite: text }))}
               placeholder={t("Nationalité")}
               placeholderTextColor={colors.textSecondary}
+              editable={false}
             />
           </View>
 
@@ -2200,7 +2047,7 @@ const handleDateChange = (event, selectedDate) => {
             />
           </View>
 
-          <View style={styles.inputGroup}>
+          {/* <View style={styles.inputGroup}>
             <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Date de naissance (Agent)')}</Text>
             <TextInput
               style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
@@ -2209,7 +2056,59 @@ const handleDateChange = (event, selectedDate) => {
               placeholder={t("AAAA-MM-JJ")}
               placeholderTextColor={colors.textSecondary}
             />
+          </View> */}
+
+          <View style={styles.inputGroup}>
+            <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
+              {t('Date de naissance (AAAA-MM-JJ)')}
+            </Text>
+
+            <TouchableOpacity
+              style={[
+                styles.input,
+                {
+                  backgroundColor: colors.background,
+                  borderColor: colors.border,
+                  justifyContent: 'center',
+                  paddingVertical: 12,
+                }
+              ]}
+              onPress={() => setDatePickerOpen(true)}
+            >
+              <Text
+                style={{
+                  color: editableInterimProfile?.date_naissance
+                    ? colors.textPrimary
+                    : colors.textSecondary,
+                  fontSize: 16,
+                }}
+              >
+                {editableInterimProfile?.date_naissance || t("AAAA-MM-JJ")}
+              </Text>
+            </TouchableOpacity>
+
+            <DatePicker
+              modal
+              open={datePickerOpen}
+              date={parseStringToDate(editableInterimProfile?.date_naissance)}
+              mode="date"
+              onConfirm={(selectedDate) => {
+                setDatePickerOpen(false);
+                const formattedDate = formatDateToString(selectedDate);
+                setEditableInterimProfile(prev => ({
+                  ...prev!,
+                  date_naissance: formattedDate
+                }));
+              }}
+              onCancel={() => {
+                setDatePickerOpen(false);
+              }}
+              title={t('Sélectionner la date de naissance')}
+              confirmText={t('Confirmer')}
+              cancelText={t('Annuler')}
+            />
           </View>
+
 
           <View style={styles.inputGroup}>
             <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Lieu de naissance (Agent)')}</Text>
@@ -2244,7 +2143,7 @@ const handleDateChange = (event, selectedDate) => {
             />
           </View>
 
-          <View style={styles.inputGroup}>
+          {/* <View style={styles.inputGroup}>
             <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Chemin photo de profil')}</Text>
             <TextInput
               style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
@@ -2253,7 +2152,7 @@ const handleDateChange = (event, selectedDate) => {
               placeholder={t("URL ou chemin de la photo")}
               placeholderTextColor={colors.textSecondary}
             />
-          </View>
+          </View> */}
 
           {interimUpdateError && (
             <View style={[styles.errorContainer, { backgroundColor: colors.error + '10' }]}>
@@ -2284,7 +2183,7 @@ const handleDateChange = (event, selectedDate) => {
       ) : (
         // Mode affichage du profil Intérimaire
         <View style={styles.infoContainer}>
-          {interimProfile?.is_contract_active === false ? (
+          {user?.role !== 'interimaire' || interimProfile?.is_contract_active !== true ? (
             <View style={styles.emptyState}>
               <Ionicons name="alert-circle-outline" size={48} color={colors.error} />
               <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>{t('Accès restreint')}</Text>
@@ -2297,7 +2196,7 @@ const handleDateChange = (event, selectedDate) => {
             </View>
           ) : (
             <>
-              <View style={styles.infoItem}>
+              {/* <View style={styles.infoItem}>
                 <View style={styles.infoIcon}>
                   <Ionicons name="person" size={18} color={colors.secondary} />
                 </View>
@@ -2314,7 +2213,7 @@ const handleDateChange = (event, selectedDate) => {
                   <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Email')}</Text>
                   <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{user?.email || t('Non renseigné')}</Text>
                 </View>
-              </View>
+              </View> */}
               <View style={styles.infoItem}>
                 <View style={styles.infoIcon}>
                   <Ionicons name="finger-print" size={18} color={colors.secondary} />
@@ -2324,7 +2223,7 @@ const handleDateChange = (event, selectedDate) => {
                   <Text style={[styles.infoValue, { color: colors.textPrimary }]}>EMP-{interimProfile?.matricule || t('Non renseigné')}</Text>
                 </View>
               </View>
-              <View style={styles.infoItem}>
+              {/* <View style={styles.infoItem}>
                 <View style={styles.infoIcon}>
                   <Ionicons name="transgender" size={18} color={colors.secondary} />
                 </View>
@@ -2332,7 +2231,7 @@ const handleDateChange = (event, selectedDate) => {
                   <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Sexe')}</Text>
                   <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.sexe_label || t('Non renseigné')}</Text>
                 </View>
-              </View>
+              </View> */}
               <View style={styles.infoItem}>
                 <View style={styles.infoIcon}>
                   <Ionicons name="heart" size={18} color={colors.secondary} />
@@ -2470,6 +2369,7 @@ const handleDateChange = (event, selectedDate) => {
       )}
     </View>
   );
+
   const renderTabContent = () => {
     if (user?.role === 'user') {
       if (activeTab === 'personal') return renderPersonalInfo();
@@ -2927,7 +2827,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     paddingBottom: 12,
   },
-    contratStyle: {
+  contratStyle: {
     fontSize: 14,
     marginBottom: 12,
     paddingBottom: 12,
@@ -2952,13 +2852,14 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 
-   contractTypeContainer: {
+  contractTypeContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
     gap: 8,
+    marginTop: 10
   },
-  
+
   contractTypeTag: {
     backgroundColor: '#E8F5E8', // Vert soft
     paddingHorizontal: 12,
@@ -2967,30 +2868,55 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#C8E6C9', // Vert légèrement plus foncé pour la bordure
   },
-  
+
   contractTypeText: {
     color: '#2E7D32', // Vert foncé
     fontSize: 12,
     fontWeight: '500',
   },
-    missionsContainer: {
+
+  expContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 10,
+    marginBottom: 10,
+  },
+
+  expTag: {
+    backgroundColor: '#EBF3FF', // Light blue background
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#BFDBFE', // Light blue border
+  },
+
+  expText: {
+    color: '#091e60',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+
+  missionsContainer: {
     marginTop: 12,
   },
-  
+
   missionsHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 8,
     gap: 6,
   },
-  
+
   missionsTitle: {
     fontSize: 14,
     fontWeight: '600',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
-  
+
   missionsContent: {
     padding: 12,
     borderRadius: 8,
@@ -3168,11 +3094,11 @@ const additionalStyles = StyleSheet.create({
     paddingBottom: 16,
   },
 
-   labelText: {
+  labelText: {
     fontSize: 14,
     fontWeight: '600',
   },
-  
+
   // Container pour les éléments avec icônes
   cvViewItem: {
     flexDirection: 'row',
@@ -3180,12 +3106,12 @@ const additionalStyles = StyleSheet.create({
     marginVertical: 4,
     gap: 8,
   },
-  
+
   cvViewText: {
     fontSize: 14,
     flex: 1,
   },
-  
+
   // Header pour les formations (cohérent avec expériences)
   educationHeader: {
     flexDirection: 'row',
@@ -3193,18 +3119,18 @@ const additionalStyles = StyleSheet.create({
     alignItems: 'flex-start',
     marginBottom: 4,
   },
-  
+
   educationName: {
     fontSize: 16,
     fontWeight: '600',
     flex: 1,
   },
-  
+
   educationDates: {
     fontSize: 12,
     fontWeight: '500',
   },
-  
+
   // Container pour type de contrat
   contractTypeContainer: {
     flexDirection: 'row',
@@ -3213,7 +3139,7 @@ const additionalStyles = StyleSheet.create({
     gap: 8,
     marginTop: 8,
   },
-  
+
   contractTypeTag: {
     backgroundColor: '#E8F5E8',
     paddingHorizontal: 12,
@@ -3222,13 +3148,13 @@ const additionalStyles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#C8E6C9',
   },
-  
+
   contractTypeText: {
     color: '#2E7D32',
     fontSize: 12,
     fontWeight: '500',
   },
-  
+
   // Styles pour les compétences
   skillChipView: {
     flexDirection: 'row',
@@ -3239,10 +3165,13 @@ const additionalStyles = StyleSheet.create({
     marginRight: 8,
     marginBottom: 8,
   },
-  
+
   skillTextView: {
     fontSize: 12,
     fontWeight: '500',
   },
 });
+
+
+
 
