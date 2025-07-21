@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -15,6 +15,8 @@ import {
   Image,
   Platform,
   Button,
+  Modal,
+  Animated
 } from 'react-native';
 import { useAuth } from '../../components/AuthProvider';
 import CustomHeader from '../../components/CustomHeader';
@@ -208,6 +210,12 @@ export default function ProfileDetailsScreen() {
 
   const [showPersonalInfo, setShowPersonalInfo] = useState(true);
 
+  //  États pour le modal de complétude
+  const [showCompletionModal, setShowCompletionModal] = useState(false);
+  const [profileCompletion, setProfileCompletion] = useState({ percentage: 0, missingFields: [] as string[] });
+  const progressAnim = useRef(new Animated.Value(0)).current;
+
+
   // Options pour le Picker du type de contrat
   const contractTypeOptions = [
     { label: t('Sélectionner un type'), value: null }, // Option par défaut
@@ -243,6 +251,56 @@ export default function ProfileDetailsScreen() {
     const option = niveauEtudeOptions.find(opt => opt.value === id);
     return option ? option.label : t('Non spécifié');
   };
+
+  // Fonction pour calculer la complétude du profil
+  const calculateProfileCompletion = useCallback((profile: CandidatProfileData | null) => {
+    if (!profile) {
+      setProfileCompletion({ percentage: 0, missingFields: [t('Profil Candidat de base')] });
+      return;
+    }
+
+    let completedFields = 0;
+    const totalFields = 10; // Nombre total de critères de complétude
+    const missingFields: string[] = [];
+
+    // Critères de complétude (ajuster les poids si nécessaire)
+    if (profile.date_naissance) completedFields++; else missingFields.push(t('Date de naissance'));
+    if (profile.lieu_naissance) completedFields++; else missingFields.push(t('Lieu de naissance'));
+    if (profile.genre) completedFields++; else missingFields.push(t('Genre'));
+    if (profile.telephone) completedFields++; else missingFields.push(t('Téléphone'));
+    if (profile.titreProfil) completedFields++; else missingFields.push(t('Titre professionnel'));
+    if (profile.disponibilite) completedFields++; else missingFields.push(t('Disponibilité'));
+    // if (profile.photo_profil) completedFields++; else missingFields.push(t('Photo de profil')); // Optionnel
+
+    if (profile.parsed_cv) {
+      if (profile.parsed_cv.full_name) completedFields++; else missingFields.push(t('Nom complet CV'));
+      if (profile.parsed_cv.email) completedFields++; else missingFields.push(t('Email CV'));
+      if (profile.parsed_cv.phone) completedFields++; else missingFields.push(t('Téléphone CV'));
+      if (profile.parsed_cv.summary) completedFields++; else missingFields.push(t('Résumé professionnel'));
+    } else {
+      missingFields.push(t('Données CV de base'));
+    }
+    
+    if (profile.competences && profile.competences.length > 0) completedFields++; else missingFields.push(t('Compétences'));
+    if (profile.experiences && profile.experiences.length > 0) completedFields++; else missingFields.push(t('Expériences professionnelles'));
+    if (profile.formations && profile.formations.length > 0) completedFields++; else missingFields.push(t('Formations'));
+
+    const percentage = Math.round((completedFields / totalFields) * 100);
+    setProfileCompletion({ percentage, missingFields });
+
+    // Afficher le modal si moins de 100%
+    if (percentage < 100) {
+      setShowCompletionModal(true);
+      Animated.timing(progressAnim, {
+        toValue: percentage / 100,
+        duration: 1000,
+        useNativeDriver: false,
+      }).start();
+    } else {
+      setShowCompletionModal(false);
+    }
+  }, [t]);
+
   // --- Callbacks de chargement de données ---
   const loadCandidatProfile = useCallback(async () => {
     if (user && (user.role === 'user' || user.role === 'interimaire')) {
@@ -264,7 +322,7 @@ export default function ProfileDetailsScreen() {
           disponibilite: data?.disponibilite || '',
         });
 
-        // CORRECTION: Initialiser editableSkills avec gestion des niveaux
+        // Initialiser editableSkills avec gestion des niveaux
         const skillsWithLevels = data?.competences?.map((s: any) => {
           // Vérifier plusieurs sources possibles pour le niveau
           const niveau = s.pivot?.niveau_competence ||
@@ -284,8 +342,12 @@ export default function ProfileDetailsScreen() {
         // setEditableExperiences(data?.experiences || []);
         setEditableExperiences(data?.experiences?.map((exp: any) => ({
           ...exp,
-          competences: exp.competences?.map((c: any) => ({ libelle_competence: c.libelle_competence, niveau_competence: c.pivot?.niveau_competence })) || [],
+          competences: exp.competences?.map((c: any) => ({
+            libelle_competence: c.libelle_competence,
+            niveau_competence: c.pivot?.niveau_competence ?? 1
+          })) || [],
         })) || []);
+
         setEditableFormations(data?.formations?.map((form: any) => ({
           ...form,
           competences: form.competences?.map((c: any) => ({ libelle_competence: c.libelle_competence })) || [],
@@ -306,6 +368,8 @@ export default function ProfileDetailsScreen() {
         } else {
           setCvFileName(null);
         }
+
+        calculateProfileCompletion(data);
 
       } catch (error: any) {
         setCandidatProfile(null);
@@ -345,8 +409,9 @@ export default function ProfileDetailsScreen() {
       setParsedCv(null);
       setCvFileName(null);
       setLoadingCandidatProfile(false);
+      calculateProfileCompletion(null);
     }
-  }, [user]);
+  }, [user, calculateProfileCompletion]);
 
   const loadInterimProfile = useCallback(async () => {
     if (user && user.role === 'interimaire') {
@@ -478,6 +543,46 @@ export default function ProfileDetailsScreen() {
     }
   };
 
+  const handleInterimProfileSave = async () => {
+    setInterimUpdateError(null);
+    try {
+      if (!editableInterimProfile) {
+        setInterimUpdateError(t("Aucune donnée de profil intérimaire à sauvegarder."));
+        return;
+      }
+      if (!editableInterimProfile.phone || !editableInterimProfile.cni || !editableInterimProfile.adresse) {
+        Alert.alert(t("Erreur"), t("Veuillez remplir tous les champs obligatoires (Téléphone, CNI, Adresse)."));
+        setInterimUpdateError(t("Veuillez remplir les champs obligatoires du profil intérimaire."));
+        return;
+      }
+      if (editableInterimProfile.date_naissance && isNaN(new Date(editableInterimProfile.date_naissance).getTime())) {
+        Alert.alert(t("Erreur"), t("Format de date de naissance invalide (AAAA-MM-JJ attendu)."));
+        setInterimUpdateError(t("Format de date de naissance invalide (AAAA-MM-JJ)."));
+        return;
+      }
+      if (editableInterimProfile.taux_retenu !== undefined && isNaN(editableInterimProfile.taux_retenu)) {
+        Alert.alert(t("Erreur"), t("Le taux de retenue doit être un nombre."));
+        setInterimUpdateError(t("Le taux de retenue doit être un nombre."));
+        return;
+      }
+      if (editableInterimProfile.taux_remboursse !== undefined && isNaN(editableInterimProfile.taux_remboursse)) {
+        Alert.alert(t("Erreur"), t("Le taux de remboursement doit être un nombre."));
+        setInterimUpdateError(t("Le taux de remboursement doit être un nombre."));
+        return;
+      }
+
+      const dataToSave = { ...editableInterimProfile };
+      await createOrUpdateInterimProfile(dataToSave);
+      Alert.alert(t("Succès"), t("Profil intérimaire mis à jour !"));
+      await loadInterimProfile();
+      setInterimEditMode(false);
+    } catch (error: any) {
+      console.error("Erreur de sauvegarde du profil intérimaire:", error);
+      setInterimUpdateError(error.response?.data?.message || t("Échec de la mise à jour du profil intérimaire."));
+      Alert.alert(t("Erreur"), error.response?.data?.message || t("Échec de la mise à jour du profil intérimaire."));
+    }
+  };
+
   const handleCvSave = async () => {
     try {
       setCvUpdateError(null);
@@ -510,7 +615,20 @@ export default function ProfileDetailsScreen() {
         lieux: e.lieux,
         missions: e.missions,
         type_contrat_id: e.type_contrat_id,
-        competences: e.competences?.map(c => ({ libelle_competence: c.libelle_competence, niveau_competence: c.pivot?.niveau_competence })),
+         competences: e.competences?.map((c) => {
+            if (! c.pivot?.niveau_competence || c.pivot?.niveau_competence < 1 ||  c.pivot?.niveau_competence > 5) {
+              throw new Error(t(`Veuillez définir un niveau de compétence valide pour "${c.libelle_competence}" (dans une expérience)`));
+            }
+
+            return {
+              libelle_competence: c.libelle_competence,
+              niveau_competence: c.pivot?.niveau_competence ?? 1
+            };
+          }) || [],
+        // competences: e.competences?.map(c => ({ 
+        //   libelle_competence: c.libelle_competence, 
+        //   niveau_competence: c.pivot?.niveau_competence ?? 1
+        // })),
       }));
 
       // Préparer les données pour formations
@@ -557,46 +675,6 @@ export default function ProfileDetailsScreen() {
       Alert.alert(t("Erreur"), msg);
       setCvUpdateError(msg);
       setCandidatUpdateError(msg);
-    }
-  };
-
-  const handleInterimProfileSave = async () => {
-    setInterimUpdateError(null);
-    try {
-      if (!editableInterimProfile) {
-        setInterimUpdateError(t("Aucune donnée de profil intérimaire à sauvegarder."));
-        return;
-      }
-      if (!editableInterimProfile.phone || !editableInterimProfile.cni || !editableInterimProfile.adresse) {
-        Alert.alert(t("Erreur"), t("Veuillez remplir tous les champs obligatoires (Téléphone, CNI, Adresse)."));
-        setInterimUpdateError(t("Veuillez remplir les champs obligatoires du profil intérimaire."));
-        return;
-      }
-      if (editableInterimProfile.date_naissance && isNaN(new Date(editableInterimProfile.date_naissance).getTime())) {
-        Alert.alert(t("Erreur"), t("Format de date de naissance invalide (AAAA-MM-JJ attendu)."));
-        setInterimUpdateError(t("Format de date de naissance invalide (AAAA-MM-JJ)."));
-        return;
-      }
-      if (editableInterimProfile.taux_retenu !== undefined && isNaN(editableInterimProfile.taux_retenu)) {
-        Alert.alert(t("Erreur"), t("Le taux de retenue doit être un nombre."));
-        setInterimUpdateError(t("Le taux de retenue doit être un nombre."));
-        return;
-      }
-      if (editableInterimProfile.taux_remboursse !== undefined && isNaN(editableInterimProfile.taux_remboursse)) {
-        Alert.alert(t("Erreur"), t("Le taux de remboursement doit être un nombre."));
-        setInterimUpdateError(t("Le taux de remboursement doit être un nombre."));
-        return;
-      }
-
-      const dataToSave = { ...editableInterimProfile };
-      await createOrUpdateInterimProfile(dataToSave);
-      Alert.alert(t("Succès"), t("Profil intérimaire mis à jour !"));
-      await loadInterimProfile();
-      setInterimEditMode(false);
-    } catch (error: any) {
-      console.error("Erreur de sauvegarde du profil intérimaire:", error);
-      setInterimUpdateError(error.response?.data?.message || t("Échec de la mise à jour du profil intérimaire."));
-      Alert.alert(t("Erreur"), error.response?.data?.message || t("Échec de la mise à jour du profil intérimaire."));
     }
   };
 
@@ -687,7 +765,14 @@ export default function ProfileDetailsScreen() {
         const updatedExperiences = [...prevExperiences];
         const currentExp = updatedExperiences[expIndex];
         if (currentExp && !currentExp.competences?.some(c => c.libelle_competence.toLowerCase() === competenceText.toLowerCase())) {
-          currentExp.competences = [...(currentExp.competences || []), { id: 0, libelle_competence: competenceText, pivot: { niveau_competence: 1 } }];
+          currentExp.competences = [
+            ...(currentExp.competences || []),
+            {
+              id: 0,
+              libelle_competence: competenceText,
+              pivot: { niveau_competence: 1 }
+            }
+          ];
         }
         return updatedExperiences;
       });
@@ -709,8 +794,7 @@ export default function ProfileDetailsScreen() {
 
   // Gestion formation
   const addEducation = () => {
-    setEditableFormations((prev) => [...prev, { nomDiplome: '', universite: '', dateDebut: '', dateFin: '', description: '', competences: [] }]); // NOUVEAU : Ajouter un tableau de compétences vides
-
+    setEditableFormations((prev) => [...prev, { nomDiplome: '', universite: '', dateDebut: '', dateFin: '', description: '', competences: [] }]); // Ajouter un tableau de compétences vides
   };
 
   const updateEducation = (index: number, field: keyof FormationItem, value: string) => {
@@ -1146,7 +1230,7 @@ export default function ProfileDetailsScreen() {
           )}
         </View>
       )}
-      {(user?.role === 'user' || user?.role === 'interimaire') && !candidatProfile && !loadingCandidatProfile && (
+      {(user?.role === 'user' || user?.role === 'interimaire') && !candidatProfile && !loadingCandidatProfile && !interimProfile && !loadingInterimProfile && (
         <View style={styles.emptyState}>
           <Ionicons name="briefcase-outline" size={48} color={colors.textSecondary} />
           <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>{t('Pas de profil candidat')}</Text>
@@ -1386,7 +1470,7 @@ export default function ProfileDetailsScreen() {
           </TouchableOpacity>
         </View>
 
-        {editableExperiences.map((exp, expIndex) => ( // MODIFIÉ : Ajout de expIndex
+        {editableExperiences.map((exp, expIndex) => ( // Ajout de expIndex
           <View key={expIndex} style={[styles.experienceItem, { backgroundColor: colors.background, borderColor: colors.border }]}>
             <View style={styles.experienceHeader}>
               <Text style={[styles.experienceIndex, { color: colors.secondary }]}>#{expIndex + 1}</Text>
@@ -1505,11 +1589,52 @@ export default function ProfileDetailsScreen() {
                 <Ionicons name="add" size={20} color="#fff" />
               </TouchableOpacity>
             </View>
-            <View style={styles.skillsContainer}>
+            <View style={styles.expContainer}>
               {exp.competences?.map((comp, compIndex) => (
-                <TouchableOpacity key={compIndex} style={[styles.skillChip, { backgroundColor: colors.primary + '15', borderColor: colors.primary }]} onPress={() => removeExpCompetence(expIndex, comp.libelle_competence)}>
-                  <Text style={[styles.skillText, { color: colors.primary }]}>{comp.libelle_competence}</Text>
-                  <Ionicons name="close-circle" size={16} color={colors.primary} />
+                <TouchableOpacity
+                  key={compIndex}
+                  style={styles.expTag}
+                  onPress={() => removeExpCompetence(compIndex, comp.libelle_competence)}
+                >
+                  {/* Nom de la compétence */}
+                  <Text style={styles.expText}>{comp.libelle_competence}</Text>
+
+                  {/* Étoiles pour le niveau */}
+                  <View style={{ flexDirection: 'row', marginLeft: 8 }}>
+                    {[1, 2, 3, 4, 5].map((level) => (
+                      <TouchableOpacity
+                        key={level}
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          const updatedExperiences = [...editableExperiences];
+                          const updatedExp = updatedExperiences[expIndex];
+                          if (updatedExp && updatedExp.competences) {
+                            if (updatedExp.competences[compIndex].pivot) {
+                              updatedExp.competences[compIndex].pivot.niveau_competence = level;
+                            } else {
+                              updatedExp.competences[compIndex].pivot = { niveau_competence: level };
+                            }
+                            setEditableExperiences(updatedExperiences);
+                          }
+                        }}
+                      >
+                        <Ionicons
+                          name={
+                            ((comp.pivot?.niveau_competence ?? 0) >= level)
+                              ? 'star'
+                              : 'star-outline'
+                          }
+                          size={16}
+                          color="#DAA520"
+                          style={{ marginHorizontal: 1 }}
+                        />
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+
+                  {/* Icône de suppression */}
+                  <Ionicons name="close-circle" size={16} color='#091e60' />
                 </TouchableOpacity>
               ))}
             </View>
@@ -1528,7 +1653,7 @@ export default function ProfileDetailsScreen() {
           </TouchableOpacity>
         </View>
 
-        {editableFormations.map((edu, formIndex) => ( // Utilise editableFormations et formIndex
+        {editableFormations.map((edu, formIndex) => ( 
           <View key={formIndex} style={[styles.educationItem, { backgroundColor: colors.background, borderColor: colors.border }]}>
             <View style={[styles.sectionHeader, { borderBottomColor: colors.border }]}>
               <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{t('Formation')} #{formIndex + 1}</Text>
@@ -1590,7 +1715,7 @@ export default function ProfileDetailsScreen() {
               <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Date début formation')}</Text>
               <TextInput
                 style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
-                value={edu.dateDebut || ''} // MODIFIÉ : dateDebut
+                value={edu.dateDebut || ''}
                 onChangeText={(text) => updateEducation(formIndex, 'dateDebut', text)}
                 placeholder={t("AAAA-MM-JJ")}
                 placeholderTextColor={colors.textSecondary}
@@ -1600,7 +1725,7 @@ export default function ProfileDetailsScreen() {
               <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Date fin formation')}</Text>
               <TextInput
                 style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
-                value={edu.dateFin || ''} // MODIFIÉ : dateFin
+                value={edu.dateFin || ''} 
                 onChangeText={(text) => updateEducation(formIndex, 'dateFin', text)}
                 placeholder={t("AAAA-MM-JJ")}
                 placeholderTextColor={colors.textSecondary}
@@ -1610,7 +1735,7 @@ export default function ProfileDetailsScreen() {
               <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Description formation')}</Text>
               <TextInput
                 style={[styles.input, styles.textArea, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
-                value={edu.description || ''} // MODIFIÉ : description
+                value={edu.description || ''}
                 onChangeText={(text) => updateEducation(formIndex, 'description', text)}
                 placeholder={t("Description de la formation")}
                 placeholderTextColor={colors.textSecondary}
@@ -1619,7 +1744,9 @@ export default function ProfileDetailsScreen() {
                 textAlignVertical="top"
               />
             </View>
-            {/* NOUVEAU : Compétences liées à cette formation */}
+
+
+            {/* Compétences liées à cette formation */}
             <View style={styles.subSectionHeader}>
               <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Compétences de la formation')}</Text>
             </View>
@@ -1637,10 +1764,10 @@ export default function ProfileDetailsScreen() {
                 <Ionicons name="add" size={20} color="#fff" />
               </TouchableOpacity>
             </View>
-            <View style={styles.skillsContainer}>
+            <View style={styles.expContainer}>
               {edu.competences?.map((comp, compIndex) => (
-                <TouchableOpacity key={compIndex} style={[styles.skillChip, { backgroundColor: colors.primary + '15', borderColor: colors.primary }]} onPress={() => removeFormCompetence(formIndex, comp.libelle_competence)}>
-                  <Text style={[styles.skillText, { color: colors.primary }]}>{comp.libelle_competence}</Text>
+                <TouchableOpacity key={compIndex} style={styles.expTag} onPress={() => removeFormCompetence(formIndex, comp.libelle_competence)}>
+                  <Text style={styles.expText}>{comp.libelle_competence}</Text>
                   <Ionicons name="close-circle" size={16} color={colors.primary} />
                 </TouchableOpacity>
               ))}
@@ -1678,6 +1805,7 @@ export default function ProfileDetailsScreen() {
       </View>
     </View>
   );
+  
   const renderCvDisplay = () => {
     // Fonction pour vérifier si le CV a du contenu
     const hasCvContent = () => {
@@ -2712,6 +2840,46 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 
+  contractTypeTag: {
+    backgroundColor: '#E8F5E8', // Vert soft
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#C8E6C9', // Vert légèrement plus foncé pour la bordure
+  },
+
+  contractTypeText: {
+    color: '#2E7D32', // Vert foncé
+    fontSize: 12,
+    fontWeight: '500',
+  },
+
+  expContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 8,
+    marginBottom: 10,
+  },
+
+  expTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between', // ou 'flex-start' selon votre préférence
+    backgroundColor: '#EBF3FF', // Light blue background
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#BFDBFE', // Light blue border
+  },
+
+  expText: {
+    color: '#091e60',
+    fontSize: 12,
+    fontWeight: '500',
+  },
   // Experience Styles
   experienceItem: {
     padding: 16,
@@ -2860,44 +3028,6 @@ const styles = StyleSheet.create({
     marginTop: 10
   },
 
-  contractTypeTag: {
-    backgroundColor: '#E8F5E8', // Vert soft
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#C8E6C9', // Vert légèrement plus foncé pour la bordure
-  },
-
-  contractTypeText: {
-    color: '#2E7D32', // Vert foncé
-    fontSize: 12,
-    fontWeight: '500',
-  },
-
-  expContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 10,
-    marginBottom: 10,
-  },
-
-  expTag: {
-    backgroundColor: '#EBF3FF', // Light blue background
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#BFDBFE', // Light blue border
-  },
-
-  expText: {
-    color: '#091e60',
-    fontSize: 12,
-    fontWeight: '500',
-  },
 
   missionsContainer: {
     marginTop: 12,
@@ -3171,6 +3301,7 @@ const additionalStyles = StyleSheet.create({
     fontWeight: '500',
   },
 });
+
 
 
 
