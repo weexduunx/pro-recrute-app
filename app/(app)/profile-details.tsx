@@ -37,7 +37,6 @@ import { router } from 'expo-router';
 import { useTheme } from '../../components/ThemeContext';
 import { useLanguage } from '../../components/LanguageContext';
 import { Picker } from '@react-native-picker/picker';
-import DateTimePicker from '@react-native-community/datetimepicker'; // Expo-friendly
 import DatePicker from 'react-native-date-picker'
 
 const { width } = Dimensions.get('window');
@@ -60,7 +59,7 @@ interface EducationItem {
   dates: string;
 }
 
-// MODIFIÉ : Interface pour les formations
+//  Interface pour les formations
 interface FormationItem {
   id?: number; // Ajout de l'ID pour la clé
   nomDiplome: string;
@@ -139,7 +138,7 @@ export default function ProfileDetailsScreen() {
   const [datePickerOpen, setDatePickerOpen] = useState(false);
 
   // Fonction pour convertir la date en string AAAA-MM-JJ
-  const formatDateToString = (date) => {
+  const formatDateToString = (date: Date) => {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
@@ -147,7 +146,7 @@ export default function ProfileDetailsScreen() {
   };
 
   // Fonction pour convertir la string en Date
-  const parseStringToDate = (dateString) => {
+  const parseStringToDate = (dateString: string) => {
     if (!dateString) return new Date();
     const [year, month, day] = dateString.split('-');
     return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
@@ -194,10 +193,17 @@ export default function ProfileDetailsScreen() {
     full_name: '', email: '', phone: '', summary: '',
   });
   //  États pour les compétences, formations et expériences du candidat (séparées de parsedCv)
-  // const [editableCompetences, setEditableCompetences] = useState<{ libelle_competence: string; niveau_competence?: number }[]>([]);
   const [editableExperiences, setEditableExperiences] = useState<ExperienceItem[]>([]);
   const [editableFormations, setEditableFormations] = useState<FormationItem[]>([]); // État pour les formations
-  // const [niveauEtudes, setNiveauEtudes] = useState<{ id: number, libelle_niveau_etude: string }[]>([]);
+  const [datePickerState, setDatePickerState] = useState<{
+    expIndex: number | null;
+    field: 'date_debut' | 'date_fin' | null;
+  }>({ expIndex: null, field: null });
+
+  const [datePickerForm, setDatePickerForm] = useState<{
+    formIndex: number | null;
+    field: 'dateDebut' | 'dateFin' | null;
+  }>({ formIndex: null, field: null });
 
 
   // --- États pour les compétences et expériences du candidat (séparées de parsedCv)
@@ -212,8 +218,60 @@ export default function ProfileDetailsScreen() {
 
   //  États pour le modal de complétude
   const [showCompletionModal, setShowCompletionModal] = useState(false);
-  const [profileCompletion, setProfileCompletion] = useState({ percentage: 0, missingFields: [] as string[] });
-  const progressAnim = useRef(new Animated.Value(0)).current;
+
+  const [profileCompletion, setProfileCompletion] = useState({
+    percentage: 0,
+    missingFields: [] as string[],
+  });
+
+  const [cvCompletion, setCvCompletion] = useState({
+    percentage: 0,
+    missingFields: [] as string[],
+  });
+
+  const isEditingAnything = cvEditMode || personalEditMode || datePickerOpen || datePickerState !== null;
+
+  useEffect(() => {
+    const missingProfileFields = [];
+    const missingCvFields = [];
+
+    if (!candidatProfile?.titreProfil) missingProfileFields.push('Titre du profil');
+    if (!candidatProfile?.telephone) missingProfileFields.push('Téléphone');
+    if (!candidatProfile?.disponibilite) missingProfileFields.push('Disponibilité');
+    if (!candidatProfile?.date_naissance) missingProfileFields.push('Date de naissance');
+    if (!candidatProfile?.genre) missingProfileFields.push('Genre');
+
+    if (!parsedCv?.summary) missingCvFields.push('Résumé');
+    if (!editableSkills.length) missingCvFields.push('Compétences');
+    if (!editableExperiences.length) missingCvFields.push('Expériences');
+    if (!editableFormations.length) missingCvFields.push('Formations');
+
+    const totalProfileFields = 5;
+    const totalCvFields = 4;
+
+    setProfileCompletion({
+      percentage: Math.round(((totalProfileFields - missingProfileFields.length) / totalProfileFields) * 100),
+      missingFields: missingProfileFields,
+    });
+
+    setCvCompletion({
+      percentage: Math.round(((totalCvFields - missingCvFields.length) / totalCvFields) * 100),
+      missingFields: missingCvFields,
+    });
+
+
+    // Si l’un des deux est incomplet, afficher la modale
+    if (
+      !isEditingAnything &&
+      (missingProfileFields.length > 0 || missingCvFields.length > 0)
+    ) {
+      setShowCompletionModal(true);
+    } else {
+      setShowCompletionModal(false); // pour forcer la fermeture si on est en train d’éditer
+    }
+
+
+  }, [candidatProfile, parsedCv, editableSkills, editableExperiences, editableFormations]);
 
 
   // Options pour le Picker du type de contrat
@@ -252,54 +310,6 @@ export default function ProfileDetailsScreen() {
     return option ? option.label : t('Non spécifié');
   };
 
-  // Fonction pour calculer la complétude du profil
-  const calculateProfileCompletion = useCallback((profile: CandidatProfileData | null) => {
-    if (!profile) {
-      setProfileCompletion({ percentage: 0, missingFields: [t('Profil Candidat de base')] });
-      return;
-    }
-
-    let completedFields = 0;
-    const totalFields = 10; // Nombre total de critères de complétude
-    const missingFields: string[] = [];
-
-    // Critères de complétude (ajuster les poids si nécessaire)
-    if (profile.date_naissance) completedFields++; else missingFields.push(t('Date de naissance'));
-    if (profile.lieu_naissance) completedFields++; else missingFields.push(t('Lieu de naissance'));
-    if (profile.genre) completedFields++; else missingFields.push(t('Genre'));
-    if (profile.telephone) completedFields++; else missingFields.push(t('Téléphone'));
-    if (profile.titreProfil) completedFields++; else missingFields.push(t('Titre professionnel'));
-    if (profile.disponibilite) completedFields++; else missingFields.push(t('Disponibilité'));
-    // if (profile.photo_profil) completedFields++; else missingFields.push(t('Photo de profil')); // Optionnel
-
-    if (profile.parsed_cv) {
-      if (profile.parsed_cv.full_name) completedFields++; else missingFields.push(t('Nom complet CV'));
-      if (profile.parsed_cv.email) completedFields++; else missingFields.push(t('Email CV'));
-      if (profile.parsed_cv.phone) completedFields++; else missingFields.push(t('Téléphone CV'));
-      if (profile.parsed_cv.summary) completedFields++; else missingFields.push(t('Résumé professionnel'));
-    } else {
-      missingFields.push(t('Données CV de base'));
-    }
-    
-    if (profile.competences && profile.competences.length > 0) completedFields++; else missingFields.push(t('Compétences'));
-    if (profile.experiences && profile.experiences.length > 0) completedFields++; else missingFields.push(t('Expériences professionnelles'));
-    if (profile.formations && profile.formations.length > 0) completedFields++; else missingFields.push(t('Formations'));
-
-    const percentage = Math.round((completedFields / totalFields) * 100);
-    setProfileCompletion({ percentage, missingFields });
-
-    // Afficher le modal si moins de 100%
-    if (percentage < 100) {
-      setShowCompletionModal(true);
-      Animated.timing(progressAnim, {
-        toValue: percentage / 100,
-        duration: 1000,
-        useNativeDriver: false,
-      }).start();
-    } else {
-      setShowCompletionModal(false);
-    }
-  }, [t]);
 
   // --- Callbacks de chargement de données ---
   const loadCandidatProfile = useCallback(async () => {
@@ -321,6 +331,21 @@ export default function ProfileDetailsScreen() {
           status: data?.status ?? 1,
           disponibilite: data?.disponibilite || '',
         });
+        // Calcul des champs manquants profil
+        const missingProfileFields = [];
+        if (!data?.titreProfil) missingProfileFields.push('Titre du profil');
+        if (!data?.telephone) missingProfileFields.push('Téléphone');
+        if (!data?.disponibilite) missingProfileFields.push('Disponibilité');
+        if (!data?.date_naissance) missingProfileFields.push('Date de naissance');
+        if (!data?.genre) missingProfileFields.push('Genre');
+
+        const totalProfileFields = 5;
+        const profilePercentage = Math.round(((totalProfileFields - missingProfileFields.length) / totalProfileFields) * 100);
+
+        setProfileCompletion({
+          percentage: profilePercentage,
+          missingFields: missingProfileFields,
+        });
 
         // Initialiser editableSkills avec gestion des niveaux
         const skillsWithLevels = data?.competences?.map((s: any) => {
@@ -337,16 +362,20 @@ export default function ProfileDetailsScreen() {
           };
         }) || [];
 
-
         setEditableSkills(skillsWithLevels);
-        // setEditableExperiences(data?.experiences || []);
+
         setEditableExperiences(data?.experiences?.map((exp: any) => ({
           ...exp,
           competences: exp.competences?.map((c: any) => ({
+            id: c.id,
             libelle_competence: c.libelle_competence,
-            niveau_competence: c.pivot?.niveau_competence ?? 1
+            pivot: {
+              niveau_competence: c.niveau_competence ?? c.pivot?.niveau_competence ?? 1,
+            },
           })) || [],
+
         })) || []);
+
 
         setEditableFormations(data?.formations?.map((form: any) => ({
           ...form,
@@ -363,13 +392,32 @@ export default function ProfileDetailsScreen() {
           // education: Array.isArray(data?.parsed_cv?.education) ? data?.parsed_cv?.education : [],
         });
 
+        // Calcul des champs manquants du CV
+        const missingCvFields = [];
+        if (!data?.parsed_cv?.summary) missingCvFields.push('Résumé');
+        if (!data?.competences?.length) missingCvFields.push('Compétences');
+        if (!data?.experiences?.length) missingCvFields.push('Expériences');
+        if (!data?.formations?.length) missingCvFields.push('Formations');
+
+        const totalCvFields = 4;
+        const cvPercentage = Math.round(((totalCvFields - missingCvFields.length) / totalCvFields) * 100);
+
+        setCvCompletion({
+          percentage: cvPercentage,
+          missingFields: missingCvFields,
+        });
+
+        // Afficher la modale si nécessaire
+        if (!cvEditMode && !personalEditMode && (profilePercentage < 100 || cvPercentage < 100)) {
+          setShowCompletionModal(true);
+        }
+
+
         if (data?.parsed_cv?.last_parsed_file) {
           setCvFileName(data.parsed_cv.last_parsed_file);
         } else {
           setCvFileName(null);
         }
-
-        calculateProfileCompletion(data);
 
       } catch (error: any) {
         setCandidatProfile(null);
@@ -409,9 +457,10 @@ export default function ProfileDetailsScreen() {
       setParsedCv(null);
       setCvFileName(null);
       setLoadingCandidatProfile(false);
-      calculateProfileCompletion(null);
+
+
     }
-  }, [user, calculateProfileCompletion]);
+  }, [user]);
 
   const loadInterimProfile = useCallback(async () => {
     if (user && user.role === 'interimaire') {
@@ -615,16 +664,16 @@ export default function ProfileDetailsScreen() {
         lieux: e.lieux,
         missions: e.missions,
         type_contrat_id: e.type_contrat_id,
-         competences: e.competences?.map((c) => {
-            if (! c.pivot?.niveau_competence || c.pivot?.niveau_competence < 1 ||  c.pivot?.niveau_competence > 5) {
-              throw new Error(t(`Veuillez définir un niveau de compétence valide pour "${c.libelle_competence}" (dans une expérience)`));
-            }
+        competences: e.competences?.map((c) => {
+          if (!c.pivot?.niveau_competence || c.pivot?.niveau_competence < 1 || c.pivot?.niveau_competence > 5) {
+            throw new Error(t(`Veuillez définir un niveau de compétence valide pour "${c.libelle_competence}" (dans une expérience)`));
+          }
 
-            return {
-              libelle_competence: c.libelle_competence,
-              niveau_competence: c.pivot?.niveau_competence ?? 1
-            };
-          }) || [],
+          return {
+            libelle_competence: c.libelle_competence,
+            niveau_competence: c.pivot?.niveau_competence ?? 1
+          };
+        }) || [],
         // competences: e.competences?.map(c => ({ 
         //   libelle_competence: c.libelle_competence, 
         //   niveau_competence: c.pivot?.niveau_competence ?? 1
@@ -1226,6 +1275,7 @@ export default function ProfileDetailsScreen() {
                   </Text>
                 </View>
               </View>
+
             </>
           )}
         </View>
@@ -1310,7 +1360,7 @@ export default function ProfileDetailsScreen() {
                 style={[styles.actionButton, styles.actionButtonCancel, { backgroundColor: colors.error }]}
                 onPress={() => {
                   setCvEditMode(false);
-                  loadCandidatProfile(); // Recharger pour annuler les modifications
+                  loadCandidatProfile();
                   setCvUpdateError(null);
                 }}
               >
@@ -1334,14 +1384,14 @@ export default function ProfileDetailsScreen() {
           </View>
         )}
 
-        {loadingCandidatProfile && (user?.role === 'user' || user?.role === 'interimaire') ? ( // Utilisez loadingCandidatProfile pour le CV aussi
+        {loadingCandidatProfile && (user?.role === 'user' || user?.role === 'interimaire') ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="small" color={colors.secondary} />
             <Text style={[styles.loadingText, { color: colors.textSecondary }]}>{t('Chargement des données...')}</Text>
           </View>
         ) : cvEditMode ? (
           renderCvEditForm()
-        ) : candidatProfile?.parsed_cv || (candidatProfile?.competences && candidatProfile.competences.length > 0) || (candidatProfile?.experiences && candidatProfile.experiences.length > 0) ? ( // Check for parsed_cv OR skills OR experiences
+        ) : candidatProfile?.parsed_cv || (candidatProfile?.competences && candidatProfile.competences.length > 0) || (candidatProfile?.experiences && candidatProfile.experiences.length > 0) || (candidatProfile?.formations && candidatProfile.formations.length > 0) ? (
           renderCvDisplay()
         ) : (
           <View style={styles.emptyState}>
@@ -1503,25 +1553,80 @@ export default function ProfileDetailsScreen() {
               />
             </View>
             <View style={styles.inputGroup}>
-              <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Date début')}</Text>
-              <TextInput
-                style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
-                value={exp.date_debut}
-                onChangeText={(text) => updateExperience(expIndex, 'date_debut', text)}
-                placeholder={t("AAAA-MM-JJ")}
-                placeholderTextColor={colors.textSecondary}
-              />
+              <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
+                {t('Date début')}
+              </Text>
+
+              <TouchableOpacity
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: colors.background,
+                    borderColor: colors.border,
+                    justifyContent: 'center',
+                    paddingVertical: 12,
+                  }
+                ]}
+                onPress={() => setDatePickerState({ expIndex, field: 'date_debut' })}
+              >
+                <Text
+                  style={{
+                    color: exp.date_debut ? colors.textPrimary : colors.textSecondary,
+                    fontSize: 16,
+                  }}
+                >
+                  {formatDateOfBirth(exp.date_debut) || t("JJ-MM-AAAA")}
+                </Text>
+              </TouchableOpacity>
             </View>
             <View style={styles.inputGroup}>
-              <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Date fin')}</Text>
-              <TextInput
-                style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
-                value={exp.date_fin}
-                onChangeText={(text) => updateExperience(expIndex, 'date_fin', text)}
-                placeholder={t("AAAA-MM-JJ")}
-                placeholderTextColor={colors.textSecondary}
-              />
+              <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
+                {t('Date Fin')}
+              </Text>
+
+              <TouchableOpacity
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: colors.background,
+                    borderColor: colors.border,
+                    justifyContent: 'center',
+                    paddingVertical: 12,
+                  }
+                ]}
+                onPress={() => setDatePickerState({ expIndex, field: 'date_fin' })}
+              >
+                <Text
+                  style={{
+                    color: exp.date_fin ? colors.textPrimary : colors.textSecondary,
+                    fontSize: 16,
+                  }}
+                >
+                  {formatDateOfBirth(exp.date_fin) || t("JJ-MM-AAAA")}
+                </Text>
+              </TouchableOpacity>
             </View>
+            <DatePicker
+              modal
+              open={datePickerState.expIndex === expIndex}
+              date={parseStringToDate(
+                datePickerState.field === 'date_debut' ? exp.date_debut : exp.date_fin
+              )}
+              mode="date"
+              onConfirm={(selectedDate) => {
+                const formatted = formatDateToString(selectedDate);
+                updateExperience(expIndex, datePickerState.field!, formatted);
+                setDatePickerState({ expIndex: null, field: null });
+              }}
+              onCancel={() => setDatePickerState({ expIndex: null, field: null })}
+              title={
+                datePickerState.field === 'date_debut'
+                  ? t('Sélectionner la date de début')
+                  : t('Sélectionner la date de fin')
+              }
+              confirmText={t('Confirmer')}
+              cancelText={t('Annuler')}
+            />
             <View style={styles.inputGroup}>
               <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Lieu')}</Text>
               <TextInput
@@ -1642,7 +1747,6 @@ export default function ProfileDetailsScreen() {
         ))}
       </View>
 
-
       {/* Formation */}
       <View style={styles.formSection}>
         <View style={styles.subSectionHeader}>
@@ -1653,7 +1757,7 @@ export default function ProfileDetailsScreen() {
           </TouchableOpacity>
         </View>
 
-        {editableFormations.map((edu, formIndex) => ( 
+        {editableFormations.map((edu, formIndex) => (
           <View key={formIndex} style={[styles.educationItem, { backgroundColor: colors.background, borderColor: colors.border }]}>
             <View style={[styles.sectionHeader, { borderBottomColor: colors.border }]}>
               <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{t('Formation')} #{formIndex + 1}</Text>
@@ -1666,17 +1770,17 @@ export default function ProfileDetailsScreen() {
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Nom de l\'établissement/diplôme')}</Text>
+              <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Diplôme / Certification')}</Text>
               <TextInput
                 style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
                 value={edu.nomDiplome} // nomDiplome
                 onChangeText={(text) => updateEducation(formIndex, 'nomDiplome', text)}
-                placeholder={t("Nom de l'établissement/diplôme")}
+                placeholder={t("diplôme / certification")}
                 placeholderTextColor={colors.textSecondary}
               />
             </View>
             <View style={styles.inputGroup}>
-              <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Université')}</Text>
+              <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Université / Institut ')}</Text>
               <TextInput
                 style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
                 value={edu.universite} //  universite
@@ -1712,6 +1816,81 @@ export default function ProfileDetailsScreen() {
             </View>
 
             <View style={styles.inputGroup}>
+              <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
+                {t('Date Début Formation')}
+              </Text>
+
+              <TouchableOpacity
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: colors.background,
+                    borderColor: colors.border,
+                    justifyContent: 'center',
+                    paddingVertical: 12,
+                  }
+                ]}
+                onPress={() => setDatePickerForm({ formIndex, field: 'dateDebut' })}
+              >
+                <Text
+                  style={{
+                    color: edu.dateDebut ? colors.textPrimary : colors.textSecondary,
+                    fontSize: 16,
+                  }}
+                >
+                  {formatDateOfBirth(edu.dateDebut || '') || t("JJ-MM-AAAA")}
+                </Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.inputGroup}>
+              <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
+                {t('Date Fin Formation')}
+              </Text>
+
+              <TouchableOpacity
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: colors.background,
+                    borderColor: colors.border,
+                    justifyContent: 'center',
+                    paddingVertical: 12,
+                  }
+                ]}
+                onPress={() => setDatePickerForm({ formIndex, field: 'dateFin' })}
+              >
+                <Text
+                  style={{
+                    color: edu.dateFin ? colors.textPrimary : colors.textSecondary,
+                    fontSize: 16,
+                  }}
+                >
+                  {formatDateOfBirth(edu.dateFin || '') || t("JJ-MM-AAAA")}
+                </Text>
+              </TouchableOpacity>
+            </View>
+            <DatePicker
+              modal
+              open={datePickerForm.formIndex === formIndex}
+              date={parseStringToDate(
+                datePickerForm.field === 'dateDebut' ? edu.dateDebut || '' : edu.dateFin || ''
+              )}
+              mode="date"
+              onConfirm={(selectedDate) => {
+                const formatted = formatDateToString(selectedDate);
+                updateEducation(formIndex, datePickerForm.field!, formatted);
+                setDatePickerForm({ formIndex: null, field: null });
+              }}
+              onCancel={() => setDatePickerForm({ formIndex: null, field: null })}
+              title={
+                datePickerForm.field === 'dateDebut'
+                  ? t('Sélectionner la date de début')
+                  : t('Sélectionner la date de fin')
+              }
+              confirmText={t('Confirmer')}
+              cancelText={t('Annuler')}
+            />
+            {/* <View style={styles.inputGroup}>
               <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Date début formation')}</Text>
               <TextInput
                 style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
@@ -1725,12 +1904,12 @@ export default function ProfileDetailsScreen() {
               <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Date fin formation')}</Text>
               <TextInput
                 style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
-                value={edu.dateFin || ''} 
+                value={edu.dateFin || ''}
                 onChangeText={(text) => updateEducation(formIndex, 'dateFin', text)}
                 placeholder={t("AAAA-MM-JJ")}
                 placeholderTextColor={colors.textSecondary}
               />
-            </View>
+            </View> */}
             <View style={styles.inputGroup}>
               <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Description formation')}</Text>
               <TextInput
@@ -1805,25 +1984,15 @@ export default function ProfileDetailsScreen() {
       </View>
     </View>
   );
-  
+
   const renderCvDisplay = () => {
     // Fonction pour vérifier si le CV a du contenu
     const hasCvContent = () => {
-      const hasPersonalInfo = candidatProfile?.parsed_cv?.full_name ||
-        candidatProfile?.parsed_cv?.email ||
-        candidatProfile?.parsed_cv?.phone ||
-        candidatProfile?.parsed_cv?.summary;
-
-      const hasCompetences = candidatProfile?.competences && candidatProfile.competences.length > 0;
-
-      const hasExperiences = candidatProfile?.experiences && candidatProfile.experiences.length > 0;
-
-      const hasEducation = candidatProfile?.formations && candidatProfile.formations.length > 0;
-
-      const hasFile = candidatProfile?.parsed_cv?.last_parsed_file;
-
-      // Retourne true s'il y a au moins une section avec du contenu
-      return hasCompetences || hasExperiences || hasEducation;
+      return (
+        (editableExperiences?.length || 0) >= 2 &&
+        (editableFormations?.length || 0) >= 2 &&
+        (editableSkills?.length || 0) >= 4
+      );
     };
 
     return (
@@ -1950,7 +2119,7 @@ export default function ProfileDetailsScreen() {
         )}
 
         {/* Formation */}
-        {candidatProfile?.formations && candidatProfile.formations.length > 0 && ( // NOUVEAU : Affichage des formations
+        {candidatProfile?.formations && candidatProfile.formations.length > 0 && (
           <View style={[styles.cvViewSection, { borderBottomColor: colors.border }]}>
             <Text style={[styles.cvViewSectionTitle, { color: colors.textPrimary }]}>{t('Formation')}</Text>
             {candidatProfile.formations.map((edu: FormationItem, index: number) => (
@@ -2529,6 +2698,80 @@ export default function ProfileDetailsScreen() {
       >
         {renderTabContent()}
       </ScrollView>
+      <Modal
+        visible={showCompletionModal}
+        animationType="fade"
+        transparent
+      >
+        <View style={cvStyles.modalOverlay}>
+          <View style={[cvStyles.modalCard, { backgroundColor: colors.cardBackground }]}>
+            {/* PROFIL */}
+            <Text style={[cvStyles.completionText, { color: colors.textSecondary }]}>
+              {t("Profil complété à")} {profileCompletion.percentage}%
+            </Text>
+            <View style={cvStyles.progressBarContainer}>
+              <Animated.View
+                style={[
+                  cvStyles.progressBar,
+                  {
+                    width: `${profileCompletion.percentage}%`,
+                    backgroundColor: colors.secondary,
+                  },
+                ]}
+              />
+            </View>
+            {profileCompletion.missingFields.length > 0 && (
+              <>
+                <Text style={[cvStyles.missingFieldsTitle, { color: colors.textPrimary }]}>
+                  {t("Champs manquants du profil")} :
+                </Text>
+                {profileCompletion.missingFields.map((field, index) => (
+                  <View key={`profile-${index}`} style={cvStyles.missingItem}>
+                    <Ionicons name="alert-circle" size={16} color={colors.error} />
+                    <Text style={[cvStyles.missingText, { color: colors.textSecondary }]}>{field}</Text>
+                  </View>
+                ))}
+              </>
+            )}
+
+            {/* CV */}
+            <Text style={[cvStyles.completionText, { color: colors.textSecondary }]}>
+              {t("CV complété à")} {cvCompletion.percentage}%
+            </Text>
+            <View style={cvStyles.progressBarContainer}>
+              <Animated.View
+                style={[
+                  cvStyles.progressBar,
+                  {
+                    width: `${cvCompletion.percentage}%`,
+                    backgroundColor: colors.primary,
+                  },
+                ]}
+              />
+            </View>
+            {cvCompletion.missingFields.length > 0 && (
+              <>
+                <Text style={[cvStyles.missingFieldsTitle, { color: colors.textPrimary }]}>
+                  {t("Sections manquantes du CV")} :
+                </Text>
+                {cvCompletion.missingFields.map((field, index) => (
+                  <View key={`cv-${index}`} style={cvStyles.missingItem}>
+                    <Ionicons name="alert-circle" size={16} color={colors.error} />
+                    <Text style={[cvStyles.missingText, { color: colors.textSecondary }]}>{field}</Text>
+                  </View>
+                ))}
+              </>
+            )}
+
+            <TouchableOpacity
+              style={[cvStyles.closeButton, { backgroundColor: colors.secondary }]}
+              onPress={() => setShowCompletionModal(false)}
+            >
+              <Text style={cvStyles.closeButtonText}>{t("Compléter plus tard")}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -3299,6 +3542,70 @@ const additionalStyles = StyleSheet.create({
   skillTextView: {
     fontSize: 12,
     fontWeight: '500',
+  },
+});
+const cvStyles = StyleSheet.create({
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalCard: {
+    width: '100%',
+    borderRadius: 16,
+    padding: 24,
+    elevation: 5,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  completionText: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  progressBarContainer: {
+    height: 12,
+    width: '100%',
+    backgroundColor: '#e0e0e0',
+    borderRadius: 6,
+    overflow: 'hidden',
+    marginBottom: 16,
+  },
+  progressBar: {
+    height: '100%',
+    borderRadius: 6,
+  },
+  missingFieldsTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  missingItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  missingText: {
+    marginLeft: 6,
+    fontSize: 14,
+  },
+  closeButton: {
+    marginTop: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  closeButtonText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 16,
   },
 });
 

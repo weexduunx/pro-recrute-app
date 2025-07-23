@@ -232,38 +232,28 @@ const arrayBufferToBase64 = (buffer) => {
 
 export const exportCvPdf = async () => {
   try {
-    const response = await api.get('/user/export-cv-pdf', {
-      responseType: 'arraybuffer', // Indispensable pour recevoir des données binaires (le PDF)
-      headers: {
-        'Accept': 'application/pdf', // Demander un PDF
-      },
+const response = await api.get('/user/export-cv-pdf', {
+      responseType: 'arraybuffer',
+      headers: { 'Accept': 'application/pdf' },
     });
 
-    // Convertir l'ArrayBuffer reçu en chaîne Base64
-    const base64Content = arrayBufferToBase64(response.data);
-
-    // Récupérer le nom de fichier suggéré depuis les headers ou utiliser un nom par défaut
     const contentDisposition = response.headers['content-disposition'];
-    let fileName = 'cv.pdf';
+    let fileName = 'cv-export.pdf'; // Valeur par défaut
+
     if (contentDisposition) {
-      const fileNameMatch = contentDisposition.match(/filename="(.+)"/);
-      if (fileNameMatch && fileNameMatch[1]) {
-        fileName = fileNameMatch[1];
+      const match = contentDisposition.match(/filename="?(.+?)"?$/i);
+      if (match && match[1]) {
+        fileName = decodeURIComponent(match[1]);
       }
     }
 
-    // Chemin du sauvegarde en local
-    // Utilisation de FileSystem.documentDirectory pour stocker le fichier dans l'application
+    const base64Content = arrayBufferToBase64(response.data);
     const localUri = FileSystem.documentDirectory + fileName;
 
-    // Écrire le contenu Base64 dans un fichier local
     await FileSystem.writeAsStringAsync(localUri, base64Content, {
       encoding: FileSystem.EncodingType.Base64,
     });
 
-    console.log(`CV PDF téléchargé vers : ${localUri}`);
-
-    // Proposer d'ouvrir ou de partager le fichier
     if (await Sharing.isAvailableAsync()) {
       await Sharing.shareAsync(localUri);
     } else {
@@ -416,61 +406,55 @@ export const getDetailsUserGbg = async () => {
   }
 };
 
-export const getInterimLoans = async () => {
-  try {
-    const response = await api.get('/interim/loans'); // Laravel: GET /api/interim/loans
-    return response.data;
-  } catch (error) {
-    console.error("Échec de l'appel API getInterimLoans:", error.response?.data || error.message);
-    throw error;
-  }
-};
 
-export const getPdf = async (encryptedContratId) => {
-  try {
-    // MODIFIÉ : Requête GET et ID dans l'URL
-    const response = await api.get(`/interim/attestations/${encryptedContratId}/download`, { 
-      responseType: 'arraybuffer', // Indispensable pour recevoir des données binaires (le PDF)
-      headers: {
-        'Accept': 'application/pdf', // Demander un PDF
-      },
-    });
+
+// export const getPdf = async (encryptedContratId) => {
+//   try {
+//     // MODIFIÉ : Requête GET et ID dans l'URL
+//     const response = await api.get(`/interim/attestations/${encryptedContratId}/download`, { 
+//       responseType: 'arraybuffer', // Indispensable pour recevoir des données binaires (le PDF)
+//       headers: {
+//         'Accept': 'application/pdf', // Demander un PDF
+//       },
+//     });
 
      
-    const base64Content = arrayBufferToBase64(response.data);
+//     const base64Content = arrayBufferToBase64(response.data);
 
-    const contentDisposition = response.headers['content-disposition'];
-    let fileName = `attestation_${encryptedContratId}.pdf`;
-    if (contentDisposition) {
-      const fileNameMatch = contentDisposition.match(/filename="(.+)"/);
-      if (fileNameMatch && fileNameMatch[1]) {
-        fileName = fileNameMatch[1];
-      }
-    }
+//     const contentDisposition = response.headers['content-disposition'];
+//     let fileName = `attestation_${encryptedContratId}.pdf`;
+//     if (contentDisposition) {
+//       const fileNameMatch = contentDisposition.match(/filename="(.+)"/);
+//       if (fileNameMatch && fileNameMatch[1]) {
+//         fileName = fileNameMatch[1];
+//       }
+//     }
 
-    const localUri = FileSystem.documentDirectory + fileName;
+//     const localUri = FileSystem.documentDirectory + fileName;
 
-    await FileSystem.writeAsStringAsync(localUri, base64Content, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
+//     await FileSystem.writeAsStringAsync(localUri, base64Content, {
+//       encoding: FileSystem.EncodingType.Base64,
+//     });
 
-    console.log(`Attestation PDF téléchargée vers : ${localUri}`);
+//     console.log(`Attestation PDF téléchargée vers : ${localUri}`);
 
-    if (await Sharing.isAvailableAsync()) {
-      await Sharing.shareAsync(localUri);
-    } else {
-      Alert.alert("Partage indisponible", "La fonctionnalité de partage n'est pas disponible sur cet appareil.");
-    }
+//     if (await Sharing.isAvailableAsync()) {
+//       await Sharing.shareAsync(localUri);
+//     } else {
+//       Alert.alert("Partage indisponible", "La fonctionnalité de partage n'est pas disponible sur cet appareil.");
+//     }
 
-    return { message: 'Attestation PDF téléchargée et partagée.', uri: localUri };
+//     return { message: 'Attestation PDF téléchargée et partagée.', uri: localUri };
 
-  } catch (error) {
-    console.error("Erreur téléchargement PDF:", error.response?.data || error.message);
-    Alert.alert("Erreur", error.response?.data?.message || "Le téléchargement du PDF a échoué.");
-    throw error;
-  }
-};
+//   } catch (error) {
+//     console.error("Erreur téléchargement PDF:", error.response?.data || error.message);
+//     Alert.alert("Erreur", error.response?.data?.message || "Le téléchargement du PDF a échoué.");
+//     throw error;
+//   }
+// };
 
+
+// Fonction API Gestion Dossier RH
 export const fetchEncryptedTypes = async () => {
   try {
     const response = await api.get('/interim/encrypted-types');
@@ -540,6 +524,145 @@ export const getCertificatInfo = async () => {
     return response.data;
   } catch (error) {
     console.error("Erreur API certificat:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+// Fonction de téléchargement partagée avec Dossier RH et IPM
+export const getPdf = async (encryptedId, type) => {
+  let url = '';
+  if (type === 'attestation') {
+    url = `/interim/attestations/${encryptedId}/download`;
+  } else if (type === 'prise_en_charge') {
+    url = `/interim/prises-en-charge/${encryptedId}/download`;
+  } else if (type === 'feuille_de_soins') {
+    url = `/interim/feuilles-de-soins/${encryptedId}/download`;
+  } else {
+    throw new Error("Type de document non supporté.");
+  }
+
+  try {
+    // Requête GET et ID dans l'URL
+    const response = await api.get(url, {
+      responseType: 'arraybuffer', // Indispensable pour recevoir des données binaires (le PDF)
+      headers: {
+        'Accept': 'application/pdf', // Demander un PDF
+      },
+    });
+
+     
+    const base64Content = arrayBufferToBase64(response.data);
+
+    const contentDisposition = response.headers['content-disposition'];
+    let fileName = `attestation_${encryptedContratId}.pdf`;
+    if (contentDisposition) {
+      const fileNameMatch = contentDisposition.match(/filename="(.+)"/);
+      if (fileNameMatch && fileNameMatch[1]) {
+        fileName = fileNameMatch[1];
+      }
+    }
+
+    const localUri = FileSystem.documentDirectory + fileName;
+
+    await FileSystem.writeAsStringAsync(localUri, base64Content, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+
+    console.log(`Attestation PDF téléchargée vers : ${localUri}`);
+
+    if (await Sharing.isAvailableAsync()) {
+      await Sharing.shareAsync(localUri);
+    } else {
+      Alert.alert("Partage indisponible", "La fonctionnalité de partage n'est pas disponible sur cet appareil.");
+    }
+
+    return { message: 'Document téléchargé et partagé.', uri: localUri };
+  } catch (error) {
+    console.error("Erreur téléchargement PDF:", error.response?.data || error.message);
+    Alert.alert("Erreur", error.response?.data?.message || "Le téléchargement du PDF a échoué.");
+    throw error;
+  }
+};
+
+// Fonctions API pour la gestion IPM
+export const getInterimLoans = async () => {
+  try {
+    const response = await api.get('/interim/loans'); // Laravel: GET /api/interim/loans
+    return response.data;
+  } catch (error) {
+    console.error("Échec de l'appel API getInterimLoans:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+/**
+ * Récupère la liste des membres de la famille de l'intérimaire connecté.
+ * @returns {Promise<Array>} Un tableau de membres de la famille.
+ */
+export const getFamilleMembers = async () => {
+  try {
+    const response = await api.get('/interim/famille-members');
+    return response.data;
+  } catch (error) {
+    console.error("Échec de l'appel API getFamilleMembers:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+/**
+ * Soumet une demande de prise en charge pour l'intérimaire ou un membre de sa famille.
+ * @param {object} data - Les données de la demande (objet, date, famille_id, etc.).
+ * @returns {Promise<object>} La demande de prise en charge créée.
+ */
+export const requestPriseEnCharge = async (data) => {
+  try {
+    const response = await api.post('/interim/request-prise-en-charge', data);
+    return response.data;
+  } catch (error) {
+    console.error("Échec de l'appel API requestPriseEnCharge:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+/**
+ * Soumet une demande de feuille de soins pour l'intérimaire ou un membre de sa famille.
+ * @param {object} data - Les données de la demande (type, date_soins, montant_total, famille_id, etc.).
+ * @returns {Promise<object>} La demande de feuille de soins créée.
+ */
+export const requestFeuilleDeSoins = async (data) => {
+  try {
+    const response = await api.post('/interim/request-feuille-de-soins', data);
+    return response.data;
+  } catch (error) {
+    console.error("Échec de l'appel API requestFeuilleDeSoins:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+/**
+ * Récupère l'historique des demandes de prise en charge de l'intérimaire.
+ * @returns {Promise<Array>} Un tableau des demandes de prise en charge.
+ */
+export const getPrisesEnChargeHistory = async () => {
+  try {
+    const response = await api.get('/interim/prises-en-charge-history');
+    return response.data;
+  } catch (error) {
+    console.error("Échec de l'appel API getPrisesEnChargeHistory:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+/**
+ * Récupère l'historique des demandes de feuilles de soins de l'intérimaire.
+ * @returns {Promise<Array>} Un tableau des demandes de feuilles de soins.
+ */
+export const getFeuillesDeSoinsHistory = async () => {
+  try {
+    const response = await api.get('/interim/feuilles-de-soins-history');
+    return response.data;
+  } catch (error) {
+    console.error("Échec de l'appel API getFeuillesDeSoinsHistory:", error.response?.data || error.message);
     throw error;
   }
 };
