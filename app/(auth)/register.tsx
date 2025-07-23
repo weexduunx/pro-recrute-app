@@ -1,43 +1,37 @@
-import React, { useState } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  TouchableOpacity, 
-  TextInput, 
-  ActivityIndicator, 
-  Platform, 
-  Image, 
-  ScrollView, 
-  Alert // Import Alert pour les messages d'erreur/succès
-} from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator, Platform, Image, ScrollView, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { registerUser } from '../../utils/api';
 import { useAuth } from '../../components/AuthProvider';
-import { Picker } from '@react-native-picker/picker'; // NOUVEAU : Import du Picker
-import { Ionicons } from '@expo/vector-icons'; // Pour les icônes
+import { Picker } from '@react-native-picker/picker';
+import { Ionicons } from '@expo/vector-icons';
+import * as Device from 'expo-device'; // Importer Device
 
 export default function RegisterScreen() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [passwordConfirmation, setPasswordConfirmation] = useState('');
-  // NOUVEAU : État pour le rôle sélectionné (par défaut 'candidate')
-  const [role, setRole] = useState('user'); 
+  const [selectedRole, setSelectedRole] = useState('user'); 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  const { login } = useAuth(); // Nous utiliserons login après l'inscription si elle réussit
+  const { register, error: authError, clearError } = useAuth();
+
+  useEffect(() => {
+    clearError();
+    if (authError) {
+      setError(authError);
+    }
+  }, [authError, clearError]);
 
   const handleRegister = async () => {
     setLoading(true);
     setError(null);
     setSuccess(null);
 
-    // Validations côté client
-    if (!name || !email || !password || !passwordConfirmation || !role) {
+    if (!name || !email || !password || !passwordConfirmation) {
       setError('Veuillez remplir tous les champs.');
       setLoading(false);
       return;
@@ -49,24 +43,13 @@ export default function RegisterScreen() {
     }
 
     try {
-      // MODIFIÉ : Envoyer le rôle sélectionné au backend
-      const response = await registerUser(name, email, password, passwordConfirmation, role);
-      
-      setSuccess('Inscription réussie ! Connexion en cours...');
-      Alert.alert('Inscription réussie', 'Vous êtes maintenant inscrit. Connexion en cours...');
-      
-      // Tenter de connecter l'utilisateur immédiatement après l'inscription réussie
-      await login(email, password); // Assurez-vous que votre fonction loginUser peut récupérer le rôle
-      
+      const deviceName = Device.deviceName || 'UnknownDevice';
+      // La fonction register dans AuthProvider gère maintenant la redirection OTP
+      await register(name, email, password, passwordConfirmation, selectedRole, deviceName); // Passer deviceName
+      setSuccess('Inscription réussie ! Un code de vérification a été envoyé.');
     } catch (err: any) {
       console.error("Erreur d'inscription :", err.response ? err.response.data : err.message);
-      if (err.response && err.response.data && err.response.data.errors) {
-        // Affiche la première erreur de validation du backend
-        const firstError = Object.values(err.response.data.errors)[0] as string[];
-        setError(firstError[0] || "L'inscription a échoué. Veuillez réessayer.");
-      } else {
-        setError(err.response?.data?.message || "L'inscription a échoué. Veuillez vérifier vos coordonnées.");
-      }
+      setError(authError || err.response?.data?.message || "L'inscription a échoué. Veuillez vérifier vos coordonnées.");
     } finally {
       setLoading(false);
     }
@@ -155,18 +138,17 @@ export default function RegisterScreen() {
             />
           </View>
           
-          {/* NOUVEAU : Sélecteur de rôle */}
+          {/* Sélecteur de rôle */}
           <View style={styles.rolePickerContainer}>
             <Text style={styles.pickerLabel}>Je suis :</Text>
             <Picker
-              selectedValue={role}
-              onValueChange={(itemValue: string) => setRole(itemValue)}
+              selectedValue={selectedRole}
+              onValueChange={(itemValue: string) => setSelectedRole(itemValue)}
               style={styles.picker}
-              itemStyle={styles.pickerItem} // Style pour les éléments du Picker
+              itemStyle={styles.pickerItem}
             >
               <Picker.Item label="Candidat" value="user" />
               <Picker.Item label="Intérimaire" value="interimaire" />
-              {/* Ajoutez d'autres rôles si nécessaire */}
             </Picker>
             <Ionicons name="chevron-down" size={20} color="#6B7280" style={styles.pickerIcon} />
           </View>

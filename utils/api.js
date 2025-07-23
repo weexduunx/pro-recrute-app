@@ -667,4 +667,23 @@ export const getFeuillesDeSoinsHistory = async () => {
   }
 };
 
+export const sendOtp = async (email) => {
+  try {
+    const response = await api.post('/otp/send', { email });
+    return response.data;
+  } catch (error) {
+    console.error("Échec de l'appel API sendOtp:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+export const verifyOtp = async (email, otpCode, deviceName) => {
+  try {
+    const response = await api.post('/otp/verify', { email, otp_code: otpCode, device_name: deviceName });
+    return response.data; // Devrait contenir user et token
+  } catch (error) {
+    console.error("Échec de l'appel API verifyOtp:", error.response?.data || error.message);
+    throw error;
+  }
+};
 export default api;

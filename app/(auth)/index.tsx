@@ -1,63 +1,75 @@
-import React, { useState, useEffect } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  StyleSheet,
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  TouchableOpacity,
-  Image,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { router } from "expo-router";
-import { useAuth } from "../../components/AuthProvider";
-import { FontAwesome5 } from "@expo/vector-icons";
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator, Platform, Image, ScrollView, Alert } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
+import { useAuth } from '../../components/AuthProvider';
+import { FontAwesome5 } from '@expo/vector-icons';
+import * as Device from 'expo-device'; // Importer Device
 
 export default function LoginScreen() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const { login, socialLogin, loading, error, clearError } = useAuth();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const { login, socialLogin, error: authError, clearError } = useAuth();
 
   useEffect(() => {
-    if (error) {
-      clearError();
+    // Nettoyer l'erreur du contexte AuthProvider lors du montage du composant
+    clearError();
+    // Utiliser l'erreur du contexte pour l'affichage si elle existe
+    if (authError) {
+      setError(authError);
     }
-    console.log('api: ' + process.env.EXPO_PUBLIC_API_URL);
-  }, [email, password]);
+  }, [authError, clearError]);
 
-  const handleLoginPress = async () => {
+  const handleLogin = async () => {
+    setLoading(true);
+    setError(null);
+
     if (!email || !password) {
-      clearError();
+      setError('Veuillez saisir votre email et mot de passe.');
+      setLoading(false);
       return;
     }
-    await login(email, password);
+
+    try {
+      const deviceName = Device.deviceName || 'UnknownDevice';
+      // La fonction login dans AuthProvider gère maintenant la redirection OTP
+      await login(email, password, deviceName); 
+    } catch (err: any) {
+      // L'erreur est déjà gérée par AuthProvider et stockée dans le contexte
+      // Elle sera récupérée par le useEffect ci-dessus
+      // Ici, on peut juste s'assurer que le loading est false
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleGoogleLogin = async () => {
-    await socialLogin('google');
-  };
-
-  const handleLinkedInLogin = async () => {
-    await socialLogin('linkedin');
+  const handleSocialLogin = async (provider: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      await socialLogin(provider);
+    } catch (err: any) {
+      setError(authError || err.message || `Échec de la connexion via ${provider}.`);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <KeyboardAvoidingView
-        style={styles.container}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-      >
-        {/* Section Logo et Titre */}
+      <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
+        {/* Section Header */}
         <View style={styles.headerSection}>
           <Image
-            source={require("../../assets/images/logo.png")}
+            source={require('../../assets/images/logo.png')} // Assurez-vous que le chemin est correct
             style={styles.logo}
             resizeMode="contain"
           />
-          <Text style={styles.title}>GBG | Pro Recrute</Text>
-          <Text style={styles.subtitle}>Bienvenue</Text>
+          <Text style={styles.title}>Bienvenue !</Text>
+          <Text style={styles.subtitle}>Connectez-vous pour continuer</Text>
         </View>
 
         {/* Section Formulaire */}
@@ -99,7 +111,7 @@ export default function LoginScreen() {
 
           <TouchableOpacity
             style={[styles.primaryButton, loading && styles.buttonDisabled]}
-            onPress={handleLoginPress}
+            onPress={handleLogin}
             disabled={loading}
           >
             {loading ? (
@@ -111,41 +123,36 @@ export default function LoginScreen() {
 
           <TouchableOpacity
             style={styles.linkButton}
-            onPress={() => router.push("/(auth)/register")}
+            onPress={() => Alert.alert("Mot de passe oublié", "Fonctionnalité à implémenter.")}
+            disabled={loading}
           >
-            <Text style={styles.linkText}>
-              Pas encore de compte ? <Text style={styles.linkAccent}>Créer un compte </Text>
-            </Text>
+            <Text style={styles.linkText}>Mot de passe oublié ?</Text>
           </TouchableOpacity>
-        </View>
 
-        {/* Section Connexion Sociale */}
-        <View style={styles.socialSection}>
-          <View style={styles.dividerContainer}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>ou</Text>
-            <View style={styles.dividerLine} />
+          {/* Boutons de connexion sociale */}
+          <View style={styles.socialButtonsContainer}>
+            <Text style={styles.socialText}>Ou se connecter avec</Text>
+            <View style={styles.socialButtonRow}>
+              <TouchableOpacity style={styles.socialButton} onPress={() => handleSocialLogin('google')} disabled={loading}>
+                <FontAwesome5 name="google" size={24} color="#DB4437" />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.socialButton} onPress={() => handleSocialLogin('linkedin')} disabled={loading}>
+                <FontAwesome5 name="linkedin" size={24} color="#0A66C2" />
+              </TouchableOpacity>
+            </View>
           </View>
 
           <TouchableOpacity
-            style={[styles.socialButton, styles.googleButton, loading && styles.buttonDisabled]}
-            onPress={handleGoogleLogin}
+            style={styles.registerButton}
+            onPress={() => router.push('/(auth)/register')}
             disabled={loading}
           >
-            <FontAwesome5 name="google" size={18} color="#FFFFFF" />
-            <Text style={styles.socialButtonText}>Google</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.socialButton, styles.linkedinButton, loading && styles.buttonDisabled]}
-            onPress={handleLinkedInLogin}
-            disabled={loading}
-          >
-            <FontAwesome5 name="linkedin" size={18} color="#FFFFFF" />
-            <Text style={styles.socialButtonText}>LinkedIn</Text>
+            <Text style={styles.registerText}>
+              Vous n'avez pas de compte ? <Text style={styles.registerLink}>S'inscrire</Text>
+            </Text>
           </TouchableOpacity>
         </View>
-      </KeyboardAvoidingView>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -155,12 +162,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#FFFFFF",
   },
-  container: {
-    flex: 1,
+  scrollContainer: {
+    flexGrow: 1,
     paddingHorizontal: 24,
     paddingVertical: 40,
   },
-
+  
   // Section Header
   headerSection: {
     alignItems: "center",
@@ -175,7 +182,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: "700",
-    color: "#091e60",
+    color: "#1F2937",
     marginBottom: 8,
     letterSpacing: -0.5,
   },
@@ -183,13 +190,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#6B7280",
     fontWeight: "400",
-    marginBottom: 20,
   },
 
   // Section Formulaire
   formSection: {
     flex: 1,
-    justifyContent: "center",
   },
   errorContainer: {
     backgroundColor: "#FEF2F2",
@@ -241,51 +246,43 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: "#6B7280",
   },
-  linkAccent: {
-    color: "#1F2937",
-    fontWeight: "600",
+  socialButtonsContainer: {
+    alignItems: 'center',
+    marginTop: 20,
+    marginBottom: 30,
   },
-
-  // Section Sociale
-  socialSection: {
-    paddingBottom: 20,
-  },
-  dividerContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginVertical: 32,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: "#E5E7EB",
-  },
-  dividerText: {
-    paddingHorizontal: 16,
+  socialText: {
     fontSize: 14,
-    color: "#9CA3AF",
-    fontWeight: "500",
+    color: '#6B7280',
+    marginBottom: 15,
+  },
+  socialButtonRow: {
+    flexDirection: 'row',
+    gap: 20,
   },
   socialButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 12,
-    paddingVertical: 14,
-    marginBottom: 12,
-    gap: 12,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  googleButton: {
-    backgroundColor: "#1F2937",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
+  registerButton: {
+    alignItems: 'center',
+    paddingVertical: 8,
   },
-  linkedinButton: {
-    backgroundColor: "#0A66C2",
-  },
-  socialButtonText: {
-    color: "#FFFFFF",
+  registerText: {
     fontSize: 15,
-    fontWeight: "600",
+    color: '#6B7280',
+  },
+  registerLink: {
+    color: '#1F2937',
+    fontWeight: '600',
   },
 });

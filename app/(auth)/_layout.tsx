@@ -1,4 +1,7 @@
 import { Stack } from 'expo-router';
+import React from 'react';
+import { useTheme } from '../../components/ThemeContext'; // Importez useTheme
+import { StatusBar } from 'react-native'; // Importez StatusBar
 
 /**
  * Authentication Group Layout:
@@ -7,6 +10,10 @@ import { Stack } from 'expo-router';
  * Uses the primary color for header background if headers are shown.
  */
 export default function AuthLayout() {
+   const { isDarkMode, colors } = useTheme();
+   // Gérer le style de la barre de statut pour le groupe d'authentification
+  StatusBar.setBarStyle(isDarkMode ? 'light-content' : 'dark-content');
+  StatusBar.setBackgroundColor(colors.background);
   return (
     <Stack
       screenOptions={{
@@ -19,6 +26,8 @@ export default function AuthLayout() {
     >
       <Stack.Screen name="index" options={{ title: 'Sign In' }} />
       <Stack.Screen name="register" options={{ title: 'Register' }} />
+      <Stack.Screen name="otp_verification" /> {/* NOUVEAU : Écran de vérification OTP */}
+
     </Stack>
   );
 }
