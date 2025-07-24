@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -20,268 +20,433 @@ import { useTheme } from '../../../components/ThemeContext';
 import { useLanguage } from '../../../components/LanguageContext';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { getOffres, getRecommendedOffres, getActualites } from "../../../utils/api";
-import EvilIcons from '@expo/vector-icons/EvilIcons';
-import { FontAwesome5, FontAwesome, Ionicons } from '@expo/vector-icons';
+import { getIpmRecapByMonth, getAffiliatedStructures } from "../../../utils/api"; // NOUVEAU
+import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { format } from "date-fns";
-import { Feather } from '@expo/vector-icons';
-import { decode } from 'html-entities';
+import { format } from "date-fns"; // Pour le formatage des dates si nécessaire
 
 const { width } = Dimensions.get("window");
 
-/**
- * Composant de slider automatique réutilisable
- */
-type AutoSliderProps<T> = {
-  data: T[];
-  renderItem: (item: T, index: number, onPress: (id: string) => void) => React.ReactNode;
-  onPress: (id: string) => void;
-  autoScrollInterval?: number;
-};
+// Interfaces pour les données IPM et Structures
+interface IpmRecap {
+  id: number;
+  mois: number;
+  annee: number;
+  consultations: number;
+  soins: number;
+  medicaments: number;
+  protheses: number;
+  examens: number;
+  retenu: number;
+  exclu: number;
+  remboursement: number;
+  name?: string; // Nom de la société, si joint
+}
 
-const AutoSlider = <T extends { id?: string | number }>({
-  data,
-  renderItem,
-  onPress,
-  autoScrollInterval = 4000,
-}: AutoSliderProps<T>) => {
-  const flatListRef = useRef<FlatList<any>>(null);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const scrollX = useRef(new Animated.Value(0)).current;
+interface Structure {
+  id: number;
+  name: string;
+  adresse: string;
+  region: string;
+  tel: string;
+  email: string;
+  type: string;
+  PersonneRessource: string;
+  affilie: boolean; // Ou number (0/1) si ce n'est pas casté en boolean par Laravel
+}
 
-  useEffect(() => {
-    if (data.length <= 1) return;
 
-    const interval = setInterval(() => {
-      const nextIndex = (currentIndex + 1) % data.length;
-      flatListRef.current?.scrollToIndex({
-        index: nextIndex,
-        animated: true,
-      });
-      setCurrentIndex(nextIndex);
-    }, autoScrollInterval);
-
-    return () => clearInterval(interval);
-  }, [currentIndex, data.length, autoScrollInterval]);
-
-  const onViewableItemsChanged = useRef(
-    (info: { viewableItems: Array<{ index: number | null }> }) => {
-      if (info.viewableItems.length > 0) {
-        const firstIndex = info.viewableItems[0].index;
-        setCurrentIndex(typeof firstIndex === 'number' && firstIndex >= 0 ? firstIndex : 0);
-      }
-    }
-  ).current;
-
-  const viewabilityConfig = useRef({
-    itemVisiblePercentThreshold: 50,
-  }).current;
-
-  return (
-    <View style={{ flex: 1, position: 'relative' }}>
-      <FlatList
-        ref={flatListRef}
-        horizontal
-        pagingEnabled
-        showsHorizontalScrollIndicator={false}
-        data={data}
-        keyExtractor={(item, index) => item.id?.toString() || index.toString()}
-        renderItem={({ item, index }) => {
-          const element = renderItem(item, index, onPress);
-          // Only return if it's a valid React element, otherwise null
-          return React.isValidElement(element) ? element : null;
-        }}
-        onScroll={Animated.event(
-          [{ nativeEvent: { contentOffset: { x: scrollX } } }],
-          { useNativeDriver: false }
-        )}
-        onViewableItemsChanged={onViewableItemsChanged}
-        viewabilityConfig={viewabilityConfig}
-        snapToInterval={width * 0.9 + 20}
-        decelerationRate="fast"
-        bounces={false}
-      />
-
-      {/* Indicateurs de pagination */}
-      <View style={{
-        flexDirection: 'row',
-        justifyContent: 'center',
-        alignItems: 'center',
-        position: 'absolute',
-        bottom: 10,
-        left: 0,
-        right: 0
-      }}>
-        {data.map((_: any, index: number) => {
-          const opacity = scrollX.interpolate({
-            inputRange: [
-              (index - 1) * (width * 0.9 + 20),
-              index * (width * 0.9 + 20),
-              (index + 1) * (width * 0.9 + 20),
-            ],
-            outputRange: [0.3, 1, 0.3],
-            extrapolate: 'clamp',
-          });
-
-          return (
-            <Animated.View
-              key={index}
-              style={[{
-                width: 8,
-                height: 8,
-                borderRadius: 4,
-                backgroundColor: '#000',
-                marginHorizontal: 4
-              }, { opacity }]}
-            />
-          );
-        })}
-      </View>
-    </View>
-  );
-};
 export default function InterimDashboardScreen() {
   const { user } = useAuth();
   const { colors } = useTheme();
   const { t } = useLanguage();
   const router = useRouter();
 
-  // Ajout des états pour les actualités
-  const [newsData, setNewsData] = useState<any[]>([]); // NOUVEAU: Pour les actualités réelles
-  const [loadingNews, setLoadingNews] = useState(true); // NOUVEAU: État de chargement des actualités
-  const [errorNews, setErrorNews] = useState<string | null>(null); // NOUVEAU: Erreur de chargement des actualités
+  // États pour l'avancement IPM
+  const [ipmRecap, setIpmRecap] = useState<IpmRecap[]>([]);
+  const [loadingIpmRecap, setLoadingIpmRecap] = useState(true);
+  const [errorIpmRecap, setErrorIpmRecap] = useState<string | null>(null);
+
+  // États pour les structures affiliées
+  const [affiliatedStructures, setAffiliatedStructures] = useState<Structure[]>([]);
+  const [loadingStructures, setLoadingStructures] = useState(true);
+  const [errorStructures, setErrorStructures] = useState<string | null>(null);
+  const [structuresPage, setStructuresPage] = useState(1); // Page actuelle
+  const [hasMoreStructures, setHasMoreStructures] = useState(true); // Y a-t-il plus de pages ?
+  const [loadingMoreStructures, setLoadingMoreStructures] = useState(false); // Chargement de pages supplémentaires
+
+  // Animation d'entrée des sections (peut être conservée ou retirée)
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
 
-  const handleMenuPress = () => { Alert.alert(t("Menu"), t("Menu Intérimaire pressé !")); };
-  const handleAvatarPress = () => { Alert.alert(t("Profil"), t("Avatar Intérimaire pressé !")); };
-
-  // Ajout de la fonction handlePressNews pour corriger l'erreur
-  const handlePressNews = (item: any) => {
-    // Naviguer vers la page de détail de l'actualité ou afficher une alerte
-    Alert.alert(t("Actualité"), item?.title || t("Détail de l'actualité"));
-  };
-
-  const [isBookmarked, setIsBookmarked] = useState(false);
-  const [isImageLoaded, setIsImageLoaded] = useState(false);
-  const [imageError, setImageError] = useState(false);
-
-  const handleBookmark = () => {
-    setIsBookmarked(!isBookmarked);
-  };
-
-  const handleShare = () => {
-    Alert.alert("Partage", "Fonction de partage déclenchée");
-  };
-
-  const formatDate = (date: Date) => {
-    const options: Intl.DateTimeFormatOptions = { year: 'numeric', month: 'short', day: 'numeric' };
-    return date.toLocaleDateString('fr-FR', options);
-  };
-
-
-
-  // MODIFIÉ : LOGIQUE DE RÉCUPÉRATION DES ACTUALITÉS (filtrées)
   useEffect(() => {
-    async function fetchNewsForSlider() {
-      console.log('HomeScreen: Début fetchNewsForSlider'); // LOG
-      try {
-        setLoadingNews(true);
-        const fetchedNews = await getActualites({ type: 'Conseil RH' });
-        setNewsData(fetchedNews.slice(0, 4));
-        console.log('InterimaireScreen: Actualités récupérées (NewsData):', fetchedNews); // LOG LES DONNÉES COMPLÈTES ICI
-      } catch (err: any) {
-        console.error("InterimaireScreen: Échec de la récupération des actualités pour le slider:", err);
-        setErrorNews("Impossible de charger les actualités.");
-      } finally {
-        setLoadingNews(false);
-      }
-    }
-    fetchNewsForSlider();
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+    ]).start();
   }, []);
 
+  // --- LOGIQUE DE RÉCUPÉRATION DES DONNÉES ---
+  const loadIpmRecap = useCallback(async () => {
+    if (!user) {
+      setIpmRecap([]);
+      setLoadingIpmRecap(false);
+      return;
+    }
+    setLoadingIpmRecap(true);
+    setErrorIpmRecap(null);
+    try {
+      const data = await getIpmRecapByMonth();
+      setIpmRecap(data);
+    } catch (err: any) {
+      console.error("Erreur de chargement du récap IPM:", err);
+      setErrorIpmRecap(err.message || t("Impossible de charger l'état d'avancement IPM."));
+    } finally {
+      setLoadingIpmRecap(false);
+    }
+  }, [user, t]);
 
-  // Fonction pour afficher chaque actualité (adapter selon vos besoins)
-  // Rendu pour les actualités (utilisant les données réelles de l'API)
-  const renderNews = (item: any, index: number, onPress: (id: string) => void) => (
-    <TouchableOpacity
-      key={item.id?.toString() || index.toString()}
-      style={styles.cardNews}
-      onPress={() => {
-        onPress(item.id);
+  const loadAffiliatedStructures = useCallback(async (page = 1, append = false) => {
+    if (!user) {
+      setAffiliatedStructures([]);
+      setLoadingStructures(false);
+      setLoadingMoreStructures(false);
+      setHasMoreStructures(false);
+      return;
+    }
 
-      }}
-      activeOpacity={0.9}
-    >
-      <View style={styles.imageContainer}>
-        {!isImageLoaded && (
-          <View style={styles.imagePlaceholder}>
-            <ActivityIndicator color="#999" size="small" />
+    if (page === 1) {
+      setLoadingStructures(true);
+    } else {
+      setLoadingMoreStructures(true);
+    }
+
+    setErrorStructures(null);
+
+    try {
+      const response = await getAffiliatedStructures(page, 3);
+
+      const structures = response.data; // ✅ le vrai tableau
+      const currentPage = response.current_page;
+      const lastPage = response.last_page;
+
+      if (append) {
+        setAffiliatedStructures(prev => {
+          const newStructures = structures.filter(
+            (newItem: Structure) => !prev.some(existingItem => existingItem.id === newItem.id)
+          );
+          return [...prev, ...newStructures];
+        });
+      } else {
+        setAffiliatedStructures(structures);
+      }
+
+      setStructuresPage(currentPage);
+      setHasMoreStructures(currentPage < lastPage);
+      console.log("✅ Page mise à jour:", currentPage, "/", lastPage);
+
+    } catch (err: any) {
+      console.error("Erreur de chargement des structures affiliées:", err);
+      setErrorStructures(err.message || t("Impossible de charger les structures affiliées."));
+    } finally {
+      setLoadingStructures(false);
+      setLoadingMoreStructures(false);
+    }
+  }, [user, t]);
+
+
+
+  useEffect(() => {
+    loadIpmRecap();
+    loadAffiliatedStructures();
+  }, [loadIpmRecap, loadAffiliatedStructures]);
+
+  // Fonction pour charger plus de structures
+  const handleLoadMoreStructures = () => {
+    console.log("→ Clic sur Charger plus !");
+    if (!hasMoreStructures || loadingMoreStructures || loadingStructures) return;
+    loadAffiliatedStructures(structuresPage + 1, true);
+  };
+
+
+
+  // --- Fonctions de navigation ou d'action ---
+  const handleMenuPress = () => { Alert.alert(t("Menu"), t("Menu Intérimaire pressé !")); };
+  const handleAvatarPress = () => { router.push('/(app)/profile-details'); };
+  const handleGoToHrFile = () => { router.push('/(app)/(interimaire)/hr_file'); }; // Chemin absolu
+  const handleGoToIpmFile = () => { router.push('/(app)/(interimaire)/ipm_file'); }; // Chemin absolu
+
+
+  // --- Fonctions de rendu des sections ---
+
+  // Rendu de l'état d'avancement IPM
+  const renderIpmRecap = () => {
+    // Calculer le total et le pourcentage pour la barre de progression globale
+    const totalConsultations = ipmRecap.reduce((sum, item) => sum + item.consultations, 0);
+    const totalSoins = ipmRecap.reduce((sum, item) => sum + item.soins, 0);
+    const totalMedicaments = ipmRecap.reduce((sum, item) => sum + item.medicaments, 0);
+    const totalProtheses = ipmRecap.reduce((sum, item) => sum + item.protheses, 0);
+    const totalExamens = ipmRecap.reduce((sum, item) => sum + item.examens, 0);
+
+    const overallTotal = totalConsultations + totalSoins + totalMedicaments + totalProtheses + totalExamens;
+    const overallCovered = ipmRecap.reduce((sum, item) => sum + item.remboursement, 0);
+    const completionPercentage = overallTotal > 0 ? (overallCovered / overallTotal) * 100 : 0;
+
+    const getMonthName = (monthNum: number) => {
+      const date = new Date(2000, monthNum - 1, 1); // Mois est 0-indexed
+      return date.toLocaleString(t('fr-FR'), { month: 'long' }); // Utilisez la langue de l'app
+    };
+
+    return (
+      <View style={[styles.sectionCard, { backgroundColor: colors.cardBackground }]}>
+        {/* Header avec design épuré */}
+        <View style={styles.sectionHeaderInner}>
+          <View style={[styles.iconContainer, { backgroundColor: colors.primary + '15' }]}>
+            <Ionicons name="stats-chart-outline" size={18} color={colors.primary} />
           </View>
-        )}
-        <Image
-          source={{ uri: 'https://globalbusiness-gbg.com/storage/images-actualite/' + item.fr_image }}
-          style={[
-            styles.image,
-            { opacity: isImageLoaded ? 1 : 0 }]}
-          onLoad={() => setIsImageLoaded(true)}
-          onError={() => {
-            setImageError(true);
-            setIsImageLoaded(false);
-          }}
-          onLoadEnd={() => setIsImageLoaded(true)}
-          contentFit="cover"
-          cachePolicy="memory"
-          transition={1000}
-        />
-        {item.type_mag?.fr_libelle && (
-          <View style={styles.categoryTag}>
-            <Text style={styles.categoryText}>{item.type_mag.fr_libelle}</Text>
-          </View>
-        )}
-      </View>
-
-      <View style={styles.content}>
-        <Text style={styles.headline} numberOfLines={2}>{item.fr_titre_mag || item.en_titre_mag || 'Titre actualité'}</Text>
-        <Text style={styles.description} numberOfLines={3}>
-          {decode((item.apercu || item.fr_description || 'Contenu actualité...').replace(/<[^>]+>/g, ''))}
-        </Text>
-        <View style={styles.footer}>
-          {/* Colonne gauche */}
-          <View style={styles.footerLeft}>
-            <View style={styles.meta}>
-              <Text style={styles.author}>GBG</Text>
-              <Text style={styles.dot}>·</Text>
-              <Text>{formatDate(new Date(item.created_at))}</Text>
-            </View>
-            <View style={styles.readTime}>
-              <Feather name="clock" size={14} style={{ marginRight: 4 }} />
-              <Text>5mn</Text>
-            </View>
-          </View>
-
-          {/* Colonne droite */}
-          <View style={styles.footerRight}>
-            <TouchableOpacity onPress={handleShare} style={styles.iconButton}>
-              <Feather name="share-2" size={18} />
-            </TouchableOpacity>
-
-            <TouchableOpacity onPress={handleBookmark} style={styles.iconButton}>
-              <Feather
-                name="bookmark"
-                size={18}
-                color={isBookmarked ? "#2563eb" : "#000"}
-              />
-            </TouchableOpacity>
-          </View>
+          <Text style={[styles.sectionTitleInner, { color: colors.textPrimary }]}>
+            {t('Votre Recap IPM')}
+          </Text>
         </View>
 
+        {loadingIpmRecap ? (
+          <View style={styles.loadingContainer}>
+            <View style={[styles.loadingIndicator, { backgroundColor: colors.primary + '10' }]}>
+              <ActivityIndicator size="small" color={colors.secondary} />
+            </View>
+            <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
+              {t('Chargement du récap IPM...')}
+            </Text>
+          </View>
+        ) : errorIpmRecap ? (
+          <View style={[styles.errorContainer, { backgroundColor: colors.error + '08' }]}>
+            <View style={[styles.errorIconContainer, { backgroundColor: colors.error + '15' }]}>
+              <Ionicons name="alert-circle-outline" size={18} color={colors.error} />
+            </View>
+            <Text style={[styles.errorText, { color: colors.error }]}>{errorIpmRecap}</Text>
+          </View>
+        ) : ipmRecap.length === 0 ? (
+          <View style={styles.emptyStateContent}>
+            <View style={[styles.emptyIconContainer, { backgroundColor: colors.textSecondary + '10' }]}>
+              <Ionicons name="bar-chart-outline" size={28} color={colors.textSecondary} />
+            </View>
+            <Text style={[styles.emptyTitleContent, { color: colors.textPrimary }]}>
+              {t('Aucun récapitulatif IPM')}
+            </Text>
+            <Text style={[styles.emptyTextContent, { color: colors.textSecondary }]}>
+              {t('Les données d\'avancement IPM s\'afficheront ici.')}
+            </Text>
+          </View>
+        ) : (
+          <>
+            {/* Barre de progression modernisée */}
+            <View style={styles.progressBarContainer}>
+              <View style={styles.progressHeader}>
+                <Text style={[styles.progressBarLabel, { color: colors.textPrimary }]}>
+                  {t('Couverture Générale')}
+                </Text>
+                <View style={[styles.percentageBadge, { backgroundColor: colors.success + '15' }]}>
+                  <Text style={[styles.percentageText, { color: colors.success }]}>
+                    {completionPercentage.toFixed(1)}%
+                  </Text>
+                </View>
+              </View>
+              <View style={[styles.progressBarBackground, { backgroundColor: colors.border }]}>
+                <View style={[
+                  styles.progressBarFill,
+                  {
+                    width: `${completionPercentage}%`,
+                    backgroundColor: colors.success
+                  }
+                ]} />
+              </View>
+            </View>
+
+            {/* Liste des récaps avec design cards */}
+            <FlatList
+              data={ipmRecap}
+              keyExtractor={item => item.id.toString()}
+              scrollEnabled={false}
+              showsVerticalScrollIndicator={false}
+              renderItem={({ item, index }) => (
+                <View style={[
+                  styles.ipmRecapItem,
+                  {
+                    backgroundColor: colors.background,
+                    marginBottom: index === ipmRecap.length - 1 ? 0 : 12
+                  }
+                ]}>
+                  <View style={styles.itemHeader}>
+                    <View style={[styles.monthBadge, { backgroundColor: colors.primary + '10' }]}>
+                      <Text style={[styles.ipmRecapMonth, { color: colors.primary }]}>
+                        {getMonthName(item.mois)} {item.annee}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.ipmRecapDetails}>
+                    <View style={styles.detailRow}>
+                      <View style={styles.detailItem}>
+                        <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
+                          {t('Consultations')}
+                        </Text>
+                        <Text style={[styles.detailValue, { color: colors.textPrimary }]}>
+                          {item.consultations} fcfa
+                        </Text>
+                      </View>
+                      <View style={styles.detailItem}>
+                        <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
+                          {t('Soins')}
+                        </Text>
+                        <Text style={[styles.detailValue, { color: colors.textPrimary }]}>
+                          {item.soins} fcfa
+                        </Text>
+                      </View>
+                      <View style={styles.detailItem}>
+                        <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
+                          {t('Médicaments')}
+                        </Text>
+                        <Text style={[styles.detailValue, { color: colors.textPrimary }]}>
+                          {item.medicaments} fcfa
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.detailRow}>
+                      <View style={styles.detailItem}>
+                        <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
+                          {t('Prothèses')}
+                        </Text>
+                        <Text style={[styles.detailValue, { color: colors.textPrimary }]}>
+                          {item.protheses} fcfa
+                        </Text>
+                      </View>
+                      <View style={styles.detailItem}>
+                        <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
+                          {t('Examens')}
+                        </Text>
+                        <Text style={[styles.detailValue, { color: colors.textPrimary }]}>
+                          {item.examens} fcfa
+                        </Text>
+                      </View>
+                      <View style={styles.detailItem}>
+                        <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
+                          {t('Remboursement')}
+                        </Text>
+                        <Text style={[styles.detailValue, { color: colors.textPrimary }]}>
+                          {item.remboursement} fcfa
+                        </Text>
+                        <View style={styles.detailItem}>
+                          <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
+                            {t('Retenu')}
+                          </Text>
+                          <Text style={[styles.detailValue, { color: colors.textPrimary }]}>
+                            {item.retenu} fcfa
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  </View>
+                </View>
+              )}
+            />
+          </>
+        )}
       </View>
 
-    </TouchableOpacity>
-  );
+    );
+  };
 
+  // Rendu des structures affiliées
+  const renderAffiliatedStructures = () => {
+    return (
+      <View style={[styles.sectionCard, { backgroundColor: colors.cardBackground }]}>
+        <View style={styles.sectionHeaderInner}>
+          <View style={[styles.iconContainer, { backgroundColor: colors.primary + '15' }]}>
+            <Ionicons name="business-outline" size={20} color={colors.primary} />
+          </View>
+          <Text style={[styles.sectionTitleInner, { color: colors.textPrimary }]}>
+            {t('Structures Affiliées')}
+          </Text>
+        </View>
+
+        {loadingStructures && affiliatedStructures.length === 0 ? (
+          <View style={styles.loadingContainer}>
+            <View style={[styles.loadingIndicator, { backgroundColor: colors.primary + '10' }]}>
+              <ActivityIndicator size="small" color={colors.secondary} />
+            </View>
+            <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
+              {t('Chargement des structures...')}
+            </Text>
+          </View>
+        ) : errorStructures ? (
+          <View style={[styles.errorContainer, { backgroundColor: colors.error + '10' }]}>
+            <Ionicons name="alert-circle-outline" size={20} color={colors.error} />
+            <Text style={[styles.errorText, { color: colors.error }]}>{errorStructures}</Text>
+          </View>
+        ) : affiliatedStructures.length === 0 ? (
+          <View style={styles.emptyStateContent}>
+            <Ionicons name="home-outline" size={48} color={colors.textSecondary} />
+            <Text style={[styles.emptyTitleContent, { color: colors.textPrimary }]}>
+              {t('Aucune structure affiliée')}
+            </Text>
+            <Text style={[styles.emptyTextContent, { color: colors.textSecondary }]}>
+              {t('Aucune structure affiliée disponible pour le moment.')}
+            </Text>
+          </View>
+        ) : (
+          <>
+            <FlatList
+              data={affiliatedStructures}
+              keyExtractor={(item, index) => `structure-${item.id || index}`}
+              scrollEnabled={false} // ✅ Pas de scroll, car ScrollView parent
+              renderItem={({ item }) => (
+                <View style={[styles.structureItem, { borderBottomColor: colors.border }]}>
+                  <Text style={[styles.structureName, { color: colors.textPrimary }]}>
+                    {item.name}
+                  </Text>
+                  <Text style={[styles.structureDetail, { color: colors.textSecondary }]}>
+                    {t('Adresse')}: {item.adresse}, {item.region}
+                  </Text>
+                  <Text style={[styles.structureDetail, { color: colors.textSecondary }]}>
+                    {t('Téléphone')}: {item.tel}
+                  </Text>
+                  {item.PersonneRessource && (
+                    <Text style={[styles.structureDetail, { color: colors.textSecondary }]}>
+                      {t('Personne Ressource')}: {item.PersonneRessource}
+                    </Text>
+                  )}
+                </View>
+              )}
+            />
+
+            {/* Footer manuel au lieu de onEndReached */}
+            {hasMoreStructures && (
+              <View style={{ marginTop: 10 }}>
+                {loadingMoreStructures ? (
+                  <ActivityIndicator size="small" color={colors.secondary} />
+                ) : (
+                  <TouchableOpacity onPress={handleLoadMoreStructures} style={styles.loadMoreButton}>
+                    <Text style={[styles.loadMoreButtonText, { color: colors.secondary }]}>
+                      {t('voir plus de structures')}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+          </>
+        )}
+      </View>
+    );
+  };
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
@@ -294,111 +459,70 @@ export default function InterimDashboardScreen() {
       />
       <ScrollView contentContainerStyle={styles.scrollContent}>
 
-        {user?.is_contract_active === false ? ( // NOUVEAU : Si contrat inactif
-          <View style={[styles.emptyState, { backgroundColor: colors.cardBackground }]}>
+        {user?.is_contract_active === false ? ( // Si contrat inactif
+          <View style={[styles.emptyStateFull, { backgroundColor: colors.cardBackground }]}>
             <Ionicons name="alert-circle-outline" size={48} color={colors.error} />
-            <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>{t('Accès restreint')}</Text>
-            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+            <Text style={[styles.emptyTitleFull, { color: colors.textPrimary }]}>{t('Accès restreint')}</Text>
+            <Text style={[styles.emptyTextFull, { color: colors.textSecondary }]}>
               {t('Votre contrat intérimaire est terminé ou inactif. Vous n\'avez plus accès à cet espace.')}
             </Text>
-            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+            <Text style={[styles.emptyTextFull, { color: colors.textSecondary }]}>
               {t('Veuillez contacter l\'administration pour plus d\'informations.')}
             </Text>
           </View>
         ) : (
           <>
+            {/* Section de Bienvenue et accès rapide */}
             <View style={styles.welcomeContainer}>
               <LinearGradient
                 colors={['#1c6003', '#13af3f']}
                 style={styles.welcomeGradient}
               >
                 <Text style={styles.welcomeText}>
-                  {t("Bonjour")}, {user?.name || t("Intérimaire")}! ! 👋
+                  {t("Bonjour")}, {user?.name || t("Intérimaire")}! 👋
                 </Text>
                 <Text style={styles.welcomeSubtext}>
-                  Bienvenue sur l'app Pro Recrute de <Text style={{ fontWeight: "bold" }}>GBG</Text>, ici vous pouvez gérer vos informations et accéder à vos dossiers RH et IPM.
+                  {t("Bienvenue sur l'app Pro Recrute de")}{" "}
+                  <Text style={{ fontWeight: "bold" }}>GBG</Text>,{" "}
+                  {t("ici vous pouvez gérer vos informations et accéder à vos dossiers RH et IPM.")}
                 </Text>
               </LinearGradient>
             </View>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
-              <View
+
+            <View style={styles.quickAccessContainer}>
+              <TouchableOpacity
                 style={[
-                  styles.card,
-                  {
-                    backgroundColor: colors.cardBackground,
-                    width: '48%',
-                    marginBottom: 20,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  },
+                  styles.quickAccessCard,
+                  { backgroundColor: colors.cardBackground },
                 ]}
-                onTouchEnd={() => router.push('/(app)/(interimaire)/hr_file')}
+                onPress={handleGoToHrFile}
               >
-                <FontAwesome name="folder" size={40} color={colors.secondary} style={{ marginBottom: 10 }} />
-                <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
+                <Ionicons name="folder-outline" size={30} color={colors.primary} />
+                <Text style={[styles.quickAccessText, { color: colors.textPrimary }]}>
                   {t("Dossier RH")}
                 </Text>
-                <Text style={[{ fontSize: 14, color: colors.textSecondary, textAlign: 'center' }]}>
-                  {t("Gérez vos documents RH.")}
-                </Text>
-              </View>
-              <View
+              </TouchableOpacity>
+              <TouchableOpacity
                 style={[
-                  styles.card,
-                  {
-                    backgroundColor: colors.cardBackground,
-                    width: '48%',
-                    marginBottom: 20,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  },
+                  styles.quickAccessCard,
+                  { backgroundColor: colors.cardBackground },
                 ]}
-                onTouchEnd={() => router.push('/(app)/(interimaire)/ipm_file')}
+                onPress={handleGoToIpmFile}
               >
-                <FontAwesome name="medkit" size={40} color={colors.secondary} style={{ marginBottom: 10 }} />
-                <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
+                <Ionicons name="medkit-outline" size={30} color={colors.primary} />
+                <Text style={[styles.quickAccessText, { color: colors.textPrimary }]}>
                   {t("Dossier IPM")}
                 </Text>
-                <Text style={[{ fontSize: 14, color: colors.textSecondary, textAlign: 'center' }]}>
-                  {t("Accédez à vos informations IPM.")}
-                </Text>
-              </View>
+              </TouchableOpacity>
             </View>
-            {/* Section Dernières Actualités */}
-            <View style={styles.sectionContainer}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Dernières Actualités</Text>
-                <TouchableOpacity style={styles.viewAllButton} onPress={() => router.push('/(app)/actualites')}>
-                  <Text style={styles.viewAllText}>Voir tout</Text>
-                </TouchableOpacity>
-              </View>
 
-              {loadingNews ? ( // NOUVEAU: Ajout de l'état de chargement pour les actualités
-                <View style={styles.loadingContainer}>
-                  <ActivityIndicator size="large" color="#0f8e35" />
-                  <Text style={styles.loadingText}>Chargement des actualités...</Text>
-                </View>
-              ) : errorNews ? ( // NOUVEAU: Ajout de l'état d'erreur pour les actualités
-                <View style={styles.errorContainer}>
-                  <Text style={styles.errorIcon}>⚠️</Text>
-                  <Text style={styles.errorText}>{errorNews}</Text>
-                </View>
-              ) : newsData.length > 0 ? ( // NOUVEAU: Utilisation de newsData
-                <AutoSlider
-                  data={newsData}
-                  renderItem={renderNews}
-                  onPress={handlePressNews}
-                  autoScrollInterval={6000}
-                />
-              ) : (
-                <View style={styles.emptyStateContainer}>
-                  <Text style={styles.emptyStateIcon}>📰</Text>
-                  <Text style={styles.emptyStateText}>
-                    Aucune actualité disponible pour le moment.
-                  </Text>
-                </View>
-              )}
-            </View>
+            {/* Section Avancement IPM par mois */}
+            {renderIpmRecap()}
+
+            {/* Section Structures Affiliées */}
+            {renderAffiliatedStructures()}
+            {/* Espacement pour le bas de l'écran */}
+            <View style={{ height: 60 }} />
           </>
         )}
       </ScrollView>
@@ -411,17 +535,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    padding: 20,
-  },
-  card: {
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 3,
+    padding: 16,
+    paddingBottom: 20,
   },
   welcomeContainer: {
     marginBottom: 20,
@@ -433,266 +548,143 @@ const styles = StyleSheet.create({
     borderRadius: 16,
   },
   welcomeText: {
-    color: '#FFFFFF',
     fontSize: 22,
     fontWeight: 'bold',
     marginBottom: 8,
-  },
-  subText: {
-    fontSize: 16,
     color: '#FFFFFF',
-  },
-  // Sections
-  sectionContainer: {
-    marginTop: 8,
-    marginBottom: 20,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    marginBottom: 15,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#1F2937",
   },
   welcomeSubtext: {
-    fontSize: 16,
+    fontSize: 14,
+    lineHeight: 20,
     color: '#FFFFFF',
-    marginTop: 4,
   },
-  viewAllButton: {
-    paddingVertical: 6,
-    paddingHorizontal: 14,
-    backgroundColor: '#e6f5ea',
-    borderRadius: 8,
+  quickAccessContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 20,
+    gap: 12,
   },
-  viewAllText: {
-    color: '#0f8e35',
-    fontWeight: 'bold',
-    fontSize: 14,
-  },
-
-
-  // Cartes d'actualités
-  // newsCard: {
-  //   width: width * 0.9,
-  //   height: 300,
-  //   marginLeft: 20,
-  //   borderRadius: 16,
-  //   shadowColor: "#000",
-  //   shadowOffset: { width: 0, height: 8 },
-  //   shadowOpacity: 0.15,
-  //   shadowRadius: 12,
-  //   elevation: 8,
-  // },
-  newsGradient: {
+  quickAccessCard: {
     flex: 1,
-    padding: 20,
     borderRadius: 16,
-    justifyContent: 'space-between',
-    overflow: 'hidden',
-    backgroundColor: '#fff', // fallback au cas où
+    padding: 15,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
-  newsHeader: {
-    alignItems: 'flex-end',
-  },
-  newsIconLarge: {
-    fontSize: 32,
-  },
-  newsContent: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  newsTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#FFFFFF",
-    marginBottom: 8,
-  },
-  newsDescription: {
+  quickAccessText: {
+    marginTop: 8,
     fontSize: 14,
-    color: "#F3F4F6",
-    opacity: 0.9,
+    fontWeight: '600',
+    textAlign: 'center',
   },
-  newsFooter: {
-    alignItems: 'flex-end',
-  },
-  readMoreText: {
-    fontSize: 14,
-    color: "#FFFFFF",
-    fontWeight: "600",
+  sectionCard: {
+    borderRadius: 20,
+    padding: 15,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 3,
   },
 
-  newsImage: {
-    width: '100%',
-    height: '60%', // Image prend 60% de la hauteur de la carte
+  sectionHeaderInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
   },
-  newsContentOverlay: { // NOUVEAU: Overlay pour le texte
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: 'rgba(0,0,0,0.6)', // Fond semi-transparent pour le texte
-    padding: 10,
-    borderBottomLeftRadius: 16, // Coins arrondis pour l'overlay
-    borderBottomRightRadius: 16,
+
+  iconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
   },
-  // États de chargement et d'erreur
+
+  sectionTitleInner: {
+    fontSize: 18,
+    fontWeight: '700',
+    letterSpacing: -0.2,
+  },
+
   loadingContainer: {
     alignItems: 'center',
-    paddingVertical: 40,
+    justifyContent: 'center',
+    paddingVertical: 32,
   },
-  loadingText: {
-    fontSize: 16,
-    color: "#6B7280",
-    marginTop: 10,
-  },
-  errorContainer: {
+
+  loadingIndicator: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
-    paddingVertical: 40,
-  },
-  errorIcon: {
-    fontSize: 32,
-    marginBottom: 10,
-  },
-  errorText: {
-    color: "#EF4444",
-    textAlign: "center",
-    fontSize: 16,
-  },
-  emptyStateContainer: {
-    alignItems: 'center',
-    paddingVertical: 40,
-  },
-  emptyStateIcon: {
-    fontSize: 48,
-    marginBottom: 15,
-  },
-  emptyStateText: {
-    fontSize: 16,
-    color: "#6B7280",
-    textAlign: "center",
-  },
-  cardNews: {
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    overflow: "hidden",
-    margin: 8,
-    width: width * 0.9,
-    height: 398,
-    marginLeft: 4,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  imageContainer: {
-    position: "relative",
-    width: "100%",
-    height: 200,
-    overflow: "hidden",
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    backgroundColor: "#e5e7eb", // fallback loading
-  },
-  image: {
-    ...StyleSheet.absoluteFillObject,
-    flex: 1,
-    width: "100%",
-    height: "100%",
-    position: "absolute",
-    top: 0,
-    left: 0,
-  },
-  imagePlaceholder: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  categoryTag: {
-    position: "absolute",
-    top: 10,
-    left: 10,
-    backgroundColor: "#dbffe5",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  categoryText: {
-    color: "#1c6003",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  content: {
-    padding: 16,
-  },
-  headline: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#111827",
-    marginBottom: 8,
-  },
-  description: {
-    fontSize: 14,
-    color: "#4b5563",
+    justifyContent: 'center',
     marginBottom: 12,
   },
-  footer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-end",
-    marginTop: 8,
-    flexWrap: 'wrap',
+
+  loadingText: {
+    fontSize: 15,
+    fontWeight: '500',
   },
 
-  footerLeft: {
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+  },
+
+  errorIconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+
+  errorText: {
     flex: 1,
-    paddingRight: 10,
-  },
-
-  meta: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 4,
-    flexWrap: "wrap",
-  },
-
-  author: {
-    fontWeight: "600",
     fontSize: 14,
-    color: "#1F2937",
+    fontWeight: '500',
   },
 
-  dot: {
-    marginHorizontal: 4,
-    fontSize: 14,
-    color: "#6B7280",
+  emptyStateContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 32,
   },
 
-  readTime: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 2,
-    fontSize: 13,
-    color: "#6B7280",
-  },
-
-  footerRight: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-
-  iconButton: {
-    padding: 6,
+  emptyIconContainer: {
+    width: 64,
+    height: 64,
     borderRadius: 20,
-    marginLeft: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
   },
-    emptyState: { // Styles pour le message d'accès restreint
+
+  emptyTitleContent: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+
+  emptyTextContent: {
+    fontSize: 14,
+    textAlign: 'center',
+    lineHeight: 20,
+    opacity: 0.8,
+  },
+  emptyStateFull: {
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 40,
@@ -700,20 +692,138 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    shadowOpacity: 0.05, shadowRadius: 8, elevation: 2,
   },
-  emptyTitle: {
+  emptyTitleFull: {
     fontSize: 20,
     fontWeight: '700',
     marginBottom: 10,
     textAlign: 'center',
   },
-  emptyText: {
+  emptyTextFull: {
     fontSize: 16,
     textAlign: 'center',
     lineHeight: 24,
     marginBottom: 10,
+  },
+  // Styles de la barre de progression
+  progressBarContainer: {
+    marginBottom: 24,
+  },
+
+  progressHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+
+  progressBarLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+
+  percentageBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+
+  percentageText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+
+  progressBarBackground: {
+    height: 8,
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+
+  progressBarFill: {
+    height: '100%',
+    borderRadius: 4,
+  },
+
+  // Styles des items IPM
+  ipmRecapItem: {
+    borderRadius: 16,
+    padding: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 1,
+  },
+
+  itemHeader: {
+    marginBottom: 16,
+  },
+
+  monthBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+
+  ipmRecapMonth: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+
+  ipmRecapDetails: {
+    gap: 12,
+  },
+
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+
+  detailItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+
+  detailLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+
+  detailValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  // Styles spécifiques aux structures
+  structureItem: {
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    marginBottom: 5,
+  },
+  structureName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  structureDetail: {
+    fontSize: 13,
+  },
+  loadMoreButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 15,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#0f8e35',
+    marginTop: 15,
+    alignSelf: 'center', // Centrer le bouton
+  },
+  loadMoreButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#0f8e35',
   },
 });

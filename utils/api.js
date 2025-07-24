@@ -6,7 +6,7 @@ import * as Sharing from 'expo-sharing';
 import { Alert, TouchableOpacity, Text } from 'react-native';
 
 // **IMPORTANT: Mettez à jour cette URL avec l'adresse IP et le port du  backend Laravel**
-const API_URL = 'http://192.168.1.144:8000/api';
+const API_URL = 'http://192.168.1.144:8000/api'  || process.env.EXPO_PUBLIC_API_URL ; // Fallback pour le développement
 
 const api = axios.create({
   baseURL: API_URL,
@@ -34,16 +34,19 @@ api.interceptors.request.use(
 
 api.interceptors.response.use(
   (response) => {
-    console.log('Réponse reçue de:', response.config.url, 'Statut:', response.status, 'Données:', response.data); // Débogage
+    // console.log('Réponse reçue de:', response.config.url, 'Statut:', response.status, 'Données:', response.data);
     return response;
   },
   async (error) => {
-    console.error('Erreur API:', error.response?.status, error.response?.data || error.message); // Débogage
-    const originalRequest = error.config;
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true;
-      console.warn("Jeton d'authentification expiré ou invalide. Utilisateur déconnecté.");
-      await AsyncStorage.removeItem('user_token');
+    // Si c'est une erreur 401 (Non authentifié) et que la requête n'a pas déjà été retentée
+    if (error.response?.status === 401 && !error.config._retry) {
+      error.config._retry = true; // Marque la requête comme retentée pour éviter les boucles infinies
+      console.warn("API Interceptor: Jeton d'authentification expiré ou invalide (401).");
+      await AsyncStorage.removeItem('user_token'); // Nettoie le token invalide localement
+      // L'AuthProvider devrait gérer la redirection vers l'écran de connexion
+    } else {
+      // Loggue les autres erreurs API comme des erreurs (y compris les 500)
+      console.error('Erreur API:', error.response?.status, error.response?.data || error.message);
     }
     return Promise.reject(error);
   }
@@ -52,28 +55,24 @@ api.interceptors.response.use(
 export const loginUser = async (email, password, deviceName) => {
   try {
     const response = await api.post('/login', { email, password, device_name: deviceName });
-    const { token, user } = response.data;
-    await AsyncStorage.setItem('user_token', token);
-    return { user, token };
+    return response.data;
   } catch (error) {
-    console.error("Échec de l'appel API loginUser:", error.response?.data || error.message);
-    throw error;
+    throw error; // Laisser AuthProvider gérer l'erreur
   }
 };
 
-export const registerUser = async (name, email, password, passwordConfirmation, role) => {
+export const registerUser = async (name, email, password, passwordConfirmation, role, deviceName) => {
   try {
     const response = await api.post('/register', {
       name: name,
       email: email,
       password: password,
       password_confirmation: passwordConfirmation,
-      role: role || 'user', // Définit le rôle par défaut à 'user' si non spécifié
+      role: role || 'user',
+      device_name: deviceName,
     });
-    console.log("Appel API registerUser réussi:", response.data);
     return response.data;
   } catch (error) {
-    console.error("Échec de l'appel API registerUser:", error.response?.data || error.message);
     throw error;
   }
 };
@@ -83,23 +82,70 @@ export const fetchUserProfile = async () => {
     const response = await api.get('/user');
     return response.data;
   } catch (error) {
-    console.error("Échec de l'appel API fetchUserProfile:", error.response?.data || error.message);
-    throw error;
+    throw error; // Laisser AuthProvider gérer l'erreur (y compris le 401)
   }
 };
 
 export const logoutUser = async () => {
   try {
     const response = await api.post('/logout');
-    console.log("Appel API logoutUser réussi:", response.data);
-    await AsyncStorage.removeItem('user_token');
     return response.data;
   } catch (error) {
-    console.error("Échec de l'appel API logoutUser:", error.response?.data || error.message);
-    await AsyncStorage.removeItem('user_token');
     throw error;
   }
 };
+
+// export const loginUser = async (email, password, deviceName) => {
+//   try {
+//     const response = await api.post('/login', { email, password, device_name: deviceName });
+//     const { token, user } = response.data;
+//     await AsyncStorage.setItem('user_token', token);
+//     return { user, token };
+//   } catch (error) {
+//     console.error("Échec de l'appel API loginUser:", error.response?.data || error.message);
+//     throw error;
+//   }
+// };
+
+// export const registerUser = async (name, email, password, passwordConfirmation, role) => {
+//   try {
+//     const response = await api.post('/register', {
+//       name: name,
+//       email: email,
+//       password: password,
+//       password_confirmation: passwordConfirmation,
+//       role: role || 'user', // Définit le rôle par défaut à 'user' si non spécifié
+//     });
+//     console.log("Appel API registerUser réussi:", response.data);
+//     return response.data;
+//   } catch (error) {
+//     console.error("Échec de l'appel API registerUser:", error.response?.data || error.message);
+//     throw error;
+//   }
+// };
+
+// export const fetchUserProfile = async () => {
+//   try {
+//     const response = await api.get('/user');
+//     return response.data;
+//   } catch (error) {
+//     console.error("Échec de l'appel API fetchUserProfile:", error.response?.data || error.message);
+//     throw error;
+//   }
+// };
+
+// export const logoutUser = async () => {
+//   try {
+//     const response = await api.post('/logout');
+//     console.log("Appel API logoutUser réussi:", response.data);
+//     await AsyncStorage.removeItem('user_token');
+//     return response.data;
+//   } catch (error) {
+//     console.error("Échec de l'appel API logoutUser:", error.response?.data || error.message);
+//     await AsyncStorage.removeItem('user_token');
+//     throw error;
+//   }
+// };
 
 export const getOffres = async () => {
   try {
@@ -686,4 +732,26 @@ export const verifyOtp = async (email, otpCode, deviceName) => {
     throw error;
   }
 };
+
+export const getIpmRecapByMonth = async () => {
+  try {
+    const response = await api.get('/interim/recap-ipm');
+    return response.data;
+  } catch (error) {
+    console.error("Échec de l'appel API getIpmRecapByMonth:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+export const getAffiliatedStructures = async (page = 1, perPage = 10) => {
+  try {
+    const response = await api.get(`/interim/affiliated-structures?page=${page}&per_page=${perPage}`);
+    return response.data; // 👈 PAS response.data.data
+  } catch (error) {
+    console.error("Échec de l'appel API getAffiliatedStructures:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+
 export default api;

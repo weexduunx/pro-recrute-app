@@ -2,7 +2,7 @@
 
 export const allowedDrawerRoutesByRole: Record<string, string[]> = {
   user: ['home', 'profile-details', 'job_board', 'candidature', 'actualites', 'dashboard', 'settings'],
-  interimaire: ['(interimaire)', 'profile-details','job_board', 'candidature', 'actualites', 'dashboard', 'settings'],
+  interimaire: ['profile-details','(interimaire)', 'job_board', 'candidature', 'actualites',  'settings'],
   admin: ['home', 'profile-details', 'dashboard', 'settings'],
 };
 

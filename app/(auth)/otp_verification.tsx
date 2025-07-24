@@ -122,7 +122,7 @@ export default function OtpVerificationScreen() {
 
             <TouchableOpacity
               style={styles.backButton}
-              onPress={() => router.replace('/(auth)')}
+              onPress={() => router.push('/(auth)')}
               disabled={loading}
             >
               <Text style={[styles.backButtonText, { color: colors.textSecondary }]}>
