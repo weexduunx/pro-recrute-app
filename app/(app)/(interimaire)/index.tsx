@@ -435,9 +435,18 @@ export default function InterimDashboardScreen() {
                   <ActivityIndicator size="small" color={colors.secondary} />
                 ) : (
                   <TouchableOpacity onPress={handleLoadMoreStructures} style={styles.loadMoreButton}>
-                    <Text style={[styles.loadMoreButtonText, { color: colors.secondary }]}>
-                      {t('voir plus de structures')}
-                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <Ionicons
+                        name="eye-outline"
+                        size={18}
+                        color={colors.secondary}
+                        style={{ marginLeft: 8 }}
+                      />
+                      <Text style={[styles.loadMoreButtonText, { color: colors.secondary }]}>
+                        {t(' Plus de structures')}
+                      </Text>
+
+                    </View>
                   </TouchableOpacity>
                 )}
               </View>
