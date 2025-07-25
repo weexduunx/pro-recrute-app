@@ -575,18 +575,80 @@ export const getCertificatInfo = async () => {
 };
 
 // Fonction de téléchargement partagée avec Dossier RH et IPM
+// export const getPdf = async (encryptedId, type) => {
+//   let url = '';
+//   if (type === 'attestation') {
+//     url = `/interim/attestations/${encryptedId}/download`;
+//   } else if (type === 'prise_en_charge') {
+//     url = `/interim/prises-en-charge/${encryptedId}/download`;
+//   } else if (type === 'feuille_de_soins') {
+//     url = `/interim/feuilles-de-soins/${encryptedId}/download`;
+//   } else {
+//     throw new Error("Type de document non supporté.");
+//   }
+
+//   try {
+//     // Requête GET et ID dans l'URL
+//     const response = await api.get(url, {
+//       responseType: 'arraybuffer', // Indispensable pour recevoir des données binaires (le PDF)
+//       headers: {
+//         'Accept': 'application/pdf', // Demander un PDF
+//       },
+//     });
+
+     
+//     const base64Content = arrayBufferToBase64(response.data);
+
+//     const contentDisposition = response.headers['content-disposition'];
+//     let fileName = `attestation_${encryptedContratId}.pdf`;
+//     if (contentDisposition) {
+//       const fileNameMatch = contentDisposition.match(/filename="(.+)"/);
+//       if (fileNameMatch && fileNameMatch[1]) {
+//         fileName = fileNameMatch[1];
+//       }
+//     }
+
+//     const localUri = FileSystem.documentDirectory + fileName;
+
+//     await FileSystem.writeAsStringAsync(localUri, base64Content, {
+//       encoding: FileSystem.EncodingType.Base64,
+//     });
+
+//     console.log(`Attestation PDF téléchargée vers : ${localUri}`);
+
+//     if (await Sharing.isAvailableAsync()) {
+//       await Sharing.shareAsync(localUri);
+//     } else {
+//       Alert.alert("Partage indisponible", "La fonctionnalité de partage n'est pas disponible sur cet appareil.");
+//     }
+
+//     return { message: 'Document téléchargé et partagé.', uri: localUri };
+//   } catch (error) {
+//     console.error("Erreur téléchargement PDF:", error.response?.data || error.message);
+//     Alert.alert("Erreur", error.response?.data?.message || "Le téléchargement du PDF a échoué.");
+//     throw error;
+//   }
+// };
+
+
+// Fonction de téléchargement partagée avec Dossier RH et IPM
 export const getPdf = async (encryptedId, type) => {
   let url = '';
+  let defaultFileName = '';
+  
   if (type === 'attestation') {
     url = `/interim/attestations/${encryptedId}/download`;
+    defaultFileName = `attestation_${encryptedId}.pdf`;
   } else if (type === 'prise_en_charge') {
     url = `/interim/prises-en-charge/${encryptedId}/download`;
+    defaultFileName = `prise_en_charge_${encryptedId}.pdf`;
   } else if (type === 'feuille_de_soins') {
     url = `/interim/feuilles-de-soins/${encryptedId}/download`;
+    defaultFileName = `feuille_de_soins_${encryptedId}.pdf`;
   } else {
     throw new Error("Type de document non supporté.");
   }
-
+ 
   try {
     // Requête GET et ID dans l'URL
     const response = await api.get(url, {
@@ -595,38 +657,62 @@ export const getPdf = async (encryptedId, type) => {
         'Accept': 'application/pdf', // Demander un PDF
       },
     });
-
-     
+           
     const base64Content = arrayBufferToBase64(response.data);
-
+ 
     const contentDisposition = response.headers['content-disposition'];
-    let fileName = `attestation_${encryptedContratId}.pdf`;
+    let fileName = defaultFileName; // Utiliser le nom par défaut basé sur le type
+    
     if (contentDisposition) {
       const fileNameMatch = contentDisposition.match(/filename="(.+)"/);
       if (fileNameMatch && fileNameMatch[1]) {
         fileName = fileNameMatch[1];
       }
     }
-
+ 
     const localUri = FileSystem.documentDirectory + fileName;
-
+ 
     await FileSystem.writeAsStringAsync(localUri, base64Content, {
       encoding: FileSystem.EncodingType.Base64,
     });
-
-    console.log(`Attestation PDF téléchargée vers : ${localUri}`);
-
+ 
+    console.log(`${type} PDF téléchargé vers : ${localUri}`);
+ 
     if (await Sharing.isAvailableAsync()) {
       await Sharing.shareAsync(localUri);
     } else {
       Alert.alert("Partage indisponible", "La fonctionnalité de partage n'est pas disponible sur cet appareil.");
     }
-
+ 
     return { message: 'Document téléchargé et partagé.', uri: localUri };
   } catch (error) {
-    console.error("Erreur téléchargement PDF:", error.response?.data || error.message);
-    Alert.alert("Erreur", error.response?.data?.message || "Le téléchargement du PDF a échoué.");
+    console.error(`Erreur téléchargement PDF ${type}:`, error.response?.data || error.message);
+    
+    // Gestion d'erreur plus spécifique selon le type
+    const errorMessage = getErrorMessage(type, error);
+    Alert.alert("Erreur", errorMessage);
     throw error;
+  }
+};
+
+// Fonction helper pour les messages d'erreur spécifiques
+const getErrorMessage = (type, error) => {
+  const typeLabels = {
+    'attestation': 'attestation',
+    'prise_en_charge': 'prise en charge',
+    'feuille_de_soins': 'feuille de soins'
+  };
+  
+  const docType = typeLabels[type] || 'document';
+  
+  if (error.response?.status === 403) {
+    return `Accès refusé pour télécharger la ${docType}.`;
+  } else if (error.response?.status === 404) {
+    return `${docType.charAt(0).toUpperCase() + docType.slice(1)} non trouvée.`;
+  } else if (error.response?.data?.message) {
+    return error.response.data.message;
+  } else {
+    return `Le téléchargement de la ${docType} a échoué.`;
   }
 };
 
@@ -752,6 +838,7 @@ export const getAffiliatedStructures = async (page = 1, perPage = 10) => {
     throw error;
   }
 };
+
 
 
 export default api;

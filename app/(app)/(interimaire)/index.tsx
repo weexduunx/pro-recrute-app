@@ -66,6 +66,8 @@ export default function InterimDashboardScreen() {
   const [ipmRecap, setIpmRecap] = useState<IpmRecap[]>([]);
   const [loadingIpmRecap, setLoadingIpmRecap] = useState(true);
   const [errorIpmRecap, setErrorIpmRecap] = useState<string | null>(null);
+  const [tauxRetenu, setTauxRetenu] = useState<string | null>(null); // NOUVEAU : État pour le taux de retenue
+  const [tauxRemboursse, setTauxRemboursse] = useState<string | null>(null);
 
   // États pour les structures affiliées
   const [affiliatedStructures, setAffiliatedStructures] = useState<Structure[]>([]);
@@ -95,20 +97,46 @@ export default function InterimDashboardScreen() {
   }, []);
 
   // --- LOGIQUE DE RÉCUPÉRATION DES DONNÉES ---
+  // const loadIpmRecap = useCallback(async () => {
+  //   if (!user) {
+  //     setIpmRecap([]);
+  //     setLoadingIpmRecap(false);
+  //     return;
+  //   }
+  //   setLoadingIpmRecap(true);
+  //   setErrorIpmRecap(null);
+  //   try {
+  //     const data = await getIpmRecapByMonth();
+  //     setIpmRecap(data);
+  //   } catch (err: any) {
+  //     console.error("Erreur de chargement du récap IPM:", err);
+  //     setErrorIpmRecap(err.message || t("Impossible de charger l'état d'avancement IPM."));
+  //   } finally {
+  //     setLoadingIpmRecap(false);
+  //   }
+  // }, [user, t]);
   const loadIpmRecap = useCallback(async () => {
     if (!user) {
       setIpmRecap([]);
+      setTauxRetenu(null); // Nettoyer les taux si pas d'utilisateur
+      setTauxRemboursse(null); // Nettoyer les taux si pas d'utilisateur
       setLoadingIpmRecap(false);
       return;
     }
     setLoadingIpmRecap(true);
     setErrorIpmRecap(null);
     try {
-      const data = await getIpmRecapByMonth();
-      setIpmRecap(data);
+      // L'API getIpmRecapByMonth doit retourner un objet { recap_ipm: [...], taux_retenu: "X%", taux_remboursse: "Y%" }
+      const response = await getIpmRecapByMonth();
+      setIpmRecap(response.recap_ipm || []); // Accéder à la propriété recap_ipm
+      setTauxRetenu(response.taux_retenu || null); // Accéder à la propriété taux_retenu
+      setTauxRemboursse(response.taux_remboursse || null); // Accéder à la propriété taux_remboursse
     } catch (err: any) {
       console.error("Erreur de chargement du récap IPM:", err);
       setErrorIpmRecap(err.message || t("Impossible de charger l'état d'avancement IPM."));
+      setIpmRecap([]);
+      setTauxRetenu(null); // Nettoyer en cas d'erreur
+      setTauxRemboursse(null); // Nettoyer en cas d'erreur
     } finally {
       setLoadingIpmRecap(false);
     }
@@ -163,7 +191,6 @@ export default function InterimDashboardScreen() {
   }, [user, t]);
 
 
-
   useEffect(() => {
     loadIpmRecap();
     loadAffiliatedStructures();
@@ -175,7 +202,6 @@ export default function InterimDashboardScreen() {
     if (!hasMoreStructures || loadingMoreStructures || loadingStructures) return;
     loadAffiliatedStructures(structuresPage + 1, true);
   };
-
 
 
   // --- Fonctions de navigation ou d'action ---
@@ -233,7 +259,7 @@ export default function InterimDashboardScreen() {
             </View>
             <Text style={[styles.errorText, { color: colors.error }]}>{errorIpmRecap}</Text>
           </View>
-        ) : ipmRecap.length === 0 ? (
+        ) : ipmRecap.length === 0 && !tauxRetenu && !tauxRemboursse ? (
           <View style={styles.emptyStateContent}>
             <View style={[styles.emptyIconContainer, { backgroundColor: colors.textSecondary + '10' }]}>
               <Ionicons name="bar-chart-outline" size={28} color={colors.textSecondary} />
@@ -251,7 +277,7 @@ export default function InterimDashboardScreen() {
             <View style={styles.progressBarContainer}>
               <View style={styles.progressHeader}>
                 <Text style={[styles.progressBarLabel, { color: colors.textPrimary }]}>
-                  {t('Couverture Générale')}
+                  {t('Progress Bar')}
                 </Text>
                 <View style={[styles.percentageBadge, { backgroundColor: colors.success + '15' }]}>
                   <Text style={[styles.percentageText, { color: colors.success }]}>
@@ -270,7 +296,13 @@ export default function InterimDashboardScreen() {
               </View>
             </View>
 
-            {/* Liste des récaps avec design cards */}
+            <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
+              {t('Taux de retenue')}: <Text style={[styles.rateValue, { color: colors.textPrimary }]}>{tauxRetenu || t('N/A')}</Text>
+            </Text>
+            <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
+              {t('Taux de remboursement')}: <Text style={[styles.rateValue, { color: colors.textPrimary }]}>{tauxRemboursse || t('N/A')}</Text>
+            </Text>
+            {/* Liste des récaps avec design restructuré */}
             <FlatList
               data={ipmRecap}
               keyExtractor={item => item.id.toString()}
@@ -281,7 +313,7 @@ export default function InterimDashboardScreen() {
                   styles.ipmRecapItem,
                   {
                     backgroundColor: colors.background,
-                    marginBottom: index === ipmRecap.length - 1 ? 0 : 12
+                    marginBottom: index === ipmRecap.length - 1 ? 0 : 16
                   }
                 ]}>
                   <View style={styles.itemHeader}>
@@ -292,67 +324,84 @@ export default function InterimDashboardScreen() {
                     </View>
                   </View>
 
-                  <View style={styles.ipmRecapDetails}>
-                    <View style={styles.detailRow}>
-                      <View style={styles.detailItem}>
-                        <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
-                          {t('Consultations')}
-                        </Text>
-                        <Text style={[styles.detailValue, { color: colors.textPrimary }]}>
-                          {item.consultations} fcfa
-                        </Text>
-                      </View>
-                      <View style={styles.detailItem}>
-                        <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
-                          {t('Soins')}
-                        </Text>
-                        <Text style={[styles.detailValue, { color: colors.textPrimary }]}>
-                          {item.soins} fcfa
-                        </Text>
-                      </View>
-                      <View style={styles.detailItem}>
-                        <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
-                          {t('Médicaments')}
-                        </Text>
-                        <Text style={[styles.detailValue, { color: colors.textPrimary }]}>
-                          {item.medicaments} fcfa
-                        </Text>
-                      </View>
-                    </View>
-
-                    <View style={styles.detailRow}>
-                      <View style={styles.detailItem}>
-                        <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
-                          {t('Prothèses')}
-                        </Text>
-                        <Text style={[styles.detailValue, { color: colors.textPrimary }]}>
-                          {item.protheses} fcfa
-                        </Text>
-                      </View>
-                      <View style={styles.detailItem}>
-                        <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
-                          {t('Examens')}
-                        </Text>
-                        <Text style={[styles.detailValue, { color: colors.textPrimary }]}>
-                          {item.examens} fcfa
-                        </Text>
-                      </View>
-                      <View style={styles.detailItem}>
-                        <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
-                          {t('Remboursement')}
-                        </Text>
-                        <Text style={[styles.detailValue, { color: colors.textPrimary }]}>
-                          {item.remboursement} fcfa
-                        </Text>
-                        <View style={styles.detailItem}>
+                  {/* Section principale regroupée */}
+                  <View style={[styles.mainDetailsContainer, { backgroundColor: colors.cardBackground }]}>
+                    <View style={styles.mainDetailsColumn}>
+                      {Number(item.consultations) > 0 && (
+                        <View style={styles.detailColumnItem}>
                           <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
-                            {t('Retenu')}
+                            {t('Consultations')}
                           </Text>
                           <Text style={[styles.detailValue, { color: colors.textPrimary }]}>
-                            {item.retenu} fcfa
+                            {item.consultations} fcfa
                           </Text>
                         </View>
-                      </View>
+                      )}
+
+                      {Number(item.soins) > 0 && (
+                        <View style={styles.detailColumnItem}>
+                          <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
+                            {t('Soins')}
+                          </Text>
+                          <Text style={[styles.detailValue, { color: colors.textPrimary }]}>
+                            {item.soins} fcfa
+                          </Text>
+                        </View>
+                      )}
+
+                      {Number(item.medicaments) > 0 && (
+                        <View style={styles.detailColumnItem}>
+                          <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
+                            {t('Médicaments')}
+                          </Text>
+                          <Text style={[styles.detailValue, { color: colors.textPrimary }]}>
+                            {item.medicaments} fcfa
+                          </Text>
+                        </View>
+                      )}
+
+                      {Number(item.protheses) > 0 && (
+                        <View style={styles.detailColumnItem}>
+                          <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
+                            {t('Prothèses')}
+                          </Text>
+                          <Text style={[styles.detailValue, { color: colors.textPrimary }]}>
+                            {item.protheses} fcfa
+                          </Text>
+                        </View>
+                      )}
+
+                      {Number(item.examens) > 0 && (
+                        <View style={styles.detailColumnItem}>
+                          <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
+                            {t('Examens')}
+                          </Text>
+                          <Text style={[styles.detailValue, { color: colors.textPrimary }]}>
+                            {item.examens} fcfa
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+
+                  {/* Section des montants finaux */}
+                  <View style={styles.finalAmountsContainer}>
+                    <View style={[styles.amountCard, { backgroundColor: colors.success + '10' }]}>
+                      <Text style={[styles.amountLabel, { color: colors.textSecondary }]}>
+                        {t('Remboursement')}
+                      </Text>
+                      <Text style={[styles.amountValue, { color: colors.success }]}>
+                        {item.remboursement} fcfa
+                      </Text>
+                    </View>
+
+                    <View style={[styles.amountCard, { backgroundColor: colors.error + '10' }]}>
+                      <Text style={[styles.amountLabel, { color: colors.textSecondary }]}>
+                        {t('Retenu')}
+                      </Text>
+                      <Text style={[styles.amountValue, { color: colors.error }]}>
+                        {item.retenu} fcfa
+                      </Text>
                     </View>
                   </View>
                 </View>
@@ -407,7 +456,7 @@ export default function InterimDashboardScreen() {
             <FlatList
               data={affiliatedStructures}
               keyExtractor={(item, index) => `structure-${item.id || index}`}
-              scrollEnabled={false} // ✅ Pas de scroll, car ScrollView parent
+              scrollEnabled={false}
               renderItem={({ item }) => (
                 <View style={[styles.structureItem, { borderBottomColor: colors.border }]}>
                   <Text style={[styles.structureName, { color: colors.textPrimary }]}>
@@ -719,6 +768,33 @@ const styles = StyleSheet.create({
   progressBarContainer: {
     marginBottom: 24,
   },
+  // Styles existants mis à jour
+  ipmRecapItem: {
+    borderRadius: 16,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 1,
+  },
+
+  progressBarLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+
+  detailLabel: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#6B7280',
+  },
+
+  detailValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1F2937',
+  },
 
   progressHeader: {
     flexDirection: 'row',
@@ -727,10 +803,10 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
 
-  progressBarLabel: {
-    fontSize: 15,
-    fontWeight: '600',
-  },
+  // progressBarLabel: {
+  //   fontSize: 15,
+  //   fontWeight: '600',
+  // },
 
   percentageBadge: {
     paddingHorizontal: 10,
@@ -755,15 +831,15 @@ const styles = StyleSheet.create({
   },
 
   // Styles des items IPM
-  ipmRecapItem: {
-    borderRadius: 16,
-    padding: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 1,
-  },
+  // ipmRecapItem: {
+  //   borderRadius: 16,
+  //   padding: 12,
+  //   shadowColor: '#000',
+  //   shadowOffset: { width: 0, height: 2 },
+  //   shadowOpacity: 0.04,
+  //   shadowRadius: 8,
+  //   elevation: 1,
+  // },
 
   itemHeader: {
     marginBottom: 16,
@@ -795,18 +871,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 
-  detailLabel: {
-    fontSize: 12,
-    fontWeight: '500',
-    marginBottom: 4,
-    textAlign: 'center',
-  },
+  // detailLabel: {
+  //   fontSize: 12,
+  //   fontWeight: '500',
+  //   marginBottom: 4,
+  //   textAlign: 'center',
+  // },
 
-  detailValue: {
-    fontSize: 16,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
+  // detailValue: {
+  //   fontSize: 16,
+  //   fontWeight: '700',
+  //   textAlign: 'center',
+  // },
   // Styles spécifiques aux structures
   structureItem: {
     paddingVertical: 10,
@@ -835,4 +911,82 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#0f8e35',
   },
+
+  mainDetailsContainer: {
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+
+  sectionLabel: {
+    fontSize: 13,
+    fontWeight: '500',
+    marginBottom: 10,
+    textAlign: 'center',
+    fontStyle: 'italic',
+    lineHeight: 18,
+  },
+
+  mainDetailsColumn: {
+    flexDirection: 'column',
+    gap: 12,
+  },
+
+  detailColumnItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#E5E7EB',
+  },
+
+  finalAmountsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+
+  amountCard: {
+    flex: 1,
+    borderRadius: 12,
+    padding: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+
+  amountLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+
+  amountValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  // NOUVEAU : Styles pour l'affichage des taux
+  ratesContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 15,
+    paddingTop: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderColor: '#E0E0E0',
+  },
+  rateLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  rateValue: {
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+
 });

@@ -40,7 +40,6 @@ interface Loan {
   details?: LoanDetail[];
 }
 
-
 // Interface pour un détail d'échéancier (EchelonnemenDetails)
 interface LoanDetail {
   id: number;
@@ -75,9 +74,9 @@ interface PriseEnChargeRequest {
 interface FeuilleDeSoinsRequest {
   id: number;
   type: string;
-  date_soins: string;
-  montant_total: number;
+  created_at: string;
   user_id: number;
+  encrypted_id: number;
   famille_id?: number;
   statut: number; // 0=en attente, 1=validée, 2=remboursée
   statut_label: string; // Via accesseur
@@ -325,11 +324,11 @@ export default function IpmFileScreen() {
       <View style={styles.itemContent}>
         <Text style={[styles.itemTitle, { color: colors.textPrimary }]}>{item.type}</Text>
         <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>
-          {t("Date des soins:")} {new Date(item.date_soins).toLocaleDateString()}
+          {t("Feuille générée le:")} {new Date(item.created_at).toLocaleDateString()}
         </Text>
-        <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>
+        {/* <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>
           {t("Montant:")} {item.montant_total} FCFA
-        </Text>
+        </Text> */}
         {item.famille ? (
           <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>
             {t("Bénéficiaire:")} {item.famille.prenom} {item.famille.nom} ({item.famille.lien})
@@ -342,9 +341,10 @@ export default function IpmFileScreen() {
         </Text>
       </View>
       {item.statut === 1 && ( // Bouton de téléchargement si validée
-        <TouchableOpacity onPress={() => handleDownloadPdf(item.id.toString(), 'feuille_de_soins')}>
-          <Ionicons name="download-outline" size={24} color={colors.secondary} />
-        </TouchableOpacity>
+      <TouchableOpacity onPress={() => handleDownloadPdf(item.encrypted_id, 'feuille_de_soins')}>
+        <Ionicons name="download-outline" size={24} color={colors.secondary} />
+      </TouchableOpacity>
+
       )}
     </View>
   );
@@ -558,7 +558,7 @@ export default function IpmFileScreen() {
                     }}
                     style={[styles.picker, { color: colors.textPrimary }]}
                   >
-                    <Picker.Item label={t("Lui-même")} value={undefined} />
+                    <Picker.Item label={t("Vous-même")} value={undefined} />
                     {familleMembers.map(member => (
                       <Picker.Item key={member.id} label={`${member.prenom} ${member.nom} (${member.lien})`} value={member.id} />
                     ))}
@@ -616,7 +616,7 @@ export default function IpmFileScreen() {
                     onChangeText={setFdsType}
                   />
                 </View>
-                <View style={styles.inputGroup}>
+                {/* <View style={styles.inputGroup}>
                   <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Date des soins')}</Text>
                   <TextInput
                     style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
@@ -625,8 +625,8 @@ export default function IpmFileScreen() {
                     value={fdsDateSoins}
                     onChangeText={setFdsDateSoins}
                   />
-                </View>
-                <View style={styles.inputGroup}>
+                </View> */}
+                {/* <View style={styles.inputGroup}>
                   <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Montant total (FCFA)')}</Text>
                   <TextInput
                     style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
@@ -636,7 +636,7 @@ export default function IpmFileScreen() {
                     value={fdsMontantTotal}
                     onChangeText={setFdsMontantTotal}
                   />
-                </View>
+                </View> */}
                 <TouchableOpacity
                   style={[styles.modalButton, { backgroundColor: colors.secondary }]}
                   onPress={handleSubmitFeuilleDeSoins}
