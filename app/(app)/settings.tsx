@@ -24,13 +24,13 @@ import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import { savePushToken, sendTestPushNotification } from '../../utils/api';
 import { useTheme } from '../../components/ThemeContext'; 
-import { useLanguage } from '../../components/LanguageContext'; // NOUVEAU : Importer useLanguage
+import { useLanguage } from '../../components/LanguageContext'; // Importer useLanguage
 
 
 // Configuration pour les notifications en arrière-plan (headless)
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
+  handleNotification: async (notification) => ({
+    // shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: true,
     shouldShowBanner: true,

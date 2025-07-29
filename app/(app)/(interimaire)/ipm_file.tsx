@@ -35,8 +35,13 @@ import { LinearGradient } from 'expo-linear-gradient';
 // Interface pour un échéancier parent (Echelonnement)
 interface Loan {
   id: number;
-  montant_total?: number;
-  date_debut_echelonnement?: string;
+  nombre_echeances: number;
+  montant_retenu: number;
+  montant_echeances?: number;
+  duree_echelonnement?: number;
+  date_debut?: string;
+  date_fin?: string;
+  mois_pret: string;
   details?: LoanDetail[];
 }
 
@@ -272,9 +277,18 @@ export default function IpmFileScreen() {
     <View style={[styles.cardItem, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
       <Ionicons name="wallet-outline" size={24} color={colors.secondary} style={styles.itemIcon} />
       <View style={styles.itemContent}>
-        <Text style={[styles.itemTitle, { color: colors.textPrimary }]}>{t('Prêt')} #{item.id} - {item.montant_total ?? t('Non spécifié')} FCFA</Text>
+        <Text style={[styles.itemTitle, { color: colors.textPrimary }]}>{t('Retenu')} : {item.montant_retenu ?? t('Non spécifié')} FCFA</Text>
+        {/* <Text style={[styles.itemTitle, { color: colors.textPrimary }]}>{t('Prêt')} : {item.montant_echeances ?? t('Non spécifié')} FCFA</Text> */}
+      <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>
+        {t("Durée échéance:")} {item.duree_echelonnement ? 
+          `${Math.floor(item.duree_echelonnement / 30)} ${Math.floor(item.duree_echelonnement / 30) > 1 ? 'mois' : 'mois'}` 
+          : t("N/A")}
+      </Text>
         <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>
-          {t("Début:")} {item.date_debut_echelonnement ? new Date(item.date_debut_echelonnement).toLocaleDateString() : t("N/A")}
+          {t("Début échéance:")} {item.date_debut? new Date(item.date_debut).toLocaleDateString() : t("N/A")}
+        </Text>
+         <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>
+          {t("Fin échéance:")} {item.date_fin? new Date(item.date_fin).toLocaleDateString() : t("N/A")}
         </Text>
         {item.details && item.details.length > 0 && (
           <View style={[styles.detailsList, { borderTopColor: colors.border }]}>
@@ -341,9 +355,9 @@ export default function IpmFileScreen() {
         </Text>
       </View>
       {item.statut === 1 && ( // Bouton de téléchargement si validée
-      <TouchableOpacity onPress={() => handleDownloadPdf(item.encrypted_id, 'feuille_de_soins')}>
-        <Ionicons name="download-outline" size={24} color={colors.secondary} />
-      </TouchableOpacity>
+        <TouchableOpacity onPress={() => handleDownloadPdf(item.encrypted_id.toString(), 'feuille_de_soins')}>
+          <Ionicons name="download-outline" size={24} color={colors.secondary} />
+        </TouchableOpacity>
 
       )}
     </View>
@@ -359,13 +373,13 @@ export default function IpmFileScreen() {
           <View style={[styles.sectionDemande, { backgroundColor: colors.cardBackground }]}>
             <View style={styles.sectionHeader}>
               <Ionicons name="paper-plane-sharp" size={28} color={colors.primary} style={styles.sectionIcon} />
-              <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{t('Faire une demande')}</Text>
+              <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{t('Faire une demande ')}</Text>
             </View>
             <View style={styles.requestButtonsContainer}>
-              <TouchableOpacity style={[styles.requestButton, { backgroundColor: colors.secondary }]} onPress={() => openRequestModal('prise_en_charge')}>
+              {/* <TouchableOpacity style={[styles.requestButton, { backgroundColor: colors.secondary }]} onPress={() => openRequestModal('prise_en_charge')}>
                 <Text style={styles.requestButtonText}>{t('Prise en Charge')}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.requestButton, { backgroundColor: colors.secondary }]} onPress={() => openRequestModal('feuille_de_soins')}>                
+              </TouchableOpacity> */}
+              <TouchableOpacity style={[styles.requestButton, { backgroundColor: colors.secondary }]} onPress={() => openRequestModal('feuille_de_soins')}>
                 <Text style={styles.requestButtonText}>{t('Feuille de Soins')}</Text>
               </TouchableOpacity>
             </View>
@@ -376,7 +390,7 @@ export default function IpmFileScreen() {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Ionicons name="cash-outline" size={22} color={colors.primary} style={styles.sectionIcon} />
-            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{t('Mes Prêts et Échéanciers')}</Text>
+            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{t('Mes Échéanciers')}</Text>
           </View>
 
           {loadingLoans ? (
@@ -828,62 +842,101 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   // NOUVEAU : Styles pour le modal
-  modalOverlay: {
+ modalOverlay: {
     flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: 20,
   },
   modalContainer: {
-    width: '90%',
-    borderRadius: 16,
-    padding: 20,
-    maxHeight: '80%',
+    width: '100%',
+    maxWidth: 400,
+    borderRadius: 20,
+    paddingVertical: 28,
+    paddingHorizontal: 24,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 10,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 15,
   },
   modalTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '700',
-    marginBottom: 15,
     textAlign: 'center',
+    marginBottom: 28,
+    letterSpacing: 0.3,
   },
   inputGroup: {
-    marginBottom: 15,
+    marginBottom: 22,
   },
   inputLabel: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '600',
-    marginBottom: 5,
+    marginBottom: 10,
+    letterSpacing: 0.2,
   },
   input: {
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    borderWidth: 2,
+    borderRadius: 14,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
     fontSize: 16,
+    minHeight: 54,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   pickerContainer: {
-    borderWidth: 1,
-    borderRadius: 8,
+    borderWidth: 2,
+    borderRadius: 14,
     overflow: 'hidden',
-    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   picker: {
-    height: 40,
-    width: '100%',
+    height: 54,
+    paddingHorizontal: 18,
   },
   modalButton: {
-    paddingVertical: 12,
-    borderRadius: 10,
+    borderRadius: 14,
+    paddingVertical: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 15,
+    minHeight: 56,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 4,
   },
   modalButtonText: {
     color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 17,
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
   modalCancelButton: {
-    backgroundColor: '#6B7280',
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
 });
