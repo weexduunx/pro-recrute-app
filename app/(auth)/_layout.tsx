@@ -24,6 +24,7 @@ export default function AuthLayout() {
         headerShown: false, // Keeping headers hidden as per previous setup, but style is ready if enabled
       }}
     >
+      <Stack.Screen name="onboarding" options={{ headerShown: false }} />
       <Stack.Screen name="index" options={{ title: 'Sign In' }} />
       <Stack.Screen name="register" options={{ title: 'Register' }} />
       <Stack.Screen name="otp_verification" /> {/* NOUVEAU : Écran de vérification OTP */}

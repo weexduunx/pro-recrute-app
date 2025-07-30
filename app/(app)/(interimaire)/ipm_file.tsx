@@ -277,18 +277,18 @@ export default function IpmFileScreen() {
     <View style={[styles.cardItem, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
       <Ionicons name="wallet-outline" size={24} color={colors.secondary} style={styles.itemIcon} />
       <View style={styles.itemContent}>
-        <Text style={[styles.itemTitle, { color: colors.textPrimary }]}>{t('Retenu')} : {item.montant_retenu ?? t('Non spécifié')} FCFA</Text>
+        <Text style={[styles.itemTitle, { color: colors.error }]}>{t('Retenu')} : {item.montant_retenu ?? t('Non spécifié')} FCFA</Text>
         {/* <Text style={[styles.itemTitle, { color: colors.textPrimary }]}>{t('Prêt')} : {item.montant_echeances ?? t('Non spécifié')} FCFA</Text> */}
-      <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>
-        {t("Durée échéance:")} {item.duree_echelonnement ? 
-          `${Math.floor(item.duree_echelonnement / 30)} ${Math.floor(item.duree_echelonnement / 30) > 1 ? 'mois' : 'mois'}` 
-          : t("N/A")}
-      </Text>
         <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>
-          {t("Début échéance:")} {item.date_debut? new Date(item.date_debut).toLocaleDateString() : t("N/A")}
+          {t("Durée échéance:")} {item.duree_echelonnement ?
+            `${Math.floor(item.duree_echelonnement / 30)} ${Math.floor(item.duree_echelonnement / 30) > 1 ? 'mois' : 'mois'}`
+            : t("N/A")}
         </Text>
-         <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>
-          {t("Fin échéance:")} {item.date_fin? new Date(item.date_fin).toLocaleDateString() : t("N/A")}
+        <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>
+          {t("Début échéance:")} {item.date_debut ? new Date(item.date_debut).toLocaleDateString() : t("N/A")}
+        </Text>
+        <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>
+          {t("Fin échéance:")} {item.date_fin ? new Date(item.date_fin).toLocaleDateString() : t("N/A")}
         </Text>
         {item.details && item.details.length > 0 && (
           <View style={[styles.detailsList, { borderTopColor: colors.border }]}>
@@ -368,24 +368,27 @@ export default function IpmFileScreen() {
       <CustomHeader title={t("Mon Dossier IPM")} user={user} onMenuPress={handleMenuPress} onAvatarPress={handleAvatarPress} />
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Section Demandes */}
-        {user?.is_contract_active !== false && ( // Afficher la section demande si contrat actif
-          <View style={[styles.sectionDemande, { backgroundColor: colors.cardBackground }]}>
-            <View style={styles.sectionHeader}>
-              <Ionicons name="paper-plane-sharp" size={28} color={colors.primary} style={styles.sectionIcon} />
-              <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{t('Faire une demande ')}</Text>
-            </View>
-            <View style={styles.requestButtonsContainer}>
+
+        {/* Bouton Retour & Section Demandes */}
+        <View style={{ flexDirection: 'row', justifyContent: 'space-around', marginBottom: 16 }}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={{ flexDirection: 'row', alignItems: 'center' }}
+          >
+            <Ionicons name="arrow-back-outline" size={22} color={colors.primary} style={styles.sectionIcon} />
+          </TouchableOpacity>
+          {user?.is_contract_active !== false && (
+            <View>
               {/* <TouchableOpacity style={[styles.requestButton, { backgroundColor: colors.secondary }]} onPress={() => openRequestModal('prise_en_charge')}>
                 <Text style={styles.requestButtonText}>{t('Prise en Charge')}</Text>
               </TouchableOpacity> */}
               <TouchableOpacity style={[styles.requestButton, { backgroundColor: colors.secondary }]} onPress={() => openRequestModal('feuille_de_soins')}>
-                <Text style={styles.requestButtonText}>{t('Feuille de Soins')}</Text>
+                 <Ionicons name="add-circle-outline" size={20} color='#fff'  style={styles.sectionIcon} />
+                <Text style={styles.requestButtonText}>{t('Demander Une Feuille de Soins')}</Text>
               </TouchableOpacity>
             </View>
-          </View>
-        )}
-
+          )}
+        </View>
         {/* Section Mes Prêts et Échéanciers */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -832,8 +835,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 12,
     paddingHorizontal: 16,
-    borderRadius: 8,
+    borderRadius: 10,
     marginBottom: 16,
+    borderWidth: 1,
+    borderColor:  '#091e60' ,
   },
   requestButtonText: {
     color: '#FFFFFF',
@@ -842,7 +847,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   // NOUVEAU : Styles pour le modal
- modalOverlay: {
+  modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.6)',
     justifyContent: 'center',

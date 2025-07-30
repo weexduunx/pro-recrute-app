@@ -97,24 +97,6 @@ export default function InterimDashboardScreen() {
   }, []);
 
   // --- LOGIQUE DE RÉCUPÉRATION DES DONNÉES ---
-  // const loadIpmRecap = useCallback(async () => {
-  //   if (!user) {
-  //     setIpmRecap([]);
-  //     setLoadingIpmRecap(false);
-  //     return;
-  //   }
-  //   setLoadingIpmRecap(true);
-  //   setErrorIpmRecap(null);
-  //   try {
-  //     const data = await getIpmRecapByMonth();
-  //     setIpmRecap(data);
-  //   } catch (err: any) {
-  //     console.error("Erreur de chargement du récap IPM:", err);
-  //     setErrorIpmRecap(err.message || t("Impossible de charger l'état d'avancement IPM."));
-  //   } finally {
-  //     setLoadingIpmRecap(false);
-  //   }
-  // }, [user, t]);
   const loadIpmRecap = useCallback(async () => {
     if (!user) {
       setIpmRecap([]);
@@ -923,7 +905,7 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontSize: 13,
     fontWeight: '500',
-    marginBottom: 10,
+    marginBottom: 5,
     textAlign: 'center',
     fontStyle: 'italic',
     lineHeight: 18,

@@ -29,12 +29,12 @@ import { useLanguage } from '../../components/LanguageContext'; // Importer useL
 
 // Configuration pour les notifications en arrière-plan (headless)
 Notifications.setNotificationHandler({
-  handleNotification: async (notification) => ({
-    // shouldShowAlert: true,
+  handleNotification: async (notification) => ({ // MODIFIÉ: Passer notification pour accéder à son contenu
+    shouldShowAlert: true, // Déprécié, mais laissé pour la rétrocompatibilité si pas de showBanner/showList
     shouldPlaySound: true,
     shouldSetBadge: true,
-    shouldShowBanner: true,
-    shouldShowList: true,
+    shouldShowBanner: true, // NOUVEAU: Pour afficher la bannière de notification sur Android
+    shouldShowList: true, // NOUVEAU: Pour afficher la notification dans la liste
   }),
 });
 

@@ -220,22 +220,12 @@ export default function HrFileScreen() {
     setExportingPdf(true);
     setExportError(null);
     try {
-      // Toast.show({
-      //   type: 'success',
-      //   text1: '✅ Téléchargement réussi',
-      //   text2: 'L’attestation est prête à être partagée.',
-      // });
       await getPdf(encryptedContratId);
       Alert.alert(t("Succès"), t("Attestation téléchargée avec succès !"));
     } catch (err: any) {
       console.error("Erreur lors du téléchargement de l'attestation:", err);
       setExportError(err.message || t("Échec du téléchargement de l'attestation."));
       Alert.alert(t("Erreur"), err.message || t("Impossible de télécharger l'attestation."));
-      // Toast.show({
-      //   type: 'error',
-      //   text1: '❌ Erreur',
-      //   text2: 'Le téléchargement de l’attestation a échoué.',
-      // });
     } finally {
       setExportingPdf(false);
     }
@@ -245,22 +235,12 @@ export default function HrFileScreen() {
     setExportingPdf(true);
     setExportError(null);
     try {
-      // Toast.show({
-      //   type: 'success',
-      //   text1: '✅ Téléchargement réussi',
-      //   text2: 'Le certificat est prêt à être partagé.',
-      // });
       await getCertificatPdf(encryptedType);
       Alert.alert(t("Succès"), t("Certificat téléchargé avec succès !"));
     } catch (err: any) {
       console.error("Erreur lors du téléchargement du certificat:", err);
       setExportError(err.message || t("Échec du téléchargement du certificat."));
       Alert.alert(t("Erreur"), err.message || t("Impossible de télécharger le certificat."));
-      // Toast.show({
-      //   type: 'error',
-      //   text1: '❌ Erreur',
-      //   text2: 'Le téléchargement du certificat a échoué.',
-      // });
     } finally {
       setExportingPdf(false);
     }

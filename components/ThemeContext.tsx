@@ -7,8 +7,9 @@ const lightColors = {
   primary: '#091e60', // Bleu foncé
   secondary: '#0f8e35', // Vert
   background: '#F8FAFC', // Fond clair général
+  backgroundVert: '#0f8e35', // Fond vert général
   cardBackground: '#FFFFFF', // Fond des cartes/sections
-  textPrimary: '#1F2937', // Texte foncé principal
+  textPrimary: '#091e60', // Texte foncé principal
   textSecondary: '#6B7280', // Texte gris secondaire
   textAccent: '#3B82F6', // Texte bleu accent
   border: '#E5E7EB', // Bordures claires
@@ -59,7 +60,7 @@ const darkColors = {
   newsCategoryBg: '#2C2C2C',
   newsCategoryText: '#64B5F6',
 
-  
+
 };
 
 // Interface pour le contexte du thème

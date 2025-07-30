@@ -118,7 +118,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
     if (authenticated) {
       if (isOtpVerified === false) {
-        if (router.path !== '/(auth)/otp_verification') {
+        if (segments.join('/') !== '(auth)/otp_verification') {
           router.replace({
             pathname: '/(auth)/otp_verification',
             params: { email: emailForOtp || user?.email, deviceName: deviceNameForOtp || Device.deviceName || 'UnknownDevice' },
@@ -144,7 +144,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         }
       } 
     } else { // Non authentifié
-      if (inAppGroup || router.path === '/(auth)/otp_verification') { 
+      if (inAppGroup || segments.join('/') === '(auth)/otp_verification') {
         router.replace('/(auth)'); 
       }
     }
@@ -215,6 +215,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         return;
       }
 
+      // Gérer les différents types de notifications
       if (notificationData.type === 'feuille_soins_status_update') {
         const { feuille_id, encrypted_id, screen, action, new_status } = notificationData;
         
@@ -226,22 +227,45 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           return;
         }
 
-        // Naviguer vers l'écran IPM File avec les paramètres nécessaires
+        // Naviguer vers l'écran IPM File avec les paramètres
         if (screen === 'ipm_file' && action === 'download_feuille') {
           console.log(`AuthProvider: Redirection vers IPM File pour feuille ID: ${feuille_id} (Encrypté: ${encrypted_id}).`);
           router.push({
             pathname: '/(app)/(interimaire)/ipm_file', // Le chemin absolu vers votre écran IPM File
             params: {
-              feuille_id: feuille_id,
-              encrypted_feuille_id: encrypted_id,
+              feuille_id: feuille_id as string | number,
+              encrypted_feuille_id: encrypted_id as string | undefined,
               action: 'download_feuille_from_notification', // Action spécifique pour la page IPM File
-              new_status: new_status, // Passer le nouveau statut si utile pour l'affichage
+              new_status: new_status as string | undefined, // Cast new_status to string | undefined
             },
           });
           lastProcessedNotificationId.current = response.notification.request.identifier; // Marquer comme traité
         }
+      } else if (notificationData.type === 'candidature_status_update') { // NOUVEAU: Gérer les notifications de candidature
+        const { candidature_id, offre_id, encrypted_id, screen, action, new_status } = notificationData;
+
+        if (!isAppReady || !user) {
+          console.log("AuthProvider: App pas prête pour navigation, stockage des données de notification de candidature.");
+          AsyncStorage.setItem('pending_notification_data', JSON.stringify(notificationData));
+          return;
+        }
+
+        if (screen === 'application_details' && action === 'view_candidature') {
+          console.log(`AuthProvider: Redirection vers Candidature Details pour candidature ID: ${candidature_id} (Encrypté: ${encrypted_id}).`);
+          router.push({
+            pathname: '/(app)/candidature/application_details', // Chemin absolu vers votre écran de détails de candidature
+            params: {
+              id: candidature_id as string | number, // L'ID de la candidature
+              encrypted_id: encrypted_id as string | undefined, // L'ID encrypté si nécessaire pour l'API
+              action: 'view_candidature_from_notification', // Action spécifique
+              new_status: new_status as string | undefined,
+            },
+          });
+          lastProcessedNotificationId.current = response.notification.request.identifier;
+        }
       }
     });
+
 
     return () => {
       Notifications.removeNotificationSubscription(receivedListener);
@@ -268,6 +292,19 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
                   feuille_id: feuille_id,
                   encrypted_feuille_id: encrypted_id,
                   action: 'download_feuille_from_notification',
+                  new_status: new_status,
+                },
+              });
+            }
+          } else if (notificationData.type === 'candidature_status_update') { // NOUVEAU: Gérer la candidature en attente
+            const { candidature_id, offre_id, encrypted_id, screen, action, new_status } = notificationData;
+            if (screen === 'application_details' && action === 'view_candidature') {
+              router.push({
+                pathname: '/(app)/candidature/application_details',
+                params: {
+                  id: candidature_id,
+                  encrypted_id: encrypted_id,
+                  action: 'view_candidature_from_notification',
                   new_status: new_status,
                 },
               });
@@ -376,7 +413,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   };
 
   /**
-   * [NOUVEAU] Gère le processus de connexion sociale via OAuth.
+   * Gère le processus de connexion sociale via OAuth.
    * @param {string} provider - Le nom du fournisseur ('google', 'linkedin').
    */
   const socialLogin = async (provider: string) => {
