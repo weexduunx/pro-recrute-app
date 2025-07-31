@@ -1,6 +1,7 @@
 import { Stack, Slot } from 'expo-router';
 import { AuthProvider, useAuth } from '../components/AuthProvider';
 import { PermissionsProvider } from '../components/PermissionsManager';
+import { AuthPermissionsManager } from '../components/useAuthPermissions';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import React from 'react';
 import { ThemeProvider, useTheme } from '../components/ThemeContext';
@@ -22,8 +23,10 @@ export default function RootLayout() {
         <AuthProvider>
           <LanguageProvider>
             <ThemeProvider>
-              <RootLayoutContent />
-              <Toast />
+              <AuthPermissionsManager>
+                <RootLayoutContent />
+                <Toast />
+              </AuthPermissionsManager>
             </ThemeProvider>
           </LanguageProvider>
         </AuthProvider>

@@ -23,7 +23,6 @@ import {
 import { router, useSegments } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import * as AuthSession from 'expo-auth-session';
-import { usePermissions } from './PermissionsManager'; // Import du gestionnaire de permissions
 
 SplashScreenExpo.preventAutoHideAsync();
 
@@ -89,9 +88,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const inAppGroup = segments[0] === '(app)';
   const inOnboardingGroup = segments.includes('onboarding');
 
-  // Utilisation du gestionnaire de permissions
-  const { hasRequestedPermissions, requestAllPermissions, checkPermissions } = usePermissions();
-
   const fetchUser = useCallback(async () => {
     try {
       const fetchedUser = await fetchUserProfile();
@@ -127,19 +123,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     }
   };
 
-  // Fonction pour demander les permissions après connexion
-  const requestPermissionsIfNeeded = useCallback(async () => {
-    if (!hasRequestedPermissions) {
-      // Attendre un peu après la connexion pour éviter trop d'alertes simultanées
-      setTimeout(() => {
-        requestAllPermissions();
-      }, 2000);
-    } else {
-      // Vérifier les permissions actuelles
-      await checkPermissions();
-    }
-  }, [hasRequestedPermissions, requestAllPermissions, checkPermissions]);
-
   const handleRedirect = useCallback((authenticated: boolean, userRole: string | undefined, isOtpVerified: boolean | undefined, isContractActive: boolean | undefined, emailForOtp?: string, deviceNameForOtp?: string) => {
     if (isLoggingOut) { 
       return;
@@ -172,9 +155,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
     // Priority 3: Handle authenticated users - redirect to appropriate app sections
     if (authenticated && isOtpVerified !== false) {
-      // Demander les permissions après une connexion réussie
-      requestPermissionsIfNeeded();
-
       if (inAuthGroup || inOnboardingGroup) {
         // Redirect based on user role
         switch (userRole) {
@@ -198,7 +178,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         }
       }
     }
-  }, [inAuthGroup, inAppGroup, inOnboardingGroup, segments, user?.email, isLoggingOut, hasSeenOnboarding, requestPermissionsIfNeeded]); 
+  }, [inAuthGroup, inAppGroup, inOnboardingGroup, segments, user?.email, isLoggingOut, hasSeenOnboarding]); 
 
   useEffect(() => {
     async function prepareApp() {
