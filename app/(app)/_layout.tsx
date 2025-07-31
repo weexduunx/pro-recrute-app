@@ -66,6 +66,7 @@ function getDrawerLabel(route: string): string {
     '(interimaire)': 'Espace Intérimaire',
     hr_file: 'Dossier RH',
     ipm_file: 'Dossier IPM',
+    welcome: 'Welcome',
   };
   return labels[route] || route;
 }

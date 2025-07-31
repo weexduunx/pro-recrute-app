@@ -4,17 +4,17 @@ import React, {
   useState,
   useEffect,
   ReactNode,
-  useCallback, 
-  useRef
+  useCallback,
+    useRef,
 } from 'react';
-import {Platform,Alert} from 'react-native';
+import { Platform, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Device from 'expo-device';
 import * as SplashScreenExpo from 'expo-splash-screen';
-import { 
-  loginUser, 
-  fetchUserProfile, 
-  logoutUser, 
+import {
+  loginUser,
+  fetchUserProfile,
+  logoutUser,
   registerUser,
   socialLoginCallback,
   getInterimProfile,
@@ -42,16 +42,13 @@ interface User {
   is_contract_active?: boolean;
 }
 
-// IMPORTANT: Le SCHEME doit correspondre à celui que vous avez dans app.json pour votre application Expo
-const REDIRECT_URI = AuthSession.makeRedirectUri({ scheme: 'prorecruteapp' });
-console.log('AuthProvider: Redirect URI généré:', REDIRECT_URI); // Débogage 
-
 interface AuthContextType {
   user: User | null;
   token: string | null;
   isAuthenticated: boolean;
   loading: boolean;
   error: string | null;
+  hasSeenOnboarding: boolean;
   login: (email: string, password: string, deviceName?: string) => Promise<void>;
   register: (name: string, email: string, password: string, passwordConfirmation: string, role?: string, deviceName?: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -61,10 +58,19 @@ interface AuthContextType {
   clearError: () => void;
   isAppReady: boolean;
   fetchUser: () => Promise<void>;
+  completeOnboarding: () => Promise<void>;
 }
 
-
+// IMPORTANT: Le SCHEME doit correspondre à celui que vous avez dans app.json pour votre application Expo
+const REDIRECT_URI = AuthSession.makeRedirectUri({ scheme: 'prorecruteapp' });
+console.log('AuthProvider: Redirect URI généré:', REDIRECT_URI); // Débogage 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+// Constants for AsyncStorage keys
+const STORAGE_KEYS = {
+  USER_TOKEN: 'user_token',
+  ONBOARDING_COMPLETED: 'onboarding_completed'
+} as const;
 
 interface AuthProviderProps {
   children: ReactNode;
@@ -77,17 +83,126 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [error, setError] = useState<string | null>(null);
   const [isAppReady, setIsAppReady] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [hasSeenOnboarding, setHasSeenOnboarding] = useState(false);
+
+  // NOUVEAU: État pour éviter les boucles de redirection
+  const [hasAttemptedOnboardingRedirect, setHasAttemptedOnboardingRedirect] = useState(false);
 
   const segments = useSegments();
   const inAuthGroup = segments[0] === '(auth)';
   const inAppGroup = segments[0] === '(app)';
+  const inOnboardingGroup = segments.some(segment => segment === 'onboarding');
+  const lastProcessedNotificationId = useRef<string | null>(null);
 
-  const lastProcessedNotificationId = useRef<string | null>(null); // Pour éviter de traiter la même notif plusieurs fois
+  // NOUVEAU: Reset du flag quand l'utilisateur change ou quand l'onboarding est complété
+  useEffect(() => {
+    if (hasSeenOnboarding || user) {
+      setHasAttemptedOnboardingRedirect(false);
+    }
+  }, [hasSeenOnboarding, user]);
+
+  const handleRedirect = useCallback((authenticated: boolean, userRole: string | undefined, isOtpVerified: boolean | undefined, isContractActive: boolean | undefined, emailForOtp?: string, deviceNameForOtp?: string) => {
+    if (isLoggingOut) {
+      return;
+    }
+
+    // Priority 1: Handle OTP verification
+    if (authenticated && isOtpVerified === false) {
+      if (router.canGoBack() && segments.length > 0 && segments[segments.length - 1] !== 'otp_verification') {
+        router.replace({
+          pathname: '/(auth)/otp_verification',
+          params: { email: emailForOtp || user?.email, deviceName: deviceNameForOtp || Device.deviceName || 'UnknownDevice' },
+        });
+      }
+      return;
+    }
+
+    // Priority 2: Handle onboarding for new users (not authenticated)
+    if (!authenticated) {
+      if (!hasSeenOnboarding) {
+        // CORRECTION: Vérifier si on a déjà tenté la redirection vers l'onboarding
+        if (!inOnboardingGroup && !hasAttemptedOnboardingRedirect) {
+          console.log('AuthProvider: Première tentative de redirection vers onboarding');
+          setHasAttemptedOnboardingRedirect(true);
+
+          // Utiliser un setTimeout pour éviter les conflits de navigation
+          setTimeout(() => {
+            try {
+              router.replace('/(auth)/onboarding/welcome');
+            } catch (error) {
+              console.error('AuthProvider: Erreur navigation onboarding:', error);
+              // Si la navigation échoue, marquer l'onboarding comme vu pour éviter la boucle
+              setHasSeenOnboarding(true);
+              router.replace('/(auth)');
+            }
+          }, 100);
+        }
+        return;
+      }
+
+      // If onboarding completed, handle normal auth flow
+      if (inAppGroup || segments.some(segment => segment === 'otp_verification')) {
+        router.replace('/(auth)');
+      }
+      return;
+    }
+
+    // Priority 3: Handle authenticated users - redirect to appropriate app sections
+    if (authenticated && isOtpVerified !== false) {
+      if (inAuthGroup || inOnboardingGroup) {
+        // Redirect based on user role
+        switch (userRole) {
+          case 'admin':
+            router.replace('/(app)/home');
+            break;
+          case 'user': // Candidat
+            router.replace('/(app)/home');
+            break;
+          case 'interimaire':
+            router.replace('/(app)/(interimaire)');
+            break;
+          default:
+            router.replace('/(app)/home'); // Fallback
+            break;
+        }
+      }
+    }
+  }, [inAuthGroup, inAppGroup, inOnboardingGroup, segments, user?.email, isLoggingOut, hasSeenOnboarding, hasAttemptedOnboardingRedirect]);
+
+  // MODIFIÉ: useEffect avec dependency plus précise
+  useEffect(() => {
+    if (isAppReady && !loading) {
+      handleRedirect(!!user, user?.role, user?.is_otp_verified, user?.is_contract_active);
+    }
+  }, [isAppReady, user, handleRedirect, hasSeenOnboarding, loading]);
+
+  // Fonction completeOnboarding mise à jour
+  const completeOnboarding = async () => {
+    try {
+      await AsyncStorage.setItem(STORAGE_KEYS.ONBOARDING_COMPLETED, 'true');
+      setHasSeenOnboarding(true);
+      setHasAttemptedOnboardingRedirect(false); // NOUVEAU: Reset du flag
+    } catch (error) {
+      console.error('Error saving onboarding completion:', error);
+    }
+  };
+
+  // NOUVELLE FONCTION: Pour forcer le skip de l'onboarding en cas de problème
+  const forceSkipOnboarding = async () => {
+    try {
+      await AsyncStorage.setItem(STORAGE_KEYS.ONBOARDING_COMPLETED, 'true');
+      setHasSeenOnboarding(true);
+      setHasAttemptedOnboardingRedirect(false);
+      router.replace('/(auth)');
+    } catch (error) {
+      console.error('Error force skipping onboarding:', error);
+    }
+  };
 
   const fetchUser = useCallback(async () => {
     try {
       const fetchedUser = await fetchUserProfile();
-      if (fetchedUser && fetchedUser.role === 'interimaire') { 
+      if (fetchedUser && fetchedUser.role === 'interimaire') {
         const interimProfile = await getInterimProfile();
         if (interimProfile) {
           fetchedUser.is_contract_active = interimProfile.is_contract_active;
@@ -97,67 +212,33 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       }
       setUser(fetchedUser);
       return fetchedUser;
-    } catch (e: any) { 
+    } catch (e: any) {
       if (e.response?.status === 401) {
         console.warn("AuthProvider: Jeton non valide détecté (401), utilisateur sera déconnecté.");
       } else {
         console.error("AuthProvider: Échec de fetchUser (non-401):", e);
       }
-      await AsyncStorage.removeItem('user_token');
+      await AsyncStorage.removeItem(STORAGE_KEYS.USER_TOKEN);
       setUser(null);
       setToken(null);
-      throw e; 
+      throw e;
     }
   }, []);
 
-  const handleRedirect = useCallback((authenticated: boolean, userRole: string | undefined, isOtpVerified: boolean | undefined, isContractActive: boolean | undefined, emailForOtp?: string, deviceNameForOtp?: string) => {
-    if (isLoggingOut) { 
-      console.log("AuthProvider: Déconnexion en cours, suppression de la redirection.");
-      return;
-    }
-
-    if (authenticated) {
-      if (isOtpVerified === false) {
-        if (segments.join('/') !== '(auth)/otp_verification') {
-          router.replace({
-            pathname: '/(auth)/otp_verification',
-            params: { email: emailForOtp || user?.email, deviceName: deviceNameForOtp || Device.deviceName || 'UnknownDevice' },
-          });
-        }
-        return; 
-      }
-
-      if (inAuthGroup) {
-        if (userRole === 'admin' || userRole === 'user') { // 'user' est aussi un candidat
-          router.replace('/(app)/home'); 
-        } else if (userRole === 'interimaire') { 
-          // NOUVEAU : Redirection conditionnelle pour l'intérimaire
-          if (isContractActive === false) { // Si le contrat est inactif
-            router.replace('/(app)/(interimaire)'); // Redirige vers l'espace candidat de l'intérimaire
-          } else {
-            router.replace('/(app)/(interimaire)'); // Redirige vers l'espace intérimaire
-          }
-        } else if (userRole === 'admin') { // Rôle Admin
-          router.replace('/(app)/home'); 
-        } else {
-          router.replace('/(app)/home'); // Fallback pour les rôles non reconnus ou futurs rôles
-        }
-      } 
-    } else { // Non authentifié
-      if (inAppGroup || segments.join('/') === '(auth)/otp_verification') {
-        router.replace('/(auth)'); 
-      }
-    }
-  }, [inAuthGroup, inAppGroup, segments, user?.email, isLoggingOut]); 
 
   useEffect(() => {
     async function prepareApp() {
       try {
         setLoading(true);
-        const storedToken = await AsyncStorage.getItem('user_token');
+
+        // Check onboarding status first
+        const onboardingCompleted = await AsyncStorage.getItem(STORAGE_KEYS.ONBOARDING_COMPLETED);
+        setHasSeenOnboarding(onboardingCompleted === 'true');
+
+        const storedToken = await AsyncStorage.getItem(STORAGE_KEYS.USER_TOKEN);
 
         if (storedToken) {
-          try { 
+          try {
             const userData = await fetchUser();
             if (userData) { // Si fetchUser réussit et renvoie des données utilisateur
               setToken(storedToken); // Le token est valide, donc on le garde
@@ -172,9 +253,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           handleRedirect(false, undefined, undefined, undefined);
         }
       } catch (err: any) {
-        console.error('AuthProvider: Erreur globale dans prepareApp:', err); 
+        console.error('AuthProvider: Erreur globale dans prepareApp:', err);
         setError('Failed to load session. Please log in.');
-        await AsyncStorage.removeItem('user_token');
+        await AsyncStorage.removeItem(STORAGE_KEYS.USER_TOKEN);
         setUser(null);
         setToken(null);
         handleRedirect(false, undefined, undefined, undefined);
@@ -187,12 +268,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
     prepareApp();
   }, [fetchUser, handleRedirect]);
-
-  useEffect(() => {
-    if (isAppReady) {
-      handleRedirect(!!user, user?.role, user?.is_otp_verified, user?.is_contract_active);
-    }
-  }, [isAppReady, user, handleRedirect]);
 
   // NOUVEAU: Écouteur de notificationResponse
   // Gère les actions lorsque l'utilisateur tape sur une notification
@@ -233,10 +308,10 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           router.push({
             pathname: '/(app)/(interimaire)/ipm_file', // Le chemin absolu vers votre écran IPM File
             params: {
-              feuille_id: feuille_id as string | number,
-              encrypted_feuille_id: encrypted_id as string | undefined,
+              feuille_id: feuille_id?.toString() || '',
+              encrypted_feuille_id: encrypted_id?.toString() || null,
               action: 'download_feuille_from_notification', // Action spécifique pour la page IPM File
-              new_status: new_status as string | undefined, // Cast new_status to string | undefined
+              new_status: new_status?.toString() || null, // Convert new_status to string or null
             },
           });
           lastProcessedNotificationId.current = response.notification.request.identifier; // Marquer comme traité
@@ -250,22 +325,22 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           return;
         }
 
-        if (screen === 'application_details' && action === 'view_candidature') {
+        // Naviguer vers l'écran de détails de candidature
+        if (screen === 'candidature_details' && action === 'view_candidature') {
           console.log(`AuthProvider: Redirection vers Candidature Details pour candidature ID: ${candidature_id} (Encrypté: ${encrypted_id}).`);
           router.push({
             pathname: '/(app)/candidature/application_details', // Chemin absolu vers votre écran de détails de candidature
             params: {
-              id: candidature_id as string | number, // L'ID de la candidature
-              encrypted_id: encrypted_id as string | undefined, // L'ID encrypté si nécessaire pour l'API
+              id: candidature_id?.toString() || '', // Convert candidature_id to string or empty string if undefined
+              encrypted_id: encrypted_id?.toString() || null, // Convert encrypted_id to string or null
               action: 'view_candidature_from_notification', // Action spécifique
-              new_status: new_status as string | undefined,
+              new_status: new_status?.toString() || null,
             },
           });
           lastProcessedNotificationId.current = response.notification.request.identifier;
         }
       }
     });
-
 
     return () => {
       Notifications.removeNotificationSubscription(receivedListener);
@@ -298,7 +373,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
             }
           } else if (notificationData.type === 'candidature_status_update') { // NOUVEAU: Gérer la candidature en attente
             const { candidature_id, offre_id, encrypted_id, screen, action, new_status } = notificationData;
-            if (screen === 'application_details' && action === 'view_candidature') {
+            if (screen === 'candidature_details' && action === 'view_candidature') {
               router.push({
                 pathname: '/(app)/candidature/application_details',
                 params: {
@@ -322,24 +397,24 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     try {
       const actualDeviceName = deviceName || Device.deviceName || 'UnknownDevice';
       const response = await loginUser(email, password, actualDeviceName);
-      
+
       if (response.otp_required) {
-        const minimalUser: User = { 
-          id: response.user?.id || 0, 
-          name: response.user?.name || 'Utilisateur', 
+        const minimalUser: User = {
+          id: response.user?.id || 0,
+          name: response.user?.name || 'Utilisateur',
           email: response.email,
           role: response.user?.role || 'user', // Utilise 'user' comme fallback pour le rôle ici
           is_otp_verified: false,
-          is_contract_active: response.user?.is_contract_active, 
+          is_contract_active: response.user?.is_contract_active,
         };
         setUser(minimalUser);
         setToken(null); // Pas de token si OTP requis
         handleRedirect(true, minimalUser.role, false, minimalUser.is_contract_active, email, actualDeviceName);
       } else {
         // NOUVEAU : Après un login réussi (pas d'OTP), recharger le profil complet de l'utilisateur
-        await AsyncStorage.setItem('user_token', response.token); // D'abord, stocker le token
+        await AsyncStorage.setItem(STORAGE_KEYS.USER_TOKEN, response.token); // D'abord, stocker le token
         const fullUser = await fetchUser(); // Puis, recharger l'utilisateur (inclut is_contract_active si intérimaire)
-        
+
         setUser(fullUser);
         setToken(response.token);
         handleRedirect(true, fullUser.role, true, fullUser.is_contract_active);
@@ -359,17 +434,17 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     try {
       const actualDeviceName = deviceName || Device.deviceName || 'UnknownDevice';
       const response = await registerUser(name, email, password, passwordConfirmation, role, actualDeviceName);
-      
-      const minimalUser: User = { 
-        id: response.user?.id || 0, 
-        name: name, 
-        email: email, 
-        role: role || 'user', 
+
+      const minimalUser: User = {
+        id: response.user?.id || 0,
+        name: name,
+        email: email,
+        role: role || 'user',
         is_otp_verified: false,
-        is_contract_active: response.user?.is_contract_active, 
+        is_contract_active: response.user?.is_contract_active,
       };
       setUser(minimalUser);
-      setToken(null); 
+      setToken(null);
       handleRedirect(true, minimalUser.role, false, minimalUser.is_contract_active, email, actualDeviceName);
     } catch (err: any) {
       console.error('Registration failed:', err.response?.data || err.message);
@@ -381,39 +456,59 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   };
 
   const logout = async () => {
-    setIsLoggingOut(true); 
+    setIsLoggingOut(true);
     setLoading(true);
     setError(null);
     try {
       if (token) {
-        await logoutUser(); 
+        await logoutUser();
       }
-      
-      await AsyncStorage.removeItem('user_token');
+
+      await AsyncStorage.removeItem(STORAGE_KEYS.USER_TOKEN);
       setUser(null);
       setToken(null);
 
       setTimeout(() => {
-        router.replace('/(auth)'); 
-        setIsLoggingOut(false); 
-      }, Platform.OS === 'ios' ? 100 : 300); 
+        // After logout, check if user has seen onboarding
+        if (hasSeenOnboarding) {
+          router.replace('/(auth)'); // Go directly to auth
+        } else {
+          // CORRECTION: Utiliser push au lieu de replace pour l'onboarding
+          console.log('AuthProvider: Logout - redirection vers onboarding');
+          try {
+            router.push('/(auth)/onboarding/welcome');
+          } catch (error) {
+            console.error('AuthProvider: Erreur navigation onboarding après logout:', error);
+            router.replace('/(auth)');
+          }
+        }
+        setIsLoggingOut(false);
+      }, Platform.OS === 'ios' ? 100 : 300);
     } catch (err: any) {
       console.error('Logout failed:', err.response?.data || err.message);
       setError(err.response?.data?.message || 'Déconnexion échouée.');
-      await AsyncStorage.removeItem('user_token');
+      await AsyncStorage.removeItem(STORAGE_KEYS.USER_TOKEN);
       setUser(null);
       setToken(null);
       setTimeout(() => {
-        router.replace('/(auth)');
+        if (hasSeenOnboarding) {
+          router.replace('/(auth)');
+        } else {
+          try {
+            router.push('/(auth)/onboarding/welcome');
+          } catch (error) {
+            console.error('AuthProvider: Erreur navigation onboarding après logout (error case):', error);
+            router.replace('/(auth)');
+          }
+        }
         setIsLoggingOut(false);
       }, Platform.OS === 'ios' ? 100 : 300);
     } finally {
       setLoading(false);
     }
   };
-
   /**
-   * Gère le processus de connexion sociale via OAuth.
+   * [NOUVEAU] Gère le processus de connexion sociale via OAuth.
    * @param {string} provider - Le nom du fournisseur ('google', 'linkedin').
    */
   const socialLogin = async (provider: string) => {
@@ -433,7 +528,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       if (result.type === 'success' && result.url) {
         const url = new URL(result.url);
         const tokenFromUrl = url.searchParams.get('token');
-        const roleFromUrl = url.searchParams.get('role');
+        const roleFromUrl = url.searchParams.get('role'); // Le rôle est maintenant passé par l'URL
         const errorFromUrl = url.searchParams.get('error');
 
         if (errorFromUrl) {
@@ -473,32 +568,33 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       setLoading(false);
     }
   };
+  
   // const socialLogin = async (provider: string) => {
   //   setLoading(true);
   //   setError(null);
   //   try {
-  //       const response = await socialLoginCallback(provider);
-  //       if (response.user && response.user.role === 'interimaire') {
-  //         const interimProfile = await getInterimProfile();
-  //         if (interimProfile) {
-  //           response.user.is_contract_active = interimProfile.is_contract_active;
-  //         } else {
-  //           response.user.is_contract_active = false;
-  //         }
+  //     const response = await socialLoginCallback(provider);
+  //     if (response.user && response.user.role === 'interimaire') {
+  //       const interimProfile = await getInterimProfile();
+  //       if (interimProfile) {
+  //         response.user.is_contract_active = interimProfile.is_contract_active;
+  //       } else {
+  //         response.user.is_contract_active = false;
   //       }
+  //     }
 
-  //       await AsyncStorage.setItem('user_token', response.token); // D'abord, stocker le token
-  //       const fullUser = await fetchUser(); // Puis, recharger l'utilisateur (inclut is_contract_active si intérimaire)
+  //     await AsyncStorage.setItem(STORAGE_KEYS.USER_TOKEN, response.token); // D'abord, stocker le token
+  //     const fullUser = await fetchUser(); // Puis, recharger l'utilisateur (inclut is_contract_active si intérimaire)
 
-  //       setUser(fullUser);
-  //       setToken(response.token);
-  //       handleRedirect(true, response.user.role, true, response.user.is_contract_active);
+  //     setUser(fullUser);
+  //     setToken(response.token);
+  //     handleRedirect(true, response.user.role, true, response.user.is_contract_active);
   //   } catch (err: any) {
-  //       console.error('Social login failed:', err.response?.data || err.message);
-  //       setError(err.response?.data?.message || 'Social login failed. Please try again.');
-  //       throw err;
+  //     console.error('Social login failed:', err.response?.data || err.message);
+  //     setError(err.response?.data?.message || 'Social login failed. Please try again.');
+  //     throw err;
   //   } finally {
-  //       setLoading(false);
+  //     setLoading(false);
   //   }
   // };
 
@@ -523,7 +619,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     try {
       const response = await apiVerifyOtp(email, otpCode, deviceName);
       // NOUVEAU : Après vérification OTP réussie, recharger le profil complet de l'utilisateur
-      await AsyncStorage.setItem('user_token', response.token); // D'abord, stocker le token
+      await AsyncStorage.setItem(STORAGE_KEYS.USER_TOKEN, response.token); // D'abord, stocker le token
       const fullUser = await fetchUser(); // Puis, recharger l'utilisateur (inclut is_contract_active si intérimaire)
 
       setUser(fullUser);
@@ -537,6 +633,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       setLoading(false);
     }
   };
+
   const clearError = () => setError(null);
 
   const authContextValue = {
@@ -545,6 +642,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     isAuthenticated: !!user,
     loading,
     error,
+    hasSeenOnboarding,
     login,
     register,
     logout,
@@ -554,6 +652,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     clearError,
     isAppReady,
     fetchUser,
+    completeOnboarding,
+    forceSkipOnboarding, // NOUVEAU: Fonction d'urgence
   };
 
   return (
