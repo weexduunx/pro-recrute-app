@@ -4,7 +4,8 @@ import { useRouter } from 'expo-router';
 import { useTheme } from '../../../components/ThemeContext';
 import { useLanguage } from '../../../components/LanguageContext';
 import { Ionicons } from '@expo/vector-icons';
-import Svg, { Path, Circle } from 'react-native-svg'; // NOUVEAU: Importer Svg, Path, Circle
+import { useAuth } from '../../../components/AuthProvider'; // Add this import
+
 
 const { width } = Dimensions.get('window');
 // SVG pour l'illustration de l'espace Candidat
@@ -23,13 +24,21 @@ export default function CandidateSpaceOnboardingScreen() {
     const router = useRouter();
     const { colors } = useTheme();
     const { t } = useLanguage();
+    const { completeOnboarding } = useAuth(); // Add this line
 
     const handleNext = () => {
         router.push('/(auth)/onboarding/interim_space');
     };
 
-    const handleSkip = () => {
-        router.replace('/(auth)'); // Redirige directement vers l'écran de connexion/inscription
+    const handleSkip = async () => {
+        try {
+            await completeOnboarding(); // Complete onboarding when skipping
+            router.replace('/(auth)'); // Redirige directement vers l'écran de connexion/inscription
+        } catch (error) {
+            console.error('Error completing onboarding:', error);
+            // Even if there's an error, still redirect to auth
+            router.replace('/(auth)');
+        }
     };
 
     return (

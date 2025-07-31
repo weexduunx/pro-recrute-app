@@ -4,7 +4,8 @@ import { useRouter } from 'expo-router';
 import { useTheme } from '../../../components/ThemeContext';
 import { useLanguage } from '../../../components/LanguageContext';
 import { Ionicons } from '@expo/vector-icons';
-import Svg, { Path, Circle } from 'react-native-svg'; // NOUVEAU: Importer Svg, Path, Circle
+import { useAuth } from '../../../components/AuthProvider'; // Add this import
+
 
 const { width } = Dimensions.get('window');
 // SVG pour l'illustration de l'espace Intérimaire
@@ -22,9 +23,17 @@ export default function InterimSpaceOnboardingScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const { t } = useLanguage();
+ const { completeOnboarding } = useAuth(); // Add this line
 
-  const handleGetStarted = () => {
-    router.replace('/(auth)'); // Redirige vers l'écran de connexion/inscription
+  const handleGetStarted = async () => {
+    try {
+      await completeOnboarding(); // Complete onboarding first
+      router.replace('/(auth)'); // Then redirect to auth screen
+    } catch (error) {
+      console.error('Error completing onboarding:', error);
+      // Even if there's an error, still redirect to auth
+      router.replace('/(auth)');
+    }
   };
 
   return (

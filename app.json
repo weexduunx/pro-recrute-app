@@ -16,7 +16,13 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "Cette application a besoin d'accéder à l'appareil photo pour prendre des photos de profil et scanner des documents.",
+        "NSPhotoLibraryUsageDescription": "Cette application a besoin d'accéder à la galerie photo pour sélectionner des images.",
+        "NSLocationWhenInUseUsageDescription": "Cette application utilise votre localisation pour vous proposer des offres d'emploi près de chez vous.",
+        "NSMicrophoneUsageDescription": "Cette application a besoin d'accéder au microphone pour enregistrer des messages vocaux."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -25,7 +31,16 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "com.weexduunx88.prorecrutegbg",
-      "googleServicesFile":"./google-services.json"
+      "googleServicesFile":"./google-services.json",
+       "permissions": [
+        "CAMERA",
+        "RECORD_AUDIO",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "ACCESS_MEDIA_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
+      ]
 
     },
     "web": {
