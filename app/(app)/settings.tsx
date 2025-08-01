@@ -666,7 +666,7 @@ export default function ParametresScreen() {
   const handleAbout = () => {
     Alert.alert(
       t('À propos'),
-      `${t('Version')}: 1.0.0\n${t('Développé par')}: Votre Équipe\n${t('Copyright')} © 2024`,
+      `${t('Version')}: 1.0.0\n${t('Développé par')}: GBG TEAM IT\n${t('Copyright')} © 2024`,
       [
         {
           text: t('Conditions d\'utilisation'),

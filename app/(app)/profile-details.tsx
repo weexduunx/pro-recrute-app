@@ -216,64 +216,6 @@ export default function ProfileDetailsScreen() {
 
   const [showPersonalInfo, setShowPersonalInfo] = useState(true);
 
-  //  États pour le modal de complétude
-  const [showCompletionModal, setShowCompletionModal] = useState(false);
-
-  const [profileCompletion, setProfileCompletion] = useState({
-    percentage: 0,
-    missingFields: [] as string[],
-  });
-
-  const [cvCompletion, setCvCompletion] = useState({
-    percentage: 0,
-    missingFields: [] as string[],
-  });
-
-  const isEditingAnything = cvEditMode || personalEditMode || datePickerOpen || datePickerState !== null;
-
-  useEffect(() => {
-    const missingProfileFields = [];
-    const missingCvFields = [];
-
-    if (!candidatProfile?.titreProfil) missingProfileFields.push('Titre du profil');
-    if (!candidatProfile?.telephone) missingProfileFields.push('Téléphone');
-    if (!candidatProfile?.disponibilite) missingProfileFields.push('Disponibilité');
-    if (!candidatProfile?.date_naissance) missingProfileFields.push('Date de naissance');
-    if (!candidatProfile?.genre) missingProfileFields.push('Genre');
-
-    if (!parsedCv?.summary) missingCvFields.push('Résumé');
-    if (!editableSkills.length) missingCvFields.push('Compétences');
-    if (!editableExperiences.length) missingCvFields.push('Expériences');
-    if (!editableFormations.length) missingCvFields.push('Formations');
-
-    const totalProfileFields = 5;
-    const totalCvFields = 4;
-
-    setProfileCompletion({
-      percentage: Math.round(((totalProfileFields - missingProfileFields.length) / totalProfileFields) * 100),
-      missingFields: missingProfileFields,
-    });
-
-    setCvCompletion({
-      percentage: Math.round(((totalCvFields - missingCvFields.length) / totalCvFields) * 100),
-      missingFields: missingCvFields,
-    });
-
-
-    // Si l’un des deux est incomplet, afficher la modale
-    if (
-      !isEditingAnything &&
-      (missingProfileFields.length > 0 || missingCvFields.length > 0)
-    ) {
-      setShowCompletionModal(true);
-    } else {
-      setShowCompletionModal(false); // pour forcer la fermeture si on est en train d’éditer
-    }
-
-
-  }, [candidatProfile, parsedCv, editableSkills, editableExperiences, editableFormations]);
-
-
   // Options pour le Picker du type de contrat
   const contractTypeOptions = [
     { label: t('Sélectionner un type'), value: null }, // Option par défaut
@@ -310,18 +252,154 @@ export default function ProfileDetailsScreen() {
     return option ? option.label : t('Non spécifié');
   };
 
+  // États pour le modal de complétude
+  const [showCompletionModal, setShowCompletionModal] = useState(false);
+  const [profileCompletion, setProfileCompletion] = useState({
+    percentage: 0,
+    missingFields: [] as string[],
+  });
+  const [cvCompletion, setCvCompletion] = useState({
+    percentage: 0,
+    missingFields: [] as string[],
+  });
 
-  // --- Callbacks de chargement de données ---
+  // État pour éviter les rendus multiples
+  const [initialLoadComplete, setInitialLoadComplete] = useState(false);
+
+  const isEditingAnything = cvEditMode || personalEditMode || datePickerOpen || datePickerState !== null;
+
+  // Fonction de calcul de complétude (mémorisée pour éviter les recalculs)
+  const calculateCompletion = useCallback(() => {
+    if (!candidatProfile || loadingCandidatProfile) {
+      return {
+        profileCompletion: { percentage: 0, missingFields: [] },
+        cvCompletion: { percentage: 0, missingFields: [] }
+      };
+    }
+
+    const missingProfileFields = [];
+    const missingCvFields = [];
+
+    // Calcul des champs manquants du profil
+    if (!candidatProfile?.titreProfil) missingProfileFields.push('Titre du profil');
+    if (!candidatProfile?.telephone) missingProfileFields.push('Téléphone');
+    if (!candidatProfile?.disponibilite) missingProfileFields.push('Disponibilité');
+    if (!candidatProfile?.date_naissance) missingProfileFields.push('Date de naissance');
+    if (!candidatProfile?.genre) missingProfileFields.push('Genre');
+
+    // Calcul des champs manquants du CV
+    if (!parsedCv?.summary) missingCvFields.push('Résumé');
+    if (!editableSkills?.length) missingCvFields.push('Compétences');
+    if (!editableExperiences?.length) missingCvFields.push('Expériences');
+    if (!editableFormations?.length) missingCvFields.push('Formations');
+
+    const totalProfileFields = 5;
+    const totalCvFields = 4;
+
+    const profilePercentage = Math.round(((totalProfileFields - missingProfileFields.length) / totalProfileFields) * 100);
+    const cvPercentage = Math.round(((totalCvFields - missingCvFields.length) / totalCvFields) * 100);
+
+    return {
+      profileCompletion: { percentage: profilePercentage, missingFields: missingProfileFields },
+      cvCompletion: { percentage: cvPercentage, missingFields: missingCvFields }
+    };
+  }, [candidatProfile, parsedCv, editableSkills, editableExperiences, editableFormations, loadingCandidatProfile]);
+
+  // useEffect pour la mise à jour de la complétude (évite les boucles)
+  useEffect(() => {
+    if (!initialLoadComplete) return;
+
+    const { profileCompletion: newProfileCompletion, cvCompletion: newCvCompletion } = calculateCompletion();
+
+    setProfileCompletion(newProfileCompletion);
+    setCvCompletion(newCvCompletion);
+
+    // Logique d'affichage de la modale simplifiée
+    const shouldShowModal = (
+      !isEditingAnything &&
+      !candidatEditMode &&
+      !interimEditMode &&
+      (newProfileCompletion.missingFields.length > 0 || newCvCompletion.missingFields.length > 0) &&
+      candidatProfile !== null &&
+      !loadingCandidatProfile
+    );
+
+    console.log('Modal check:', {
+      shouldShowModal,
+      isEditingAnything,
+      candidatEditMode,
+      interimEditMode,
+      profileMissing: newProfileCompletion.missingFields.length,
+      cvMissing: newCvCompletion.missingFields.length,
+      candidatProfile: !!candidatProfile,
+      loadingCandidatProfile,
+      showCompletionModal
+    });
+
+    if (shouldShowModal) {
+      const timer = setTimeout(() => {
+        setShowCompletionModal(true);
+      }, 300);
+      return () => clearTimeout(timer);
+    } else if (!shouldShowModal) {
+      setShowCompletionModal(false);
+    }
+
+  }, [
+    initialLoadComplete,
+    isEditingAnything,
+    candidatEditMode,
+    interimEditMode,
+    candidatProfile,
+    loadingCandidatProfile,
+    profileCompletion.missingFields.length,
+    cvCompletion.missingFields.length
+  ]);
+
+  // Fonction checkCompletionStatus simplifiée
+  const checkCompletionStatus = useCallback(() => {
+    if (!candidatProfile || loadingCandidatProfile || !initialLoadComplete) return;
+
+    const { profileCompletion: newProfileCompletion, cvCompletion: newCvCompletion } = calculateCompletion();
+
+    setProfileCompletion(newProfileCompletion);
+    setCvCompletion(newCvCompletion);
+
+    const isEditing = cvEditMode || personalEditMode || candidatEditMode || interimEditMode || datePickerOpen;
+    const hasIncompleteData = newProfileCompletion.missingFields.length > 0 || newCvCompletion.missingFields.length > 0;
+
+    console.log('checkCompletionStatus:', {
+      isEditing,
+      hasIncompleteData,
+      profileMissing: newProfileCompletion.missingFields,
+      cvMissing: newCvCompletion.missingFields
+    });
+
+    if (!isEditing && hasIncompleteData) {
+      setTimeout(() => setShowCompletionModal(true), 300);
+    }
+  }, [
+    candidatProfile,
+    loadingCandidatProfile,
+    initialLoadComplete,
+    calculateCompletion,
+    cvEditMode,
+    personalEditMode,
+    candidatEditMode,
+    interimEditMode,
+    datePickerOpen
+  ]);
+
+  // Callback de chargement candidat optimisé
   const loadCandidatProfile = useCallback(async () => {
     if (user && (user.role === 'user' || user.role === 'interimaire')) {
       setLoadingCandidatProfile(true);
       try {
-        // Charge le candidat AVEC ses relations competences, experiences, formations et parsed_cv
         const data: CandidatProfileData = await getCandidatProfile();
         setCandidatProfile(data);
 
-        // Initialiser editableCandidatProfile avec les données de base du candidat
-        setEditableCandidatProfile({
+        // Initialiser tous les états en une seule fois
+        const candidatData = {
           date_naissance: data?.date_naissance || '',
           lieu_naissance: data?.lieu_naissance || '',
           genre: data?.genre || 'Homme',
@@ -330,41 +408,17 @@ export default function ProfileDetailsScreen() {
           photo_profil: data?.photo_profil || '',
           status: data?.status ?? 1,
           disponibilite: data?.disponibilite || '',
-        });
-        // Calcul des champs manquants profil
-        const missingProfileFields = [];
-        if (!data?.titreProfil) missingProfileFields.push('Titre du profil');
-        if (!data?.telephone) missingProfileFields.push('Téléphone');
-        if (!data?.disponibilite) missingProfileFields.push('Disponibilité');
-        if (!data?.date_naissance) missingProfileFields.push('Date de naissance');
-        if (!data?.genre) missingProfileFields.push('Genre');
+        };
 
-        const totalProfileFields = 5;
-        const profilePercentage = Math.round(((totalProfileFields - missingProfileFields.length) / totalProfileFields) * 100);
-
-        setProfileCompletion({
-          percentage: profilePercentage,
-          missingFields: missingProfileFields,
-        });
-
-        // Initialiser editableSkills avec gestion des niveaux
         const skillsWithLevels = data?.competences?.map((s: any) => {
-          // Vérifier plusieurs sources possibles pour le niveau
-          const niveau = s.pivot?.niveau_competence ||
-            s.niveau_competence ||
-            1; // Valeur par défaut
-
-          console.log(`Compétence: ${s.libelle_competence}, Niveau: ${niveau}`); // Pour déboguer
-
+          const niveau = s.pivot?.niveau_competence || s.niveau_competence || 1;
           return {
             libelle_competence: s.libelle_competence,
             niveau_competence: niveau
           };
         }) || [];
 
-        setEditableSkills(skillsWithLevels);
-
-        setEditableExperiences(data?.experiences?.map((exp: any) => ({
+        const experiences = data?.experiences?.map((exp: any) => ({
           ...exp,
           competences: exp.competences?.map((c: any) => ({
             id: c.id,
@@ -373,45 +427,30 @@ export default function ProfileDetailsScreen() {
               niveau_competence: c.niveau_competence ?? c.pivot?.niveau_competence ?? 1,
             },
           })) || [],
+        })) || [];
 
-        })) || []);
-
-
-        setEditableFormations(data?.formations?.map((form: any) => ({
+        const formations = data?.formations?.map((form: any) => ({
           ...form,
-          competences: form.competences?.map((c: any) => ({ libelle_competence: c.libelle_competence })) || [],
-        })) || []);
+          competences: form.competences?.map((c: any) => ({
+            libelle_competence: c.libelle_competence
+          })) || [],
+        })) || [];
 
-        // Initialiser parsedCv et editableParsedCv à partir de la relation parsed_cv
-        setParsedCv(data?.parsed_cv || null);
-        setEditableParsedCv({
+        const parsedCvData = data?.parsed_cv || null;
+        const editableParsedCvData = {
           full_name: data?.parsed_cv?.full_name || user?.name || '',
           email: data?.parsed_cv?.email || user?.email || '',
           phone: data?.parsed_cv?.phone || '',
           summary: data?.parsed_cv?.summary || '',
-          // education: Array.isArray(data?.parsed_cv?.education) ? data?.parsed_cv?.education : [],
-        });
+        };
 
-        // Calcul des champs manquants du CV
-        const missingCvFields = [];
-        if (!data?.parsed_cv?.summary) missingCvFields.push('Résumé');
-        if (!data?.competences?.length) missingCvFields.push('Compétences');
-        if (!data?.experiences?.length) missingCvFields.push('Expériences');
-        if (!data?.formations?.length) missingCvFields.push('Formations');
-
-        const totalCvFields = 4;
-        const cvPercentage = Math.round(((totalCvFields - missingCvFields.length) / totalCvFields) * 100);
-
-        setCvCompletion({
-          percentage: cvPercentage,
-          missingFields: missingCvFields,
-        });
-
-        // Afficher la modale si nécessaire
-        if (!cvEditMode && !personalEditMode && (profilePercentage < 100 || cvPercentage < 100)) {
-          setShowCompletionModal(true);
-        }
-
+        // Batch des mises à jour d'état
+        setEditableCandidatProfile(candidatData);
+        setEditableSkills(skillsWithLevels);
+        setEditableExperiences(experiences);
+        setEditableFormations(formations);
+        setParsedCv(parsedCvData);
+        setEditableParsedCv(editableParsedCvData);
 
         if (data?.parsed_cv?.last_parsed_file) {
           setCvFileName(data.parsed_cv.last_parsed_file);
@@ -420,6 +459,8 @@ export default function ProfileDetailsScreen() {
         }
 
       } catch (error: any) {
+        console.error("Erreur de chargement du profil candidat:", error);
+        // Reset des états en cas d'erreur
         setCandidatProfile(null);
         setEditableCandidatProfile({
           date_naissance: '',
@@ -440,6 +481,7 @@ export default function ProfileDetailsScreen() {
         setLoadingCandidatProfile(false);
       }
     } else {
+      // Reset pour les utilisateurs non-candidats
       setCandidatProfile(null);
       setEditableCandidatProfile({
         date_naissance: '',
@@ -457,11 +499,10 @@ export default function ProfileDetailsScreen() {
       setParsedCv(null);
       setCvFileName(null);
       setLoadingCandidatProfile(false);
-
-
     }
-  }, [user]);
+  }, [user]); // Retiré checkCompletionStatus des dépendances
 
+  // Callback de chargement intérimaire optimisé
   const loadInterimProfile = useCallback(async () => {
     if (user && user.role === 'interimaire') {
       setLoadingInterimProfile(true);
@@ -487,22 +528,33 @@ export default function ProfileDetailsScreen() {
       } catch (error: any) {
         console.error("Erreur de chargement du profil intérimaire:", error);
         setInterimProfile(null);
-        setEditableInterimProfile({ matricule: '', sexe: 1, matrimoniale: 1, nationalite: '', phone: '', date_naissance: '', lieu_naissance: '', cni: '', adresse: '', profile_photo_path: '', statut_agent: 0, diplome: '', taux_retenu: 0, taux_remboursse: 0, });
+        setEditableInterimProfile({
+          matricule: '', sexe: 1, matrimoniale: 1, nationalite: '', phone: '',
+          date_naissance: '', lieu_naissance: '', cni: '', adresse: '',
+          profile_photo_path: '', statut_agent: 0, diplome: '', taux_retenu: 0,
+          taux_remboursse: 0,
+        });
       } finally {
         setLoadingInterimProfile(false);
       }
     } else {
       setInterimProfile(null);
-      setEditableInterimProfile({ matricule: '', sexe: 1, matrimoniale: 1, nationalite: '', phone: '', date_naissance: '', lieu_naissance: '', cni: '', adresse: '', profile_photo_path: '', statut_agent: 0, diplome: '', taux_retenu: 0, taux_remboursse: 0, });
+      setEditableInterimProfile({
+        matricule: '', sexe: 1, matrimoniale: 1, nationalite: '', phone: '',
+        date_naissance: '', lieu_naissance: '', cni: '', adresse: '',
+        profile_photo_path: '', statut_agent: 0, diplome: '', taux_retenu: 0,
+        taux_remboursse: 0,
+      });
       setLoadingInterimProfile(false);
     }
   }, [user]);
 
+  // Fonction de chargement du CV parsé (inchangée mais optimisée)
   const loadParsedCv = useCallback(async () => {
-    if (user && user.role !== 'user') { // Seulement si pas candidat, sinon loadCandidatProfile le fait
+    if (user && user.role !== 'user') {
       setLoadingParsedCv(true);
       try {
-        const rawData = await getParsedCvData(); // Cette API retourne ParsedCv seul
+        const rawData = await getParsedCvData();
         const data: ParsedCvData = rawData ?? {};
         setParsedCv(data);
         setEditableParsedCv({
@@ -510,8 +562,8 @@ export default function ProfileDetailsScreen() {
           email: data?.email || user?.email || '',
           phone: data?.phone || '',
           summary: data?.summary || '',
-          // education:  [],
         });
+
         if (data && data.last_parsed_file) {
           setCvFileName(data.last_parsed_file);
         } else {
@@ -523,7 +575,6 @@ export default function ProfileDetailsScreen() {
         setLoadingParsedCv(false);
       }
     } else if (user?.role === 'user') {
-      // Si c'est un candidat, parsedCv est déjà chargé par loadCandidatProfile
       setLoadingParsedCv(false);
     } else {
       setParsedCv(null);
@@ -532,12 +583,43 @@ export default function ProfileDetailsScreen() {
     }
   }, [user]);
 
-  // useEffect pour le chargement initial ---
+  // useEffect principal optimisé pour éviter les re-rendus
   useEffect(() => {
-    setEditableName(user?.name || '');
-    loadCandidatProfile();
-    loadInterimProfile();
+    if (!user) {
+      setInitialLoadComplete(false);
+      return;
+    }
+
+    const loadProfiles = async () => {
+      setInitialLoadComplete(false);
+      setEditableName(user?.name || '');
+
+      // Charger en parallèle pour optimiser
+      await Promise.all([
+        loadCandidatProfile(),
+        loadInterimProfile(),
+        // loadParsedCv() si nécessaire
+      ]);
+
+      // Marquer le chargement initial comme terminé avec un délai pour stabiliser les états
+      setTimeout(() => {
+        setInitialLoadComplete(true);
+      }, 200);
+    };
+
+    loadProfiles();
   }, [user, loadCandidatProfile, loadInterimProfile]);
+
+  // useEffect séparé pour déclencher la vérification de complétude après le chargement
+  useEffect(() => {
+    if (initialLoadComplete && candidatProfile) {
+      // Délai supplémentaire pour s'assurer que tous les états sont synchronisés
+      setTimeout(() => {
+        checkCompletionStatus();
+      }, 100);
+    }
+  }, [initialLoadComplete, candidatProfile, checkCompletionStatus]);
+
 
   // Gestionnaire d'événements pour la sauvegarde des informations personnelles
   const handlePersonalInfoSave = async () => {
@@ -3608,8 +3690,3 @@ const cvStyles = StyleSheet.create({
     fontSize: 16,
   },
 });
-
-
-
-
-
