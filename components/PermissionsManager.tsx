@@ -188,101 +188,38 @@ export const PermissionsProvider = ({ children }: PermissionsProviderProps) => {
 
   const requestAllPermissions = async () => {
     try {
-      // Demander les permissions une par une avec des explications
-      
-      // 1. Notifications
-      Alert.alert(
-        'Notifications',
-        'Nous aimerions vous envoyer des notifications pour vous tenir informé des nouvelles opportunités et mises à jour importantes.',
-        [
-          {
-            text: 'Plus tard',
-            style: 'cancel',
-          },
-          {
-            text: 'Autoriser',
-            onPress: async () => {
-              const status = await requestPermission('notifications');
-              if (status === 'denied') {
-                showPermissionAlert('aux notifications', 'vous tenir informé des opportunités');
-              }
-            },
-          },
-        ]
-      );
-
-      // Petite pause entre les demandes
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      // 2. Caméra
-      Alert.alert(
-        'Appareil photo',
-        'L\'accès à l\'appareil photo est nécessaire pour prendre des photos de profil et scanner des documents.',
-        [
-          {
-            text: 'Plus tard',
-            style: 'cancel',
-          },
-          {
-            text: 'Autoriser',
-            onPress: async () => {
-              const status = await requestPermission('camera');
-              if (status === 'denied') {
-                showPermissionAlert('à l\'appareil photo', 'prendre des photos');
-              }
-            },
-          },
-        ]
-      );
-
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      // 3. Galerie
-      Alert.alert(
-        'Galerie photo',
-        'L\'accès à la galerie photo permet de sélectionner des images existantes pour votre profil ou vos documents.',
-        [
-          {
-            text: 'Plus tard',
-            style: 'cancel',
-          },
-          {
-            text: 'Autoriser',
-            onPress: async () => {
-              const status = await requestPermission('mediaLibrary');
-              if (status === 'denied') {
-                showPermissionAlert('à la galerie', 'sélectionner des photos');
-              }
-            },
-          },
-        ]
-      );
-
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      // 4. Localisation (optionnelle)
-      Alert.alert(
-        'Localisation',
-        'L\'accès à votre localisation nous aide à vous proposer des offres d\'emploi près de chez vous.',
-        [
-          {
-            text: 'Plus tard',
-            style: 'cancel',
-          },
-          {
-            text: 'Autoriser',
-            onPress: async () => {
-              const status = await requestPermission('location');
-              if (status === 'denied') {
-                showPermissionAlert('à la localisation', 'proposer des offres locales');
-              }
-            },
-          },
-        ]
-      );
-
-      // Marquer les permissions comme demandées
+      // Marquer les permissions comme demandées dès le début pour éviter les boucles
       await setPermissionsRequested();
+      
+      // Demander les permissions de manière séquentielle pour éviter les superpositions
+      const requestSequentially = async () => {
+        // 1. Notifications
+        return new Promise<void>((resolve) => {
+          Alert.alert(
+            'Notifications',
+            'Nous aimerions vous envoyer des notifications pour vous tenir informé des nouvelles opportunités et mises à jour importantes.',
+            [
+              {
+                text: 'Plus tard',
+                style: 'cancel',
+                onPress: () => resolve(),
+              },
+              {
+                text: 'Autoriser',
+                onPress: async () => {
+                  const status = await requestPermission('notifications');
+                  if (status === 'denied') {
+                    showPermissionAlert('aux notifications', 'vous tenir informé des opportunités');
+                  }
+                  resolve();
+                },
+              },
+            ]
+          );
+        });
+      };
+
+      await requestSequentially();
       
       // Vérifier le statut final de toutes les permissions
       await checkPermissions();

@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useAuth } from './AuthProvider';
 import { usePermissions } from './PermissionsManager';
 
@@ -9,11 +9,34 @@ import { usePermissions } from './PermissionsManager';
 export const useAuthPermissions = () => {
   const { isAuthenticated, user, isAppReady } = useAuth();
   const { hasRequestedPermissions, requestAllPermissions } = usePermissions();
+  
+  // Utiliser useRef pour éviter les appels multiples
+  const hasTriggeredPermissions = useRef(false);
 
   useEffect(() => {
-    // Demander les permissions 2 secondes après qu'un utilisateur soit connecté
-    // et seulement si elles n'ont pas déjà été demandées
-    if (isAuthenticated && user && isAppReady && !hasRequestedPermissions) {
+    // Réinitialiser le flag quand l'utilisateur se déconnecte
+    if (!isAuthenticated) {
+      hasTriggeredPermissions.current = false;
+    }
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    // Demander les permissions seulement si :
+    // - L'utilisateur est connecté ET authentifié (pas en phase d'OTP)
+    // - L'app est prête
+    // - Les permissions n'ont pas déjà été demandées
+    // - On n'a pas déjà déclenché les permissions pour cette session
+    // - L'utilisateur a vérifié son OTP (is_otp_verified !== false)
+    if (
+      isAuthenticated && 
+      user && 
+      user.is_otp_verified !== false && // S'assurer que l'OTP est vérifié
+      isAppReady && 
+      !hasRequestedPermissions && 
+      !hasTriggeredPermissions.current
+    ) {
+      hasTriggeredPermissions.current = true;
+      
       const timer = setTimeout(() => {
         requestAllPermissions();
       }, 2000);

@@ -130,7 +130,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
     // Priority 1: Handle OTP verification
     if (authenticated && isOtpVerified === false) {
-      if (router.canGoBack() && segments.length > 0 && segments[segments.length - 1] !== 'otp_verification') {
+      // Éviter les redirections multiples vers OTP
+      const currentPath = router.pathname || '';
+      if (!currentPath.includes('otp_verification')) {
         router.replace({
           pathname: '/(auth)/otp_verification',
           params: { email: emailForOtp || user?.email, deviceName: deviceNameForOtp || Device.deviceName || 'UnknownDevice' },
@@ -178,7 +180,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         }
       }
     }
-  }, [inAuthGroup, inAppGroup, inOnboardingGroup, segments, user?.email, isLoggingOut, hasSeenOnboarding]); 
+  }, [inAuthGroup, inAppGroup, inOnboardingGroup, user?.email, isLoggingOut, hasSeenOnboarding]); 
 
   useEffect(() => {
     async function prepareApp() {
@@ -224,10 +226,10 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   }, [fetchUser, handleRedirect]);
 
   useEffect(() => {
-    if (isAppReady) {
+    if (isAppReady && !isLoggingOut) {
       handleRedirect(!!user, user?.role, user?.is_otp_verified, user?.is_contract_active);
     }
-  }, [isAppReady, user, handleRedirect, hasSeenOnboarding]);
+  }, [isAppReady, user, handleRedirect, hasSeenOnboarding, isLoggingOut]);
 
   const login = async (email: string, password: string, deviceName?: string) => {
     setLoading(true);
@@ -334,32 +336,66 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     }
   };
 
+  /**
+    * [NOUVEAU] Gère le processus de connexion sociale via OAuth.
+    * Gère le processus de connexion sociale via OAuth.
+    * @param {string} provider - Le nom du fournisseur ('google', 'linkedin').
+    */
   const socialLogin = async (provider: string) => {
     setLoading(true);
     setError(null);
+
+    // L'URL de redirection vers votre API Laravel pour initier le flux OAuth
+    // Assurez-vous que l'URL de votre API Laravel est correcte
+    const LARAVEL_SOCIAL_REDIRECT_URL = `http://192.168.1.144:8000/api/auth/${provider}/redirect`; // Utiliser l'IP locale pour le dev
+
     try {
-        const response = await socialLoginCallback(provider);
-        if (response.user && response.user.role === 'interimaire') {
-          const interimProfile = await getInterimProfile();
-          if (interimProfile) {
-            response.user.is_contract_active = interimProfile.is_contract_active;
-          } else {
-            response.user.is_contract_active = false;
+      const result = await WebBrowser.openAuthSessionAsync(
+        LARAVEL_SOCIAL_REDIRECT_URL,
+        REDIRECT_URI
+      );
+
+      if (result.type === 'success' && result.url) {
+        const url = new URL(result.url);
+        const tokenFromUrl = url.searchParams.get('token');
+        const roleFromUrl = url.searchParams.get('role');
+        const errorFromUrl = url.searchParams.get('error');
+
+        if (errorFromUrl) {
+          setError(decodeURIComponent(errorFromUrl));
+          console.error(`AuthProvider: Erreur OAuth depuis l'API: ${decodeURIComponent(errorFromUrl)}`);
+        } else if (tokenFromUrl) {
+          const userFromApi = await fetchUserProfile(); // Récupérer l'utilisateur complet via le token
+
+          // Récupérer le profil intérimaire si nécessaire
+          if (userFromApi && userFromApi.role === 'interimaire') {
+            const interimProfile = await (await import('../utils/api')).getInterimProfile();
+            if (interimProfile) {
+              userFromApi.is_contract_active = interimProfile.is_contract_active;
+            } else {
+              userFromApi.is_contract_active = false;
+            }
           }
+
+          await AsyncStorage.setItem('user_token', tokenFromUrl);
+          setUser(userFromApi);
+          setToken(tokenFromUrl);
+          handleRedirect(true, userFromApi?.role, userFromApi?.is_otp_verified, userFromApi?.is_contract_active);
+
+        } else {
+          setError('Token manquant dans la réponse OAuth.');
+          console.error('AuthProvider: Token manquant après Social Login.');
         }
-
-        await AsyncStorage.setItem(STORAGE_KEYS.USER_TOKEN, response.token); // D'abord, stocker le token
-        const fullUser = await fetchUser(); // Puis, recharger l'utilisateur (inclut is_contract_active si intérimaire)
-
-        setUser(fullUser);
-        setToken(response.token);
-        handleRedirect(true, response.user.role, true, response.user.is_contract_active);
+      } else if (result.type === 'cancel') {
+        setError('Connexion annulée par l\'utilisateur.');
+      } else {
+        setError('Échec de la connexion OAuth.');
+      }
     } catch (err: any) {
-        console.error('Social login failed:', err.response?.data || err.message);
-        setError(err.response?.data?.message || 'Social login failed. Please try again.');
-        throw err;
+      console.error(`Échec de la connexion sociale via ${provider}:`, err.response?.data || err.message);
+      setError(err.response?.data?.message || `Échec de la connexion via ${provider}. Veuillez réessayer.`);
     } finally {
-        setLoading(false);
+      setLoading(false);
     }
   };
 
