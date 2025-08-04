@@ -3,13 +3,14 @@ import { View, Text, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator,
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useAuth } from '../../components/AuthProvider';
-import { FontAwesome5 } from '@expo/vector-icons';
+import { FontAwesome5,Feather } from '@expo/vector-icons';
 import * as Device from 'expo-device'; // Importer Device
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false); 
   const [error, setError] = useState<string | null>(null);
 
   const { login, socialLogin, error: authError, clearError } = useAuth();
@@ -38,8 +39,7 @@ export default function LoginScreen() {
       // La fonction login dans AuthProvider gère maintenant la redirection OTP
       await login(email, password, deviceName); 
     } catch (err: any) {
-      // L'erreur est déjà gérée par AuthProvider et stockée dans le contexte
-      // Elle sera récupérée par le useEffect ci-dessus
+
       // Ici, on peut juste s'assurer que le loading est false
     } finally {
       setLoading(false);
@@ -95,19 +95,54 @@ export default function LoginScreen() {
             />
           </View>
 
-          <View style={styles.inputContainer}>
+          {/* <View style={styles.inputContainer}>
             <TextInput
               style={styles.input}
               placeholder="Mot de passe"
               placeholderTextColor="#9CA3AF"
               value={password}
               onChangeText={setPassword}
-              secureTextEntry
+              secureTextEntry={!showPassword}
               textContentType="password"
               autoComplete="password"
               editable={!loading}
+              autoCapitalize="none"
             />
-          </View>
+             <TouchableOpacity 
+                onPress={() => setShowPassword(!showPassword)}
+                style={{ padding: 5 }}
+              >
+                <Feather 
+                  name={showPassword ? "eye-off" : "eye"} 
+                  size={18} 
+                  color={styles.textSecondary.color}
+                />
+              </TouchableOpacity>
+          </View> */}
+<View style={styles.inputContainer}>
+  <TextInput
+    style={[styles.input, { paddingRight: 50 }]} // AJOUT: paddingRight pour l'icône
+    placeholder="Mot de passe"
+    placeholderTextColor="#9CA3AF"
+    value={password}
+    onChangeText={setPassword}
+    secureTextEntry={!showPassword}
+    textContentType="password"
+    autoComplete="password"
+    editable={!loading}
+    autoCapitalize="none"
+  />
+  <TouchableOpacity 
+    onPress={() => setShowPassword(!showPassword)}
+    style={styles.eyeIcon} // AJOUT: nouveau style
+  >
+    <Feather 
+      name={showPassword ? "eye-off" : "eye"} 
+      size={18} 
+      color="#9CA3AF"
+    />
+  </TouchableOpacity>
+</View>
 
           <TouchableOpacity
             style={[styles.primaryButton, loading && styles.buttonDisabled]}
@@ -167,7 +202,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingVertical: 40,
   },
-  
+   textSecondary: {
+     color: '#A0A0A0'
+   },
   // Section Header
   headerSection: {
     alignItems: "center",
@@ -211,6 +248,7 @@ const styles = StyleSheet.create({
   },
   inputContainer: {
     marginBottom: 20,
+ position: 'relative',
   },
   input: {
     backgroundColor: "#F9FAFB",
@@ -221,7 +259,17 @@ const styles = StyleSheet.create({
     color: "#1F2937",
     borderWidth: 1,
     borderColor: "#E5E7EB",
+    flex: 1,
   },
+    eyeIcon: {
+    position: 'absolute',
+    right: 15,
+    top: '50%',
+    transform: [{ translateY: -13 }], // Centrage vertical (ajustez si nécessaire)
+    padding: 5, // Zone de touch plus grande
+    zIndex: 1, // Au-dessus de l'input
+  },
+
   primaryButton: {
     backgroundColor: "#0e8030",
     borderRadius: 12,

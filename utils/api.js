@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { Alert, TouchableOpacity, Text } from 'react-native';
+import * as Device from 'expo-device';
 
 // **IMPORTANT: Mettez à jour cette URL avec l'adresse IP et le port du  backend Laravel**
 const API_URL = 'http://192.168.1.144:8000/api'  || process.env.EXPO_PUBLIC_API_URL ; // Fallback pour le développement
@@ -51,6 +52,7 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
 
 export const loginUser = async (email, password, deviceName) => {
   try {
@@ -453,7 +455,6 @@ export const getDetailsUserGbg = async () => {
 };
 
 
-
 // export const getPdf = async (encryptedContratId) => {
 //   try {
 //     // MODIFIÉ : Requête GET et ID dans l'URL
@@ -839,9 +840,140 @@ export const getAffiliatedStructures = async (page = 1, perPage = 10) => {
   }
 };
 
+/**
+ * Enregistre une nouvelle session active ou met à jour une session existante
+ */
+export const storeActiveSession = async (sessionData, deviceHeaders = {}) => {
+  try {
+    console.log('=== storeActiveSession API Call ===');
+    console.log('Session Data:', sessionData);
+    console.log('Device Headers:', deviceHeaders);
+    
+    // Construire la configuration de la requête avec les headers personnalisés
+    const requestConfig = {
+      headers: {
+        'Content-Type': 'application/json',
+        ...deviceHeaders // Ajouter les headers de device
+      }
+    };
+    
+    console.log('Request Config:', requestConfig);
+    
+    const response = await api.post('/sessions', sessionData, requestConfig);
+    
+    console.log('Response storeActiveSession:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error("Échec de l'appel API storeActiveSession:", error.response?.data || error.message);
+    console.error("Full error:", error);
+    throw error;
+  }
+};
 
+/**
+ * Récupère toutes les sessions actives de l'utilisateur
+ * Maintenant avec headers pour identification de l'appareil actuel
+ */
+export const getActiveSessions = async (deviceHeaders = {}) => {
+  try {
+    console.log('=== getActiveSessions API Call ===');
+    console.log('Device Headers:', deviceHeaders);
+    
+    // Construire la configuration de la requête avec les headers personnalisés
+    const requestConfig = {
+      headers: {
+        'Content-Type': 'application/json',
+        ...deviceHeaders // Ajouter les headers de device pour identification
+      }
+    };
+    
+    console.log('Request Config:', requestConfig);
+    
+    const response = await api.get('/sessions', requestConfig);
+    
+    console.log('Response getActiveSessions:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error("Échec de l'appel API getActiveSessions:", error.response?.data || error.message);
+    throw error;
+  }
+};
 
+/**
+ * Termine une session spécifique
+ */
+export const terminateSession = async (sessionId) => {
+  try {
+    const response = await api.delete(`/sessions/${sessionId}`);
+    return response.data;
+  } catch (error) {
+    console.error("Échec de l'appel API terminateSession:", error.response?.data || error.message);
+    throw error;
+  }
+};
 
+/**
+ * Termine toutes les autres sessions (sauf la session actuelle)
+ */
+export const terminateAllOtherSessions = async () => {
+  try {
+    const response = await api.delete('/sessions');
+    return response.data;
+  } catch (error) {
+    console.error("Échec de l'appel API terminateAllOtherSessions:", error.response?.data || error.message);
+    throw error;
+  }
+};
 
+/**
+ * Nettoie les sessions expirées
+ */
+export const cleanupExpiredSessions = async () => {
+  try {
+    const response = await api.post('/sessions/cleanup');
+    return response.data;
+  } catch (error) {
+    console.error("Échec de l'appel API cleanupExpiredSessions:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+/**
+ * Change le mot de passe de l'utilisateur connecté
+ */
+export const changePassword = async (currentPassword, newPassword, newPasswordConfirmation) => {
+  try {
+    console.log('=== changePassword API Call ===');
+    
+    const response = await api.post('/user/change-password', {
+      current_password: currentPassword,
+      new_password: newPassword,
+      new_password_confirmation: newPasswordConfirmation
+    });
+    
+    console.log('Response changePassword:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error("Échec de l'appel API changePassword:", error.response?.data || error.message);
+    
+    // Gérer les erreurs de validation spécifiquement
+    if (error.response?.status === 422) {
+      const validationErrors = error.response.data.errors;
+      let errorMessage = 'Erreur de validation:';
+      
+      if (validationErrors.current_password) {
+        errorMessage = validationErrors.current_password[0];
+      } else if (validationErrors.new_password) {
+        errorMessage = validationErrors.new_password[0];
+      } else if (validationErrors.new_password_confirmation) {
+        errorMessage = validationErrors.new_password_confirmation[0];
+      }
+      
+      throw new Error(errorMessage);
+    }
+    
+    throw error;
+  }
+};
 
 export default api;

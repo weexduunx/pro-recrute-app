@@ -718,49 +718,54 @@ const styles = StyleSheet.create({
     color: "#1F2937",
   },
   viewAllButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: "#e0e7fc",
-    borderRadius: 12,
+    paddingHorizontal: 16, // Augmenté de 12 à 16
+    paddingVertical: 8, // Augmenté de 6 à 8
+    backgroundColor: "#F1F5FF", // Plus subtil
+    borderRadius: 16, // Augmenté de 12 à 16
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
   },
   viewAllText: {
-    fontSize: 14,
+    fontSize: 13, // Réduit de 14 à 13
     color: "#091e60",
     fontWeight: "600",
   },
 
-  // Slider container
+  // === SLIDER ===
   sliderContainer: {
-    marginBottom: 10,
+    marginBottom: 16, // Augmenté de 10 à 16
   },
 
-  // Pagination
+  // === PAGINATION - Plus moderne ===
   paginationContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 15,
+    marginTop: 20, // Augmenté de 15 à 20
   },
   paginationDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 6, // Réduit de 8 à 6
+    height: 6, // Réduit de 8 à 6
+    borderRadius: 3, // Ajusté
     backgroundColor: '#091e60',
-    marginHorizontal: 4,
+    marginHorizontal: 3, // Réduit de 4 à 3
   },
 
   // Cartes d'offres d'emploi
-  jobCard: {
+ jobCard: {
     width: width * 0.85,
-    height: 230,
-    marginLeft: 20,
+    height: 240, // Augmenté de 230 à 240
+    marginLeft: 16, // Réduit de 20 à 16
     marginBottom: 20,
-    borderRadius: 16,
+    borderRadius: 20, // Augmenté de 16 à 20
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.12,
-    shadowRadius: 12,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 2 }, // Plus subtil
+    shadowOpacity: 0.08, // Réduit de 0.12 à 0.08
+    shadowRadius: 16, // Augmenté
+    elevation: 4, // Réduit de 8 à 4
   },
   cardGradient: {
     flex: 1,
@@ -910,17 +915,19 @@ const styles = StyleSheet.create({
   // Cartes d'astuces
   tipCard: {
     width: width * 0.9,
-    height: 200,
-    marginLeft: 20,
+    height: 220, // Augmenté de 200 à 220
+    marginLeft: 16,
     marginBottom: 20,
     backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    padding: 20,
+    borderRadius: 20,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 4,
     justifyContent: 'space-between',
   },
   tipIconContainer: {
@@ -1066,19 +1073,22 @@ const styles = StyleSheet.create({
     color: "#6B7280",
     textAlign: "center",
   },
+
   card: {
-    backgroundColor: "#fff",
-    borderRadius: 16,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20, // Augmenté de 16 à 20
     overflow: "hidden",
     margin: 16,
     width: width * 0.9,
-    height: 400,
-    marginLeft: 20,
+    height: 420, // Augmenté de 400 à 420
+    marginLeft: 16, // Réduit de 20 à 16
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 4,
   },
   imageContainer: {
     position: "relative",

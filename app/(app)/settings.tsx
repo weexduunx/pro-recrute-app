@@ -31,7 +31,14 @@ import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import * as Network from 'expo-network';
 import * as Location from 'expo-location';
-import { savePushToken, sendTestPushNotification } from '../../utils/api';
+import { 
+  savePushToken, 
+  sendTestPushNotification,
+  terminateSession,
+  storeActiveSession,
+  getActiveSessions,
+  changePassword
+} from '../../utils/api';
 import { useTheme } from '../../components/ThemeContext';
 import { useLanguage } from '../../components/LanguageContext';
 
@@ -214,15 +221,19 @@ const SectionHeader: React.FC<SectionHeaderProps> = ({ title, icon }) => {
 const ChangePasswordModal: React.FC<{
   visible: boolean;
   onClose: () => void;
-  onConfirm: (oldPassword: string, newPassword: string) => void;
+  onConfirm: (oldPassword: string, newPassword: string) => Promise<void>; // MODIFIÉ: async
 }> = ({ visible, onClose, onConfirm }) => {
   const { colors } = useTheme();
   const { t } = useLanguage();
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [loading, setLoading] = useState(false); // AJOUTÉ
+  const [showOldPassword, setShowOldPassword] = useState(false); // AJOUTÉ
+  const [showNewPassword, setShowNewPassword] = useState(false); // AJOUTÉ
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false); // AJOUTÉ
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => { // MODIFIÉ: async
     if (!oldPassword || !newPassword || !confirmPassword) {
       Alert.alert(t('Erreur'), t('Veuillez remplir tous les champs'));
       return;
@@ -235,11 +246,46 @@ const ChangePasswordModal: React.FC<{
       Alert.alert(t('Erreur'), t('Le mot de passe doit contenir au moins 6 caractères'));
       return;
     }
-    onConfirm(oldPassword, newPassword);
-    setOldPassword('');
-    setNewPassword('');
-    setConfirmPassword('');
+
+    try {
+      setLoading(true); // AJOUTÉ
+      await onConfirm(oldPassword, newPassword); // MODIFIÉ: await
+      
+      // Réinitialiser les champs après succès
+      setOldPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (error) {
+      // L'erreur est gérée dans handleChangePassword
+      console.error('Erreur dans modal:', error);
+    } finally {
+      setLoading(false); // AJOUTÉ
+    }
   };
+
+  const handleClose = () => {
+    if (!loading) { // Empêcher la fermeture pendant le chargement
+      setOldPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      onClose();
+    }
+  };
+
+  // AJOUTÉ: Fonction pour valider la force du mot de passe
+  const getPasswordStrength = (password: string) => {
+    let strength = 0;
+    if (password.length >= 6) strength += 1;
+    if (password.length >= 8) strength += 1;
+    if (/[A-Z]/.test(password)) strength += 1;
+    if (/[0-9]/.test(password)) strength += 1;
+    if (/[^A-Za-z0-9]/.test(password)) strength += 1;
+    return strength;
+  };
+
+  const passwordStrength = getPasswordStrength(newPassword);
+  const strengthColors = ['#EF4444', '#F59E0B', '#EAB308', '#22C55E', '#16A34A'];
+  const strengthLabels = ['Très faible', 'Faible', 'Moyen', 'Fort', 'Très fort'];
 
   return (
     <Modal visible={visible} transparent animationType="slide">
@@ -249,48 +295,238 @@ const ChangePasswordModal: React.FC<{
             {t('Changer le mot de passe')}
           </Text>
 
-          <TextInput
-            style={[styles.textInput, { backgroundColor: colors.background, color: colors.textPrimary, borderColor: colors.border }]}
-            placeholder={t('Mot de passe actuel')}
-            placeholderTextColor={colors.textSecondary}
-            secureTextEntry
-            value={oldPassword}
-            onChangeText={setOldPassword}
-          />
+          {/* Ancien mot de passe */}
+          <View style={{ marginBottom: 15 }}>
+            <View style={[{
+              height: 45,
+              borderWidth: 1,
+              borderRadius: 8,
+              paddingHorizontal: 12,
+              flexDirection: 'row',
+              alignItems: 'center'
+            }, { 
+              backgroundColor: colors.background, 
+              borderColor: colors.border 
+            }]}>
+              <TextInput
+                style={[{ 
+                  flex: 1,
+                  color: colors.textPrimary 
+                }]}
+                placeholder={t('Mot de passe actuel')}
+                placeholderTextColor={colors.textSecondary}
+                secureTextEntry={!showOldPassword}
+                value={oldPassword}
+                onChangeText={setOldPassword}
+                editable={!loading}
+                autoCapitalize="none"
+              />
+              <TouchableOpacity 
+                onPress={() => setShowOldPassword(!showOldPassword)}
+                style={{ padding: 5 }}
+              >
+                <Feather 
+                  name={showOldPassword ? "eye-off" : "eye"} 
+                  size={18} 
+                  color={colors.textSecondary} 
+                />
+              </TouchableOpacity>
+            </View>
+          </View>
 
-          <TextInput
-            style={[styles.textInput, { backgroundColor: colors.background, color: colors.textPrimary, borderColor: colors.border }]}
-            placeholder={t('Nouveau mot de passe')}
-            placeholderTextColor={colors.textSecondary}
-            secureTextEntry
-            value={newPassword}
-            onChangeText={setNewPassword}
-          />
+          {/* Nouveau mot de passe */}
+          <View style={{ marginBottom: 10 }}>
+            <View style={[{
+              height: 45,
+              borderWidth: 1,
+              borderRadius: 8,
+              paddingHorizontal: 12,
+              flexDirection: 'row',
+              alignItems: 'center'
+            }, { 
+              backgroundColor: colors.background, 
+              borderColor: colors.border 
+            }]}>
+              <TextInput
+                style={[{ 
+                  flex: 1,
+                  color: colors.textPrimary 
+                }]}
+                placeholder={t('Nouveau mot de passe')}
+                placeholderTextColor={colors.textSecondary}
+                secureTextEntry={!showNewPassword}
+                value={newPassword}
+                onChangeText={setNewPassword}
+                editable={!loading}
+                autoCapitalize="none"
+              />
+              <TouchableOpacity 
+                onPress={() => setShowNewPassword(!showNewPassword)}
+                style={{ padding: 5 }}
+              >
+                <Feather 
+                  name={showNewPassword ? "eye-off" : "eye"} 
+                  size={18} 
+                  color={colors.textSecondary} 
+                />
+              </TouchableOpacity>
+            </View>
+            
+            {/* Indicateur de force du mot de passe */}
+            {newPassword.length > 0 && (
+              <View style={{ marginTop: 8 }}>
+                <View style={{ 
+                  flexDirection: 'row', 
+                  alignItems: 'center', 
+                  marginBottom: 4 
+                }}>
+                  <Text style={[{ 
+                    fontSize: 12, 
+                    color: colors.textSecondary,
+                    marginRight: 8 
+                  }]}>
+                    Force:
+                  </Text>
+                  <Text style={[{ 
+                    fontSize: 12, 
+                    fontWeight: '600',
+                    color: strengthColors[passwordStrength] 
+                  }]}>
+                    {strengthLabels[passwordStrength]}
+                  </Text>
+                </View>
+                <View style={{ 
+                  flexDirection: 'row', 
+                  gap: 2 
+                }}>
+                  {[0, 1, 2, 3, 4].map((index) => (
+                    <View
+                      key={index}
+                      style={{
+                        flex: 1,
+                        height: 3,
+                        backgroundColor: index <= passwordStrength 
+                          ? strengthColors[passwordStrength] 
+                          : colors.border,
+                        borderRadius: 1.5
+                      }}
+                    />
+                  ))}
+                </View>
+              </View>
+            )}
+          </View>
 
-          <TextInput
-            style={[styles.textInput, { backgroundColor: colors.background, color: colors.textPrimary, borderColor: colors.border }]}
-            placeholder={t('Confirmer le nouveau mot de passe')}
-            placeholderTextColor={colors.textSecondary}
-            secureTextEntry
-            value={confirmPassword}
-            onChangeText={setConfirmPassword}
-          />
+          {/* Confirmer nouveau mot de passe */}
+          <View style={{ marginBottom: 15 }}>
+            <View style={[{
+              height: 45,
+              borderWidth: 1,
+              borderRadius: 8,
+              paddingHorizontal: 12,
+              flexDirection: 'row',
+              alignItems: 'center'
+            }, { 
+              backgroundColor: colors.background, 
+              borderColor: newPassword !== confirmPassword && confirmPassword.length > 0 
+                ? '#EF4444' : colors.border 
+            }]}>
+              <TextInput
+                style={[{ 
+                  flex: 1,
+                  color: colors.textPrimary 
+                }]}
+                placeholder={t('Confirmer le nouveau mot de passe')}
+                placeholderTextColor={colors.textSecondary}
+                secureTextEntry={!showConfirmPassword}
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                editable={!loading}
+                autoCapitalize="none"
+              />
+              <TouchableOpacity 
+                onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                style={{ padding: 5 }}
+              >
+                <Feather 
+                  name={showConfirmPassword ? "eye-off" : "eye"} 
+                  size={18} 
+                  color={colors.textSecondary} 
+                />
+              </TouchableOpacity>
+            </View>
+            
+            {/* Indicateur de correspondance */}
+            {confirmPassword.length > 0 && (
+              <View style={{ 
+                flexDirection: 'row', 
+                alignItems: 'center', 
+                marginTop: 4 
+              }}>
+                <Feather 
+                  name={newPassword === confirmPassword ? "check-circle" : "x-circle"} 
+                  size={12} 
+                  color={newPassword === confirmPassword ? '#22C55E' : '#EF4444'} 
+                />
+                <Text style={[{ 
+                  fontSize: 12, 
+                  marginLeft: 4,
+                  color: newPassword === confirmPassword ? '#22C55E' : '#EF4444' 
+                }]}>
+                  {newPassword === confirmPassword 
+                    ? t('Les mots de passe correspondent') 
+                    : t('Les mots de passe ne correspondent pas')}
+                </Text>
+              </View>
+            )}
+          </View>
 
-          <View style={styles.modalButtons}>
+          {/* Boutons */}
+          <View style={{
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            marginTop: 20,
+            gap: 10
+          }}>
             <TouchableOpacity
-              style={[styles.modalButton, { backgroundColor: colors.border }]}
-              onPress={onClose}
+              style={[{
+                flex: 1,
+                padding: 12,
+                borderRadius: 8,
+                alignItems: 'center',
+                justifyContent: 'center',
+                opacity: loading ? 0.6 : 1
+              }, { backgroundColor: colors.border }]}
+              onPress={handleClose}
+              disabled={loading}
             >
-              <Text style={[styles.modalButtonText, { color: colors.textPrimary }]}>
+              <Text style={[{ color: colors.textPrimary, fontSize: 16, fontWeight: '500' }]}>
                 {t('Annuler')}
               </Text>
             </TouchableOpacity>
+            
             <TouchableOpacity
-              style={[styles.modalButton, { backgroundColor: colors.secondary }]}
+              style={[{
+                flex: 1,
+                padding: 12,
+                borderRadius: 8,
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexDirection: 'row',
+                opacity: loading ? 0.8 : 1
+              }, { backgroundColor: colors.secondary }]}
               onPress={handleConfirm}
+              disabled={loading || !oldPassword || !newPassword || !confirmPassword || newPassword !== confirmPassword}
             >
-              <Text style={[styles.modalButtonText, { color: '#FFFFFF' }]}>
-                {t('Confirmer')}
+              {loading && (
+                <ActivityIndicator 
+                  size="small" 
+                  color="#FFFFFF" 
+                  style={{ marginRight: 8 }} 
+                />
+              )}
+              <Text style={[{ color: '#FFFFFF', fontSize: 16, fontWeight: '500' }]}>
+                {loading ? t('Changement...') : t('Confirmer')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -436,82 +672,211 @@ const useNetworkAndLocation = () => {
   return networkInfo;
 };
 
-// Hook principal pour les sessions actives
+// Hook principal pour les sessions actives - VERSION FINALE
 const useActiveSessions = () => {
   const [sessions, setSessions] = useState<ActiveSession[]>([]);
   const [loading, setLoading] = useState(true);
   const deviceInfo = useDeviceInfo();
   const networkInfo = useNetworkAndLocation();
 
-  useEffect(() => {
-    const fetchSessions = async () => {
-      try {
-        setLoading(true);
-        
-        // Simuler un délai d'API
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        
-        // Créer la session actuelle avec les vraies données
-        const currentTime = new Date();
-        const currentSession: ActiveSession = {
-          id: '1',
-          device: deviceInfo.device,
-          deviceType: deviceInfo.deviceType,
-          os: deviceInfo.os,
-          location: networkInfo.location,
-          lastActivity: 'Maintenant',
-          current: true,
-          ip: networkInfo.ip,
-          userAgent: deviceInfo.userAgent,
-          loginTime: currentTime.toISOString(),
-          networkType: networkInfo.networkType
-        };
-
-        // Ici vous pourriez faire un vrai appel API pour récupérer les autres sessions
-        // const response = await fetch('/api/user/sessions', {
-        //   headers: { Authorization: `Bearer ${userToken}` }
-        // });
-        // const otherSessions = await response.json();
-
-        // Pour la démo, on simule quelques autres sessions
-        const otherSessions: ActiveSession[] = [
-          // Ces données devraient venir de votre API backend
-          // Vous pouvez les commenter si vous n'avez que la session actuelle
-        ];
-
-        setSessions([currentSession, ...otherSessions]);
-      } catch (error) {
-        console.error('Erreur lors du chargement des sessions:', error);
-        Alert.alert('Erreur', 'Impossible de charger les sessions actives');
-        
-        // En cas d'erreur, au moins montrer la session actuelle
-        const fallbackSession: ActiveSession = {
-          id: '1',
-          device: deviceInfo.device || 'Appareil actuel',
-          deviceType: deviceInfo.deviceType,
-          os: deviceInfo.os,
-          location: networkInfo.location,
-          lastActivity: 'Maintenant',
-          current: true,
-          ip: networkInfo.ip,
-          userAgent: deviceInfo.userAgent,
-          loginTime: new Date().toISOString(),
-          networkType: networkInfo.networkType
-        };
-        setSessions([fallbackSession]);
-      } finally {
-        setLoading(false);
-      }
+  // Fonction pour préparer les headers d'appareil
+  const prepareDeviceHeaders = () => {
+    const deviceType = deviceInfo.deviceType === '1' ? 'mobile' : (deviceInfo.deviceType || 'unknown');
+    
+    return {
+      'X-Device-Name': deviceInfo.device || 'Unknown Device',
+      'X-Device-Type': deviceType,
+      'X-Operating-System': deviceInfo.os || 'unknown',
+      'X-Browser': 'React Native App',
+      'X-Location': networkInfo.location || 'Unknown Location',
+      'X-Network-Type': networkInfo.networkType?.toLowerCase() || 'unknown'
     };
+  };
 
-    // Ne charger que si on a les infos de base
-    if (!networkInfo.loading) {
+  // Fonction pour préparer les données de session
+  const prepareSessionData = () => {
+    const deviceType = deviceInfo.deviceType === '1' ? 'mobile' : (deviceInfo.deviceType || 'unknown');
+    
+    return {
+      device_name: deviceInfo.device || 'Unknown Device',
+      device_type: deviceType,
+      operating_system: deviceInfo.os || 'unknown',
+      browser: 'React Native App',
+      location: networkInfo.location || 'Unknown Location',
+      network_type: networkInfo.networkType?.toLowerCase() || 'unknown',
+      latitude: null,
+      longitude: null
+    };
+  };
+
+  // Fonction pour enregistrer/mettre à jour la session actuelle avec les vraies données
+  const updateCurrentSessionWithRealData = async () => {
+    try {
+      console.log('=== DÉBUT updateCurrentSessionWithRealData ===');
+      
+      const sessionData = prepareSessionData();
+      const deviceHeaders = prepareDeviceHeaders();
+      
+      console.log('Session Data préparées:', sessionData);
+      console.log('Headers préparés:', deviceHeaders);
+
+      // Forcer la création/mise à jour de la session avec les bonnes données
+      const response = await storeActiveSession(sessionData, deviceHeaders);
+      console.log('Réponse storeActiveSession:', response);
+      
+      if (response.success) {
+        console.log('✅ Session mise à jour avec succès avec les vraies données');
+        return true;
+      }
+      
+    } catch (error) {
+      console.error('❌ Erreur lors de la mise à jour de la session:', error);
+      console.error('Error details:', error.response?.data);
+      return false;
+    }
+  };
+
+  // Fonction pour récupérer les sessions
+  const fetchSessions = async () => {
+    try {
+      console.log('=== DÉBUT fetchSessions ===');
+      setLoading(true);
+      
+      // D'abord, essayer de mettre à jour la session avec les vraies données
+      console.log('🔄 Étape 1: Mise à jour de la session avec les vraies données...');
+      const updateSuccess = await updateCurrentSessionWithRealData();
+      console.log('Mise à jour réussie:', updateSuccess);
+      
+      // Petite pause pour laisser le temps au backend de traiter
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Ensuite, récupérer les sessions mises à jour avec les mêmes headers
+      console.log('📥 Étape 2: Récupération des sessions...');
+      const deviceHeaders = prepareDeviceHeaders();
+      const response = await getActiveSessions(deviceHeaders);
+      console.log('Réponse getActiveSessions:', response);
+      
+      if (response.success && response.data) {
+        console.log('✅ Sessions reçues:', response.data);
+        
+        // Transformer les données pour correspondre à l'interface ActiveSession
+        const transformedSessions = response.data.map((session, index) => {
+          console.log(`🔄 Transformation session ${index}:`, session);
+          
+          // Vérifier si c'est une session avec de vraies données maintenant
+          const hasRealData = session.device !== 'Unknown Device' && session.device !== 'Appareil inconnu';
+          console.log(`Session ${index} a de vraies données:`, hasRealData);
+          
+          return {
+            id: session.id?.toString() || index.toString(),
+            device: session.device || 'Appareil inconnu',
+            deviceType: session.device_type || 'unknown',
+            os: session.os || 'unknown',
+            browser: session.browser || 'unknown',
+            location: session.location || 'Localisation inconnue',
+            lastActivity: session.last_activity ? formatLastActivity(session.last_activity) : 'Inconnue',
+            current: session.current || false,
+            ip: session.ip_address || 'XXX.XXX.XXX.XXX',
+            userAgent: session.user_agent || '',
+            loginTime: session.login_time || session.last_activity || new Date().toISOString(),
+            networkType: session.network_type || 'unknown'
+          };
+        });
+        
+        console.log('✅ Sessions transformées:', transformedSessions);
+        setSessions(transformedSessions);
+        
+      } else {
+        console.warn('⚠️ Réponse API inattendue:', response);
+        setSessions([]);
+      }
+      
+    } catch (error) {
+      console.error('❌ Erreur lors du chargement des sessions:', error);
+      console.error('Error response:', error.response?.data);
+      
+      Alert.alert('Erreur', `Impossible de charger les sessions actives: ${error.response?.data?.message || error.message}`);
+      
+      // En cas d'erreur, créer au moins une session de fallback avec les vraies données
+      const fallbackSession: ActiveSession = {
+        id: '1',
+        device: deviceInfo.device || 'Appareil actuel',
+        deviceType: deviceInfo.deviceType === '1' ? 'mobile' : (deviceInfo.deviceType || 'unknown'),
+        os: deviceInfo.os || 'unknown',
+        location: networkInfo.location || 'Localisation inconnue',
+        lastActivity: 'Maintenant',
+        current: true,
+        ip: networkInfo.ip || 'XXX.XXX.XXX.XXX',
+        userAgent: deviceInfo.userAgent || '',
+        loginTime: new Date().toISOString(),
+        networkType: networkInfo.networkType?.toLowerCase() || 'unknown'
+      };
+      console.log('🆘 Utilisation session fallback avec vraies données:', fallbackSession);
+      setSessions([fallbackSession]);
+    } finally {
+      setLoading(false);
+      console.log('=== FIN fetchSessions ===');
+    }
+  };
+
+  useEffect(() => {
+    console.log('=== useEffect useActiveSessions ===');
+    console.log('Network loading:', networkInfo.loading);
+    console.log('Device Info:', deviceInfo);
+    console.log('Network Info:', networkInfo);
+    
+    // Conditions plus strictes : attendre que toutes les données soient disponibles
+    const hasDeviceData = deviceInfo.device && deviceInfo.device !== 'Appareil inconnu';
+    const hasNetworkData = !networkInfo.loading && networkInfo.location !== 'Localisation inconnue';
+    
+    console.log('Has device data:', hasDeviceData);
+    console.log('Has network data:', hasNetworkData);
+    
+    if (hasDeviceData && hasNetworkData) {
+      console.log('✅ Toutes les conditions remplies, démarrage fetchSessions...');
       fetchSessions();
+    } else {
+      console.log('⏳ En attente des données complètes...');
+      console.log('  - Device ready:', hasDeviceData);
+      console.log('  - Network ready:', hasNetworkData);
     }
   }, [deviceInfo, networkInfo]);
 
-  return { sessions, setSessions, loading: loading || networkInfo.loading };
+  // Fonction pour terminer une session
+  const terminateSessionById = async (sessionId: string) => {
+    try {
+      console.log('🗑️ Tentative de terminaison session:', sessionId);
+      const response = await terminateSession(sessionId);
+      console.log('Réponse terminateSession:', response);
+      
+      if (response.success) {
+        setSessions(prev => prev.filter(s => s.id !== sessionId));
+        return { success: true, message: response.message };
+      } else {
+        throw new Error(response.message || 'Erreur lors de la terminaison');
+      }
+    } catch (error) {
+      console.error('❌ Erreur lors de la terminaison de la session:', error);
+      throw error;
+    }
+  };
+
+  // Fonction pour rafraîchir les sessions
+  const refreshSessions = () => {
+    console.log('🔄 Rafraîchissement manuel des sessions...');
+    fetchSessions();
+  };
+
+  return { 
+    sessions, 
+    setSessions, 
+    loading: loading || networkInfo.loading,
+    terminateSessionById,
+    refreshSessions,
+    updateCurrentSessionWithRealData // Exposé pour utilisation manuelle si nécessaire
+  };
 };
+
 
 // Fonction utilitaire pour formater l'heure
 const formatLastActivity = (loginTime: string): string => {
@@ -529,28 +894,236 @@ const formatLastActivity = (loginTime: string): string => {
 };
 
 // Fonction pour obtenir l'icône selon le type d'appareil
-const getDeviceIcon = (deviceType: string, os: string) => {
-  const osLower = os.toLowerCase();
-  const deviceTypeLower = deviceType.toLowerCase();
+const getDeviceIcon = (deviceType: string, os: string, deviceName?: string) => {
+  console.log('getDeviceIcon - deviceType:', deviceType, 'os:', os, 'deviceName:', deviceName); // Debug log
   
-  if (deviceTypeLower.includes('phone') || osLower.includes('android') || osLower.includes('ios')) {
+  const osLower = os?.toLowerCase() || '';
+  const deviceTypeLower = deviceType?.toLowerCase() || '';
+  const deviceNameLower = deviceName?.toLowerCase() || '';
+  
+  // === DÉTECTION SPÉCIFIQUE APPLE ===
+  if (osLower.includes('ios')) {
+    if (osLower.includes('ipad') || deviceNameLower.includes('ipad')) {
+      return 'tablet'; // iPad
+    }
+    return 'smartphone'; // iPhone
+  }
+  
+  // === DÉTECTION ANDROID ===
+  if (osLower.includes('android')) {
+    // Vérifier si c'est une tablette Android
+    if (deviceNameLower.includes('tab') || osLower.includes('tablet') || 
+        deviceNameLower.includes('pad') || deviceType === '2') {
+      return 'tablet';
+    }
+    // Sinon c'est un smartphone Android
     return 'smartphone';
-  } else if (deviceTypeLower.includes('tablet') || osLower.includes('ipad')) {
+  }
+  
+  // === DÉTECTION PAR DEVICE TYPE (Expo Device) ===
+  switch (deviceType) {
+    case '1': // Mobile
+      return 'smartphone';
+    case '2': // Tablet
+      return 'tablet';
+    case '3': // Desktop
+      return 'monitor';
+    case '4': // TV
+      return 'tv';
+    default:
+      break;
+  }
+  
+  // === DÉTECTION PAR MOTS-CLÉS DEVICE TYPE ===
+  if (deviceTypeLower.includes('mobile') || deviceTypeLower.includes('phone')) {
+    return 'smartphone';
+  }
+  
+  if (deviceTypeLower.includes('tablet')) {
     return 'tablet';
-  } else {
+  }
+  
+  if (deviceTypeLower.includes('desktop') || deviceTypeLower.includes('computer')) {
     return 'monitor';
   }
+  
+  // === DÉTECTION PAR NOM D'APPAREIL ===
+  // Smartphones populaires
+  const smartphoneBrands = ['iphone', 'samsung', 'tecno', 'xiaomi', 'huawei', 'oneplus', 
+                           'oppo', 'vivo', 'realme', 'honor', 'nokia', 'motorola', 'sony'];
+  
+  const isSmartphone = smartphoneBrands.some(brand => 
+    deviceNameLower.includes(brand) && !deviceNameLower.includes('tab')
+  );
+  
+  if (isSmartphone) {
+    return 'smartphone';
+  }
+  
+  // Tablettes
+  const tabletKeywords = ['ipad', 'tab', 'pad', 'tablet'];
+  const isTablet = tabletKeywords.some(keyword => deviceNameLower.includes(keyword));
+  
+  if (isTablet) {
+    return 'tablet';
+  }
+  
+  // === DÉTECTION PAR OS DESKTOP ===
+  if (osLower.includes('windows') || osLower.includes('mac') || osLower.includes('linux')) {
+    return 'monitor';
+  }
+  
+  // === FALLBACK INTELLIGENT ===
+  // Si on est dans une app React Native, c'est probablement mobile
+  if (osLower.includes('mobile') || deviceTypeLower.includes('unknown')) {
+    return 'smartphone';
+  }
+  
+  // Dernier fallback
+  console.log('Fallback final vers smartphone'); // Debug
+  return 'smartphone';
 };
 
-// Modal pour les sessions actives avec données réelles
+// Version alternative avec des icônes encore plus spécifiques (optionnel)
+const getSpecificDeviceIcon = (deviceType: string, os: string, deviceName?: string) => {
+  const osLower = os?.toLowerCase() || '';
+  const deviceNameLower = deviceName?.toLowerCase() || '';
+  
+  // === ICÔNES SPÉCIFIQUES PAR MARQUE ===
+  if (deviceNameLower.includes('iphone')) return 'smartphone';
+  if (deviceNameLower.includes('ipad')) return 'tablet';
+  if (deviceNameLower.includes('samsung')) return 'smartphone';
+  if (deviceNameLower.includes('tecno')) return 'smartphone';
+  
+  // === ICÔNES PAR OS ===
+  if (osLower.includes('android')) return 'smartphone';
+  if (osLower.includes('ios')) return 'smartphone';
+  if (osLower.includes('windows')) return 'monitor';
+  if (osLower.includes('mac')) return 'monitor';
+  
+  // Utiliser la fonction principale comme fallback
+  return getDeviceIcon(deviceType, os, deviceName);
+};
+
+const TestSessionsButton = () => {
+  const testSessions = async () => {
+    try {
+      console.log('=== TEST GET SESSIONS ===');
+      
+      // Test 1: Récupérer les sessions
+      const response = await getActiveSessions();
+      console.log('Réponse getActiveSessions:', response);
+      Alert.alert('Succès GET', JSON.stringify(response, null, 2));
+      
+    } catch (error) {
+      console.error('Erreur test sessions:', error);
+      Alert.alert('Erreur GET', `${error.message}\n\nResponse: ${JSON.stringify(error.response?.data, null, 2)}`);
+    }
+  };
+
+  const testCreateSession = async () => {
+    try {
+      console.log('=== TEST CREATE SESSION ===');
+      
+      // Test 2: Créer une session
+      const sessionData = {
+        device_name: 'Test Device',
+        device_type: 'mobile',
+        operating_system: 'Test OS',
+        browser: 'React Native App',
+        location: 'Test Location',
+        network_type: 'wifi'
+      };
+
+      const deviceHeaders = {
+        'X-Device-Name': 'Test Device',
+        'X-Device-Type': 'mobile',
+        'X-Operating-System': 'Test OS',
+        'X-Browser': 'React Native App'
+      };
+
+      const response = await storeActiveSession(sessionData, deviceHeaders);
+      console.log('Réponse storeActiveSession:', response);
+      Alert.alert('Succès CREATE', JSON.stringify(response, null, 2));
+      
+    } catch (error) {
+      console.error('Erreur test create session:', error);
+      Alert.alert('Erreur CREATE', `${error.message}\n\nResponse: ${JSON.stringify(error.response?.data, null, 2)}`);
+    }
+  };
+
+  return (
+    <View style={{ padding: 20 }}>
+      <TouchableOpacity 
+        style={{ backgroundColor: '#007AFF', padding: 15, margin: 10, borderRadius: 8 }}
+        onPress={testSessions}
+      >
+        <Text style={{ color: 'white', textAlign: 'center' }}>Test GET Sessions</Text>
+      </TouchableOpacity>
+      
+      <TouchableOpacity 
+        style={{ backgroundColor: '#34C759', padding: 15, margin: 10, borderRadius: 8 }}
+        onPress={testCreateSession}
+      >
+        <Text style={{ color: 'white', textAlign: 'center' }}>Test CREATE Session</Text>
+      </TouchableOpacity>
+    </View>
+  );
+};
+
+// Modal pour les sessions actives avec données réelles - VERSION CORRIGÉE
 const ActiveSessionsModal: React.FC<{
   visible: boolean;
   onClose: () => void;
 }> = ({ visible, onClose }) => {
   const { colors } = useTheme();
   const { t } = useLanguage();
-  const { sessions, setSessions, loading } = useActiveSessions();
-
+  const { sessions, loading, terminateSessionById, refreshSessions } = useActiveSessions();
+const SessionDeviceIcon = ({ session, colors }) => {
+  const getIconAndColor = (deviceType: string, os: string, deviceName: string) => {
+    const osLower = os?.toLowerCase() || '';
+    const deviceNameLower = deviceName?.toLowerCase() || '';
+    
+    // Icônes et couleurs spécifiques par marque/OS
+    if (deviceNameLower.includes('iphone') || osLower.includes('ios')) {
+      return { icon: 'smartphone', color: '#007AFF' }; // Bleu Apple
+    }
+    
+    if (deviceNameLower.includes('ipad')) {
+      return { icon: 'tablet', color: '#007AFF' }; // Bleu Apple
+    }
+    
+    if (osLower.includes('android')) {
+      return { icon: 'smartphone', color: '#3DDC84' }; // Vert Android
+    }
+    
+    if (deviceNameLower.includes('samsung')) {
+      return { icon: 'smartphone', color: '#1428A0' }; // Bleu Samsung
+    }
+    
+    if (deviceNameLower.includes('tecno')) {
+      return { icon: 'smartphone', color: '#00A8FF' }; // Bleu Tecno
+    }
+    
+    // Fallback
+    return { 
+      icon: getDeviceIcon(deviceType, os, deviceName), 
+      color: colors.secondary 
+    };
+  };
+  
+  const { icon, color } = getIconAndColor(session.deviceType, session.os, session.device);
+  
+  return (
+    <View style={[styles.deviceIconContainer, { backgroundColor: color + '20' }]}>
+      <Feather 
+        name={icon} 
+        size={20} 
+        color={color} 
+      />
+    </View>
+  );
+};
   const terminateSession = async (sessionId: string) => {
     Alert.alert(
       t('Terminer la session'),
@@ -562,14 +1135,10 @@ const ActiveSessionsModal: React.FC<{
           style: 'destructive',
           onPress: async () => {
             try {
-              // Ici vous feriez un appel API pour terminer la session
-              // await fetch(`/api/user/sessions/${sessionId}`, {
-              //   method: 'DELETE',
-              //   headers: { Authorization: `Bearer ${userToken}` }
-              // });
-
-              setSessions(sessions.filter(s => s.id !== sessionId));
-              Alert.alert(t('Succès'), t('Session terminée avec succès'));
+              const result = await terminateSessionById(sessionId);
+              if (result.success) {
+                Alert.alert(t('Succès'), result.message || t('Session terminée avec succès'));
+              }
             } catch (error) {
               console.error('Erreur lors de la terminaison de la session:', error);
               Alert.alert(t('Erreur'), t('Impossible de terminer la session'));
@@ -580,11 +1149,6 @@ const ActiveSessionsModal: React.FC<{
     );
   };
 
-  const refreshSessions = async () => {
-    // Fonction pour rafraîchir les sessions (optionnelle)
-    // Vous pouvez l'appeler depuis un bouton de rafraîchissement
-  };
-
   return (
     <Modal visible={visible} transparent animationType="slide">
       <View style={[styles.modalOverlay]}>
@@ -593,9 +1157,14 @@ const ActiveSessionsModal: React.FC<{
             <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>
               {t('Sessions actives')}
             </Text>
-            <TouchableOpacity onPress={onClose}>
-              <Feather name="x" size={24} color={colors.textPrimary} />
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <TouchableOpacity onPress={refreshSessions} style={{ marginRight: 16 }}>
+                <Feather name="refresh-cw" size={20} color={colors.textPrimary} />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={onClose}>
+                <Feather name="x" size={24} color={colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
           </View>
 
           {loading ? (
@@ -618,13 +1187,14 @@ const ActiveSessionsModal: React.FC<{
                 sessions.map((session) => (
                   <View key={session.id} style={[styles.sessionItem, { borderBottomColor: colors.border }]}>
                     <View style={styles.sessionLeft}>
-                      <View style={[styles.deviceIconContainer, { backgroundColor: colors.secondary + '20' }]}>
+                      {/* <View style={[styles.deviceIconContainer, { backgroundColor: colors.secondary + '20' }]}>
                         <Feather 
                           name={getDeviceIcon(session.deviceType, session.os)} 
                           size={20} 
                           color={colors.secondary} 
                         />
-                      </View>
+                      </View> */}
+                      <SessionDeviceIcon session={session} colors={colors} />
                       <View style={styles.sessionInfo}>
                         <View style={styles.sessionHeader}>
                           <Text style={[styles.sessionDevice, { color: colors.textPrimary }]}>
@@ -646,7 +1216,7 @@ const ActiveSessionsModal: React.FC<{
                         </Text>
                         
                         <Text style={[styles.sessionActivity, { color: colors.textSecondary }]}>
-                          🕒 {t('Dernière activité')}: {formatLastActivity(session.loginTime)}
+                          🕒 {t('Dernière activité')}: {session.lastActivity}
                         </Text>
                         
                         {session.ip && (
@@ -826,12 +1396,52 @@ export default function ParametresScreen() {
     }
   };
 
-  const handleChangePassword = (oldPassword: string, newPassword: string) => {
-    // Simulation de changement de mot de passe
-    setTimeout(() => {
-      Alert.alert(t('Succès'), t('Mot de passe modifié avec succès'));
-      setChangePasswordModalVisible(false);
-    }, 1000);
+  const handleChangePassword = async (oldPassword: string, newPassword: string) => {
+    try {
+      console.log('=== Début changement de mot de passe ===');
+      
+      // Appeler l'API pour changer le mot de passe
+      const response = await changePassword(oldPassword, newPassword, newPassword);
+      
+      console.log('Réponse changePassword:', response);
+      
+      if (response.success) {
+        Alert.alert(
+          t('Succès'), 
+          response.message || t('Mot de passe modifié avec succès'),
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                setChangePasswordModalVisible(false);
+                // Optionnel : afficher un message de confirmation supplémentaire
+                Alert.alert(
+                  t('Information'),
+                  t('Votre mot de passe a été mis à jour. Vous pouvez continuer à utiliser l\'application normalement.'),
+                  [{ text: 'Compris' }]
+                );
+              }
+            }
+          ]
+        );
+      } else {
+        Alert.alert(t('Erreur'), response.message || t('Erreur lors du changement de mot de passe'));
+      }
+      
+    } catch (error: any) {
+      console.error('Erreur lors du changement de mot de passe:', error);
+      
+      // Gestion des différents types d'erreurs
+      let errorMessage = t('Erreur lors du changement de mot de passe');
+      
+      if (error.message) {
+        errorMessage = error.message;
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      }
+      
+      Alert.alert(t('Erreur'), errorMessage);
+    }
   };
 
   const handleExportData = async () => {
@@ -1210,6 +1820,8 @@ export default function ParametresScreen() {
   );
 }
 
+
+
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
@@ -1305,7 +1917,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   // Styles pour les modals
-  modalOverlay: {
+modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
@@ -1324,8 +1936,9 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
   largeModal: {
-    maxWidth: '90%',
-    maxHeight: '80%',
+    maxWidth: '95%', // Augmenté de 90% à 95%
+    maxHeight: '90%', // Augmenté de 80% à 90%
+    height: '90%', // AJOUTÉ: Force une hauteur de 90%
     padding: 0,
   },
   modalHeader: {
@@ -1339,37 +1952,14 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 20,
     fontWeight: '600',
-    marginBottom: 20,
+    marginBottom: 10, // Retiré le marginBottom pour économiser l'espace
   },
-  textInput: {
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginBottom: 16,
-    fontSize: 16,
-  },
-  modalButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 20,
-  },
-  modalButton: {
-    flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginHorizontal: 6,
-  },
-  modalButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  // Styles pour les sessions actives
+
+  // Styles pour la liste des sessions
   sessionsList: {
     flex: 1,
     padding: 24,
+    paddingTop: 16, // Réduit le padding top
   },
   sessionItem: {
     flexDirection: 'row',
@@ -1377,6 +1967,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  sessionLeft: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    flex: 1,
+  },
+  deviceIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
   },
   sessionInfo: {
     flex: 1,
@@ -1401,12 +2004,20 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
+  sessionOS: {
+    fontSize: 13,
+    marginBottom: 4,
+  },
   sessionLocation: {
     fontSize: 14,
     marginBottom: 2,
   },
   sessionActivity: {
     fontSize: 12,
+  },
+  sessionIP: {
+    fontSize: 11,
+    marginTop: 4,
   },
   terminateButton: {
     paddingHorizontal: 12,
@@ -1419,11 +2030,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
+  // Containers de loading et empty
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 40,
+    minHeight: 200, // AJOUTÉ: Hauteur minimum
   },
   loadingText: {
     marginTop: 16,
@@ -1434,36 +2047,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 40,
+    minHeight: 200, // AJOUTÉ: Hauteur minimum
   },
   emptyText: {
     marginTop: 16,
     fontSize: 16,
     textAlign: 'center',
   },
-  sessionLeft: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    flex: 1,
-  },
-  deviceIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  sessionOS: {
-    fontSize: 13,
-    marginBottom: 4,
-  },
-  sessionIP: {
-    fontSize: 11,
-    marginTop: 4,
-  },
+
+  // Footer du modal
   modalFooter: {
     borderTopWidth: 1,
     padding: 16,
+    paddingBottom: 20, // Augmenté le padding bottom
   },
   securityInfo: {
     flexDirection: 'row',
