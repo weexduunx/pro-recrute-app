@@ -13,7 +13,8 @@ import {
   StatusBar,
   Modal,
   TextInput,
-  Linking
+  Linking,
+  ActivityIndicator 
 } from 'react-native';
 import { useAuth } from '../../components/AuthProvider';
 import CustomHeader from '../../components/CustomHeader';
@@ -28,6 +29,8 @@ import * as Device from 'expo-device';
 import * as LocalAuthentication from 'expo-local-authentication';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
+import * as Network from 'expo-network';
+import * as Location from 'expo-location';
 import { savePushToken, sendTestPushNotification } from '../../utils/api';
 import { useTheme } from '../../components/ThemeContext';
 import { useLanguage } from '../../components/LanguageContext';
@@ -74,9 +77,16 @@ interface SectionHeaderProps {
 interface ActiveSession {
   id: string;
   device: string;
+  deviceType: string;
+  os: string;
+  browser?: string;
   location: string;
   lastActivity: string;
   current: boolean;
+  ip?: string;
+  userAgent?: string;
+  loginTime: string;
+  networkType?: string;
 }
 
 // Composant réutilisable pour les éléments de paramètres
@@ -290,40 +300,258 @@ const ChangePasswordModal: React.FC<{
   );
 };
 
-// Modal pour les sessions actives
+// Hook personnalisé pour récupérer les informations de l'appareil
+const useDeviceInfo = () => {
+  const [deviceInfo, setDeviceInfo] = useState({
+    device: 'Appareil inconnu',
+    deviceType: 'unknown',
+    os: 'unknown',
+    userAgent: '',
+    brand: '',
+    modelName: ''
+  });
+
+  useEffect(() => {
+    const getDeviceInfo = async () => {
+      try {
+        const deviceName = Device.deviceName || 'Appareil inconnu';
+        const deviceType = Device.deviceType || 'unknown';
+        const osName = Device.osName || 'unknown';
+        const osVersion = Device.osVersion || '';
+        const brand = Device.brand || '';
+        const modelName = Device.modelName || '';
+
+        // Construire le nom de l'appareil
+        let fullDeviceName = deviceName;
+        if (brand && modelName) {
+          fullDeviceName = `${brand} ${modelName}`;
+        }
+
+        setDeviceInfo({
+          device: fullDeviceName,
+          deviceType: deviceType.toString(),
+          os: `${osName} ${osVersion}`,
+          userAgent: navigator?.userAgent || '',
+          brand,
+          modelName
+        });
+      } catch (error) {
+        console.error('Erreur lors de la récupération des infos de l\'appareil:', error);
+        setDeviceInfo({
+          device: 'Appareil inconnu',
+          deviceType: 'unknown',
+          os: Platform.OS === 'ios' ? 'iOS' : 'Android',
+          userAgent: '',
+          brand: '',
+          modelName: ''
+        });
+      }
+    };
+
+    getDeviceInfo();
+  }, []);
+
+  return deviceInfo;
+};
+
+// Hook pour récupérer les informations réseau et localisation
+const useNetworkAndLocation = () => {
+  const [networkInfo, setNetworkInfo] = useState({
+    ip: 'XXX.XXX.XXX.XXX',
+    networkType: 'unknown',
+    location: 'Localisation inconnue',
+    loading: true
+  });
+
+  useEffect(() => {
+    const getNetworkAndLocation = async () => {
+      try {
+        // Informations réseau
+        const networkState = await Network.getNetworkStateAsync();
+        const networkType = networkState.type || 'unknown';
+
+        // Localisation (avec permission)
+        let locationString = 'Dakar, Sénégal'; // Fallback basé sur votre localisation
+        
+        try {
+          const { status } = await Location.requestForegroundPermissionsAsync();
+          if (status === 'granted') {
+            const location = await Location.getCurrentPositionAsync({
+              accuracy: Location.Accuracy.Low,
+            });
+            
+            // Reverse geocoding pour obtenir l'adresse
+            const reverseGeocode = await Location.reverseGeocodeAsync({
+              latitude: location.coords.latitude,
+              longitude: location.coords.longitude,
+            });
+
+            if (reverseGeocode.length > 0) {
+              const addr = reverseGeocode[0];
+              locationString = `${addr.city || addr.subregion || 'Ville inconnue'}, ${addr.country || 'Pays inconnu'}`;
+            }
+          }
+        } catch (locationError) {
+          console.log('Erreur de localisation:', locationError);
+          // Garder le fallback
+        }
+
+        // Récupérer l'IP publique (optionnel)
+        let publicIP = 'XXX.XXX.XXX.XXX';
+        try {
+          const ipResponse = await fetch('https://api.ipify.org?format=json', {
+            timeout: 5000
+          });
+          const ipData = await ipResponse.json();
+          if (ipData.ip) {
+            // Masquer partiellement l'IP pour la sécurité
+            const ipParts = ipData.ip.split('.');
+            publicIP = `${ipParts[0]}.${ipParts[1]}.XXX.XXX`;
+          }
+        } catch (ipError) {
+          console.log('Impossible de récupérer l\'IP publique:', ipError);
+        }
+
+        setNetworkInfo({
+          ip: publicIP,
+          networkType: networkType.toString(),
+          location: locationString,
+          loading: false
+        });
+
+      } catch (error) {
+        console.error('Erreur lors de la récupération des infos réseau:', error);
+        setNetworkInfo({
+          ip: 'XXX.XXX.XXX.XXX',
+          networkType: 'unknown',
+          location: 'Dakar, Sénégal',
+          loading: false
+        });
+      }
+    };
+
+    getNetworkAndLocation();
+  }, []);
+
+  return networkInfo;
+};
+
+// Hook principal pour les sessions actives
+const useActiveSessions = () => {
+  const [sessions, setSessions] = useState<ActiveSession[]>([]);
+  const [loading, setLoading] = useState(true);
+  const deviceInfo = useDeviceInfo();
+  const networkInfo = useNetworkAndLocation();
+
+  useEffect(() => {
+    const fetchSessions = async () => {
+      try {
+        setLoading(true);
+        
+        // Simuler un délai d'API
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        
+        // Créer la session actuelle avec les vraies données
+        const currentTime = new Date();
+        const currentSession: ActiveSession = {
+          id: '1',
+          device: deviceInfo.device,
+          deviceType: deviceInfo.deviceType,
+          os: deviceInfo.os,
+          location: networkInfo.location,
+          lastActivity: 'Maintenant',
+          current: true,
+          ip: networkInfo.ip,
+          userAgent: deviceInfo.userAgent,
+          loginTime: currentTime.toISOString(),
+          networkType: networkInfo.networkType
+        };
+
+        // Ici vous pourriez faire un vrai appel API pour récupérer les autres sessions
+        // const response = await fetch('/api/user/sessions', {
+        //   headers: { Authorization: `Bearer ${userToken}` }
+        // });
+        // const otherSessions = await response.json();
+
+        // Pour la démo, on simule quelques autres sessions
+        const otherSessions: ActiveSession[] = [
+          // Ces données devraient venir de votre API backend
+          // Vous pouvez les commenter si vous n'avez que la session actuelle
+        ];
+
+        setSessions([currentSession, ...otherSessions]);
+      } catch (error) {
+        console.error('Erreur lors du chargement des sessions:', error);
+        Alert.alert('Erreur', 'Impossible de charger les sessions actives');
+        
+        // En cas d'erreur, au moins montrer la session actuelle
+        const fallbackSession: ActiveSession = {
+          id: '1',
+          device: deviceInfo.device || 'Appareil actuel',
+          deviceType: deviceInfo.deviceType,
+          os: deviceInfo.os,
+          location: networkInfo.location,
+          lastActivity: 'Maintenant',
+          current: true,
+          ip: networkInfo.ip,
+          userAgent: deviceInfo.userAgent,
+          loginTime: new Date().toISOString(),
+          networkType: networkInfo.networkType
+        };
+        setSessions([fallbackSession]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    // Ne charger que si on a les infos de base
+    if (!networkInfo.loading) {
+      fetchSessions();
+    }
+  }, [deviceInfo, networkInfo]);
+
+  return { sessions, setSessions, loading: loading || networkInfo.loading };
+};
+
+// Fonction utilitaire pour formater l'heure
+const formatLastActivity = (loginTime: string): string => {
+  const now = new Date();
+  const login = new Date(loginTime);
+  const diffInMs = now.getTime() - login.getTime();
+  const diffInMinutes = Math.floor(diffInMs / (1000 * 60));
+  const diffInHours = Math.floor(diffInMinutes / 60);
+  const diffInDays = Math.floor(diffInHours / 24);
+
+  if (diffInMinutes < 1) return 'Maintenant';
+  if (diffInMinutes < 60) return `Il y a ${diffInMinutes} min`;
+  if (diffInHours < 24) return `Il y a ${diffInHours}h`;
+  return `Il y a ${diffInDays} jour${diffInDays > 1 ? 's' : ''}`;
+};
+
+// Fonction pour obtenir l'icône selon le type d'appareil
+const getDeviceIcon = (deviceType: string, os: string) => {
+  const osLower = os.toLowerCase();
+  const deviceTypeLower = deviceType.toLowerCase();
+  
+  if (deviceTypeLower.includes('phone') || osLower.includes('android') || osLower.includes('ios')) {
+    return 'smartphone';
+  } else if (deviceTypeLower.includes('tablet') || osLower.includes('ipad')) {
+    return 'tablet';
+  } else {
+    return 'monitor';
+  }
+};
+
+// Modal pour les sessions actives avec données réelles
 const ActiveSessionsModal: React.FC<{
   visible: boolean;
   onClose: () => void;
 }> = ({ visible, onClose }) => {
   const { colors } = useTheme();
   const { t } = useLanguage();
+  const { sessions, setSessions, loading } = useActiveSessions();
 
-  // Données fictives pour les sessions actives
-  const [sessions, setSessions] = useState<ActiveSession[]>([
-    {
-      id: '1',
-      device: 'iPhone 14 Pro',
-      location: 'Dakar, Sénégal',
-      lastActivity: 'Maintenant',
-      current: true
-    },
-    {
-      id: '2',
-      device: 'iPad Air',
-      location: 'Dakar, Sénégal',
-      lastActivity: 'Il y a 2 heures',
-      current: false
-    },
-    {
-      id: '3',
-      device: 'MacBook Pro',
-      location: 'Dakar, Sénégal',
-      lastActivity: 'Il y a 1 jour',
-      current: false
-    }
-  ]);
-
-  const terminateSession = (sessionId: string) => {
+  const terminateSession = async (sessionId: string) => {
     Alert.alert(
       t('Terminer la session'),
       t('Êtes-vous sûr de vouloir terminer cette session ?'),
@@ -332,20 +560,36 @@ const ActiveSessionsModal: React.FC<{
         {
           text: t('Terminer'),
           style: 'destructive',
-          onPress: () => {
-            setSessions(sessions.filter(s => s.id !== sessionId));
-            Alert.alert(t('Succès'), t('Session terminée avec succès'));
+          onPress: async () => {
+            try {
+              // Ici vous feriez un appel API pour terminer la session
+              // await fetch(`/api/user/sessions/${sessionId}`, {
+              //   method: 'DELETE',
+              //   headers: { Authorization: `Bearer ${userToken}` }
+              // });
+
+              setSessions(sessions.filter(s => s.id !== sessionId));
+              Alert.alert(t('Succès'), t('Session terminée avec succès'));
+            } catch (error) {
+              console.error('Erreur lors de la terminaison de la session:', error);
+              Alert.alert(t('Erreur'), t('Impossible de terminer la session'));
+            }
           }
         }
       ]
     );
   };
 
+  const refreshSessions = async () => {
+    // Fonction pour rafraîchir les sessions (optionnelle)
+    // Vous pouvez l'appeler depuis un bouton de rafraîchissement
+  };
+
   return (
     <Modal visible={visible} transparent animationType="slide">
-      <View style={styles.modalOverlay}>
+      <View style={[styles.modalOverlay]}>
         <View style={[styles.modalContent, styles.largeModal, { backgroundColor: colors.cardBackground }]}>
-          <View style={styles.modalHeader}>
+          <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
             <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>
               {t('Sessions actives')}
             </Text>
@@ -354,38 +598,88 @@ const ActiveSessionsModal: React.FC<{
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.sessionsList}>
-            {sessions.map((session) => (
-              <View key={session.id} style={[styles.sessionItem, { borderBottomColor: colors.border }]}>
-                <View style={styles.sessionInfo}>
-                  <View style={styles.sessionHeader}>
-                    <Text style={[styles.sessionDevice, { color: colors.textPrimary }]}>
-                      {session.device}
-                    </Text>
-                    {session.current && (
-                      <View style={[styles.currentBadge, { backgroundColor: colors.secondary }]}>
-                        <Text style={styles.currentBadgeText}>{t('Actuel')}</Text>
-                      </View>
-                    )}
-                  </View>
-                  <Text style={[styles.sessionLocation, { color: colors.textSecondary }]}>
-                    {session.location}
-                  </Text>
-                  <Text style={[styles.sessionActivity, { color: colors.textSecondary }]}>
-                    {t('Dernière activité')}: {session.lastActivity}
+          {loading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={colors.secondary} />
+              <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
+                {t('Chargement des sessions...')}
+              </Text>
+            </View>
+          ) : (
+            <ScrollView style={styles.sessionsList}>
+              {sessions.length === 0 ? (
+                <View style={styles.emptyContainer}>
+                  <Feather name="smartphone" size={48} color={colors.textSecondary} />
+                  <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+                    {t('Aucune session active trouvée')}
                   </Text>
                 </View>
-                {!session.current && (
-                  <TouchableOpacity
-                    style={[styles.terminateButton, { backgroundColor: colors.error }]}
-                    onPress={() => terminateSession(session.id)}
-                  >
-                    <Text style={styles.terminateButtonText}>{t('Terminer')}</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            ))}
-          </ScrollView>
+              ) : (
+                sessions.map((session) => (
+                  <View key={session.id} style={[styles.sessionItem, { borderBottomColor: colors.border }]}>
+                    <View style={styles.sessionLeft}>
+                      <View style={[styles.deviceIconContainer, { backgroundColor: colors.secondary + '20' }]}>
+                        <Feather 
+                          name={getDeviceIcon(session.deviceType, session.os)} 
+                          size={20} 
+                          color={colors.secondary} 
+                        />
+                      </View>
+                      <View style={styles.sessionInfo}>
+                        <View style={styles.sessionHeader}>
+                          <Text style={[styles.sessionDevice, { color: colors.textPrimary }]}>
+                            {session.device}
+                          </Text>
+                          {session.current && (
+                            <View style={[styles.currentBadge, { backgroundColor: colors.secondary }]}>
+                              <Text style={styles.currentBadgeText}>{t('Actuel')}</Text>
+                            </View>
+                          )}
+                        </View>
+                        
+                        <Text style={[styles.sessionOS, { color: colors.textSecondary }]}>
+                          {session.os}
+                        </Text>
+                        
+                        <Text style={[styles.sessionLocation, { color: colors.textSecondary }]}>
+                          📍 {session.location}
+                        </Text>
+                        
+                        <Text style={[styles.sessionActivity, { color: colors.textSecondary }]}>
+                          🕒 {t('Dernière activité')}: {formatLastActivity(session.loginTime)}
+                        </Text>
+                        
+                        {session.ip && (
+                          <Text style={[styles.sessionIP, { color: colors.textSecondary }]}>
+                            🌐 IP: {session.ip} • {session.networkType}
+                          </Text>
+                        )}
+                      </View>
+                    </View>
+
+                    {!session.current && (
+                      <TouchableOpacity
+                        style={[styles.terminateButton, { backgroundColor: colors.error }]}
+                        onPress={() => terminateSession(session.id)}
+                      >
+                        <Text style={styles.terminateButtonText}>{t('Terminer')}</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                ))
+              )}
+            </ScrollView>
+          )}
+          
+          {/* Footer avec informations de sécurité */}
+          <View style={[styles.modalFooter, { borderTopColor: colors.border, backgroundColor: colors.background }]}>
+            <View style={styles.securityInfo}>
+              <Feather name="shield" size={16} color={colors.textSecondary} />
+              <Text style={[styles.securityText, { color: colors.textSecondary }]}>
+                {t('Terminez les sessions suspectes pour protéger votre compte')}
+              </Text>
+            </View>
+          </View>
         </View>
       </View>
     </Modal>
@@ -666,7 +960,7 @@ export default function ParametresScreen() {
   const handleAbout = () => {
     Alert.alert(
       t('À propos'),
-      `${t('Version')}: 1.0.0\n${t('Développé par')}: GBG TEAM IT\n${t('Copyright')} © 2024`,
+      `${t('Version')}: 1.0.0\n${t('Développé par')}: GBG TEAM IT\n${t('Copyright')} © 2025`,
       [
         {
           text: t('Conditions d\'utilisation'),
@@ -1123,5 +1417,61 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '600',
+  },
+
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+  },
+  emptyText: {
+    marginTop: 16,
+    fontSize: 16,
+    textAlign: 'center',
+  },
+  sessionLeft: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    flex: 1,
+  },
+  deviceIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  sessionOS: {
+    fontSize: 13,
+    marginBottom: 4,
+  },
+  sessionIP: {
+    fontSize: 11,
+    marginTop: 4,
+  },
+  modalFooter: {
+    borderTopWidth: 1,
+    padding: 16,
+  },
+  securityInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  securityText: {
+    marginLeft: 8,
+    fontSize: 12,
+    flex: 1,
   },
 });
