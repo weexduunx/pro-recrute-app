@@ -27,6 +27,7 @@ import {
   updateUserProfile,
   uploadCv,
   uploadProfilePhoto,
+  deleteProfilePhoto,
   getParsedCvData,
   updateParsedCvData,
   exportCvPdf,
@@ -126,7 +127,7 @@ interface InterimProfileData {
 
 
 export default function ProfileDetailsScreen() {
-  const { user, logout, loading: authLoading } = useAuth();
+  const { user, logout, loading: authLoading, fetchUser } = useAuth();
   const { colors } = useTheme();
   const { t } = useLanguage();
 
@@ -167,9 +168,23 @@ export default function ProfileDetailsScreen() {
     date_naissance: '', lieu_naissance: '', genre: 'Homme', telephone: '',
     titreProfil: '', photo_profil: '', status: 1, disponibilite: '',
   });
-  
+
   // États pour la photo de profil
   const [uploadingProfilePhoto, setUploadingProfilePhoto] = useState(false);
+  const [currentPhotoUrl, setCurrentPhotoUrl] = useState<string | null>(null);
+
+  // Synchroniser l'état local avec les données utilisateur
+  useEffect(() => {
+    if (user?.photo_profil && !currentPhotoUrl) {
+      const photoUrl = user.photo_profil.startsWith('http') 
+        ? user.photo_profil 
+        : `http://192.168.1.144:8000/storage/${user.photo_profil}`;
+      console.log('=== PHOTO URL SYNCHRONISATION ===');
+      console.log('user.photo_profil:', user.photo_profil);
+      console.log('photoUrl construite:', photoUrl);
+      setCurrentPhotoUrl(photoUrl);
+    }
+  }, [user?.photo_profil, currentPhotoUrl]);
   const [candidatUpdateError, setCandidatUpdateError] = useState<string | null>(null);
 
   // États profil Intérimaire
@@ -840,20 +855,48 @@ export default function ProfileDetailsScreen() {
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const selectedImage = result.assets[0];
         
+        console.log('Image sélectionnée:', selectedImage); // Debug
+        
+        // Vérification que l'image a bien un URI
+        if (!selectedImage.uri) {
+          throw new Error(t('Impossible d\'obtenir l\'URI de l\'image sélectionnée'));
+        }
+
         // Upload de l'image
         const uploadResult = await uploadProfilePhoto(selectedImage);
-        
+
+        // Mettre à jour immédiatement l'URL de la photo avec la réponse de l'API
+        console.log('=== UPLOAD SUCCESS ===');
+        console.log('uploadResult.photo_path:', uploadResult.photo_path);
+        // S'assurer que l'URL est au bon format complet
+        const fullPhotoUrl = uploadResult.photo_path.startsWith('http') 
+          ? uploadResult.photo_path 
+          : `http://192.168.1.144:8000${uploadResult.photo_path}`;
+        console.log('fullPhotoUrl calculée:', fullPhotoUrl);
+        setCurrentPhotoUrl(fullPhotoUrl);
+        console.log('currentPhotoUrl mise à jour avec:', fullPhotoUrl);
+
         Alert.alert(t('Succès'), t('Photo de profil mise à jour avec succès!'));
-        
-        // Recharger le profil candidat pour obtenir le nouveau chemin de la photo
-        await loadCandidatProfile();
+
+        // Recharger les données utilisateur pour obtenir la photo mise à jour
+        console.log('Avant fetchUser, user.photo_profil:', user?.photo_profil);
+        await fetchUser();
+        console.log('Après fetchUser, user.photo_profil:', user?.photo_profil);
       }
     } catch (error: any) {
       console.error('Erreur lors de l\'upload de la photo de profil:', error);
-      Alert.alert(
-        t('Erreur'),
-        error.response?.data?.message || t('Échec de la mise à jour de la photo de profil.')
-      );
+      
+      let errorMessage = t('Échec de la mise à jour de la photo de profil.');
+      
+      if (error.message === 'Network Error') {
+        errorMessage = t('Erreur de connexion. Vérifiez que le serveur est accessible et votre connexion internet.');
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      Alert.alert(t('Erreur'), errorMessage);
     } finally {
       setUploadingProfilePhoto(false);
     }
@@ -1156,16 +1199,29 @@ export default function ProfileDetailsScreen() {
               onPress={handleProfilePhotoUpload}
               disabled={uploadingProfilePhoto}
             >
-              {candidatProfile?.photo_profil ? (
-                <Image
-                  source={{ 
-                    uri: candidatProfile.photo_profil.startsWith('http') 
-                      ? candidatProfile.photo_profil 
-                      : `http://192.168.1.144:8000/storage/${candidatProfile.photo_profil}`
-                  }}
-                  style={styles.profilePhoto}
-                />
-              ) : (
+              {(currentPhotoUrl || user?.photo_profil) ? (() => {
+                // Construire l'URL finale pour l'affichage
+                let finalImageUrl;
+                if (currentPhotoUrl) {
+                  finalImageUrl = currentPhotoUrl;
+                } else if (user?.photo_profil) {
+                  finalImageUrl = user.photo_profil.startsWith('http')
+                    ? user.photo_profil
+                    : `http://192.168.1.144:8000/storage/${user.photo_profil}`;
+                }
+                
+                console.log('=== IMAGE DISPLAY ===');
+                console.log('currentPhotoUrl:', currentPhotoUrl);
+                console.log('user.photo_profil:', user?.photo_profil);
+                console.log('finalImageUrl:', finalImageUrl);
+                
+                return (
+                  <Image
+                    source={{ uri: finalImageUrl }}
+                    style={styles.profilePhoto}
+                  />
+                );
+              })() : (
                 <View style={[styles.profilePhotoPlaceholder, { backgroundColor: colors.background }]}>
                   <Ionicons name="camera-outline" size={28} color={colors.textSecondary} />
                   <Text style={[styles.placeholderText, { color: colors.textSecondary }]}>{t('Ajouter une photo')}</Text>
@@ -1185,10 +1241,10 @@ export default function ProfileDetailsScreen() {
               >
                 <Ionicons name="camera" size={16} color="#ffffff" />
                 <Text style={styles.profileActionButtonText}>
-                  {candidatProfile?.photo_profil ? t('Modifier') : t('Ajouter')}
+                  {(currentPhotoUrl || user?.photo_profil) ? t('Modifier') : t('Ajouter')}
                 </Text>
               </TouchableOpacity>
-              {candidatProfile?.photo_profil && (
+              {(currentPhotoUrl || user?.photo_profil) && (
                 <TouchableOpacity
                   style={[styles.profileActionButton, styles.removePhotoButton, { borderColor: colors.error }]}
                   onPress={() => {
@@ -1197,11 +1253,23 @@ export default function ProfileDetailsScreen() {
                       t('Êtes-vous sûr de vouloir supprimer votre photo de profil ?'),
                       [
                         { text: t('Annuler'), style: 'cancel' },
-                        { 
-                          text: t('Supprimer'), 
+                        {
+                          text: t('Supprimer'),
                           style: 'destructive',
-                          onPress: () => {
-                            // Logique pour supprimer la photo (à implémenter)
+                          onPress: async () => {
+                            try {
+                              setUploadingProfilePhoto(true);
+                              await deleteProfilePhoto();
+                              // Réinitialiser l'état local immédiatement
+                              setCurrentPhotoUrl(null);
+                              Alert.alert(t('Succès'), t('Photo de profil supprimée avec succès!'));
+                              await fetchUser();
+                            } catch (error: any) {
+                              console.error('Erreur lors de la suppression de la photo:', error);
+                              Alert.alert(t('Erreur'), error.response?.data?.message || t('Erreur lors de la suppression de la photo de profil.'));
+                            } finally {
+                              setUploadingProfilePhoto(false);
+                            }
                           }
                         }
                       ]
@@ -3180,11 +3248,11 @@ const styles = StyleSheet.create({
     // color est géré par le style inline
   },
 
-  
+
   profilePhotoContainer: {
     alignItems: 'center',
   },
-  
+
   profilePhotoButton: {
     width: 120,
     height: 120,
@@ -3196,13 +3264,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 15,
   },
-  
+
   profilePhoto: {
     width: '100%',
     height: '100%',
     resizeMode: 'cover',
   },
-  
+
   profilePhotoPlaceholder: {
     width: '100%',
     height: '100%',
@@ -3210,13 +3278,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 60,
   },
-  
+
   placeholderText: {
     fontSize: 12,
     marginTop: 4,
     textAlign: 'center',
   },
-  
+
   profilePhotoOverlay: {
     position: 'absolute',
     top: 0,
@@ -3228,12 +3296,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 60,
   },
-  
+
   profilePhotoActions: {
     flexDirection: 'row',
     gap: 10,
   },
-  
+
   profileActionButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -3242,12 +3310,13 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     gap: 6,
   },
-  
+
   profileActionButtonText: {
+    color: '#ffffff',
     fontSize: 14,
     fontWeight: '500',
   },
-  
+
   removePhotoButton: {
     backgroundColor: 'transparent',
     borderWidth: 1,

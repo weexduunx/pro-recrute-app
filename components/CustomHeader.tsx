@@ -80,15 +80,17 @@ const handleDropdownLogout = () => {
           <UserAvatar
             size={50}
             name={user?.name || ''}
-            src={user?.profile_photo_path || undefined}
+            src={user?.photo_profil ? 
+              (user.photo_profil.startsWith('http') 
+                ? user.photo_profil 
+                : `http://192.168.1.144:8000/storage/${user.photo_profil}`) 
+              : undefined}
             bgColor="#0f8e35"
             bgColors={['#0f8e35', '#0f8e35', '#0f8e35']}
             initials={user?.name ? user.name.split(' ').map((n: string) => n[0]).join('') : ''}
             style={{ borderWidth: 2, borderColor: '#FFFFFF' }}
             textColor="#FFFFFF"
             borderRadius={30}
-
-
           />
         </TouchableOpacity>
 

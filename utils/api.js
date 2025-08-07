@@ -7,7 +7,9 @@ import { Alert, TouchableOpacity, Text } from 'react-native';
 import * as Device from 'expo-device';
 
 // **IMPORTANT: Mettez à jour cette URL avec l'adresse IP et le port du  backend Laravel**
-const API_URL = 'http://192.168.1.144:8000/api'  || process.env.EXPO_PUBLIC_API_URL ; // Fallback pour le développement
+const API_URL = 'http://192.168.1.144:8000/api' || process.env.EXPO_PUBLIC_API_URL; // Fallback pour le développement
+
+console.log('API_URL configuré:', API_URL); // Debug
 
 const api = axios.create({
   baseURL: API_URL,
@@ -203,22 +205,62 @@ export const uploadCv = async (fileAsset) => {
 
 export const uploadProfilePhoto = async (imageAsset) => {
   try {
+    console.log("=== DEBUG UPLOAD PROFILE PHOTO ===");
+    console.log("Image Asset reçu:", imageAsset);
+    console.log("API_URL utilisé:", API_URL);
+    
+    // Test de connectivité basique
+    try {
+      console.log("Test de connectivité vers:", `${API_URL.replace('/api', '')}/api/user`);
+      const testResponse = await api.get('/user');
+      console.log("Test de connectivité: OK");
+    } catch (testError) {
+      console.error("Test de connectivité: ÉCHEC", testError.message);
+    }
+    
     const formData = new FormData();
+    
+    // L'objet imageAsset d'ImagePicker a des propriétés différentes
+    const fileName = imageAsset.fileName || imageAsset.name || `profile_photo_${Date.now()}.jpg`;
+    const mimeType = imageAsset.mimeType || imageAsset.type || 'image/jpeg';
+    
     formData.append('profile_photo', {
       uri: imageAsset.uri,
-      name: imageAsset.fileName || 'profile_photo.jpg',
-      type: imageAsset.type || 'image/jpeg',
+      name: fileName,
+      type: mimeType,
     });
+
+    console.log("FormData préparé avec:", { uri: imageAsset.uri, name: fileName, type: mimeType });
 
     const response = await api.post('/user/upload-profile-photo', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
+      timeout: 30000, // 30 secondes timeout
     });
     console.log("Appel API uploadProfilePhoto réussi:", response.data);
     return response.data;
   } catch (error) {
-    console.error("Échec de l'appel API uploadProfilePhoto:", error.response?.data || error.message);
+    console.error("=== ERREUR UPLOAD PROFILE PHOTO ===");
+    console.error("Type d'erreur:", error.constructor.name);
+    console.error("Message:", error.message);
+    console.error("Code:", error.code);
+    console.error("Response status:", error.response?.status);
+    console.error("Response data:", error.response?.data);
+    console.error("Request URL:", error.config?.url);
+    console.error("Request headers:", error.config?.headers);
+    throw error;
+  }
+};
+
+export const deleteProfilePhoto = async () => {
+  try {
+    console.log("=== DELETE PROFILE PHOTO ===");
+    const response = await api.delete('/user/delete-profile-photo');
+    console.log("Appel API deleteProfilePhoto réussi:", response.data);
+    return response.data;
+  } catch (error) {
+    console.error("Échec de l'appel API deleteProfilePhoto:", error.response?.data || error.message);
     throw error;
   }
 };
@@ -1029,6 +1071,54 @@ export const changePassword = async (currentPassword, newPassword, newPasswordCo
     }
     
     throw error;
+  }
+};
+
+// Fonctions pour les entretiens
+export const getCandidatEntretiens = async () => {
+  try {
+    console.log('=== API CALL: getCandidatEntretiens (tous les entretiens) ===');
+    const response = await api.get('/candidat/entretiens');
+    console.log('API Response getCandidatEntretiens:', response.data);
+    return response.data.entretiens || [];
+  } catch (error) {
+    console.error("Échec de l'appel API getCandidatEntretiens:", error.response?.data || error.message);
+    return []; // Retour tableau vide en cas d'erreur
+  }
+};
+
+export const getCandidatEntretiensCalendrier = async () => {
+  try {
+    console.log('=== API CALL: getCandidatEntretiensCalendrier ===');
+    
+    // D'abord appeler la route de debug pour voir les infos utilisateur
+    try {
+      const debugResponse = await api.get('/debug/user-info');
+      console.log('DEBUG USER INFO:', debugResponse.data);
+    } catch (debugError) {
+      console.error('Debug API error:', debugError.response?.data);
+    }
+    
+    // Tester la nouvelle requête SQL corrigée
+    try {
+      const testSqlResponse = await api.get('/test/entretiens-sql');
+      console.log('TEST SQL CORRECTED:', testSqlResponse.data);
+    } catch (testError) {
+      console.error('Test SQL error:', testError.response?.data);
+    }
+    
+    const response = await api.get('/candidat/entretiens-calendrier');
+    console.log('API Response status:', response.status);
+    console.log('API Response data:', response.data);
+    console.log('API Response entretiens:', response.data.entretiens);
+    return response.data.entretiens || [];
+  } catch (error) {
+    console.error("=== API ERROR: getCandidatEntretiensCalendrier ===");
+    console.error("Error:", error);
+    console.error("Error response:", error.response?.data);
+    console.error("Error status:", error.response?.status);
+    // Retourner un tableau vide en cas d'erreur pour éviter de casser l'interface
+    return [];
   }
 };
 

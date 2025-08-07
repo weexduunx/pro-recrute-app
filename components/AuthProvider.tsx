@@ -36,6 +36,7 @@ interface User {
   updated_at?: string;
   expo_push_token?: string;
   profile_photo_url?: string;
+  photo_profil?: string;
   is_otp_verified?: boolean;
   is_contract_active?: boolean;
 }
