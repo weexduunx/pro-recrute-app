@@ -1,3 +1,6 @@
+// Polyfills pour React Native - Doit être en première ligne
+import '../polyfills';
+
 import { Stack, Slot } from 'expo-router';
 import { AuthProvider, useAuth } from '../components/AuthProvider';
 import { SimplePermissionsProvider } from '../components/SimplePermissionsManager';

@@ -20,10 +20,10 @@ import { getOffres, getRecommendedOffres, getActualites } from "../../utils/api"
 import { router } from "expo-router";
 import { LinearGradient } from 'expo-linear-gradient';
 import EvilIcons from '@expo/vector-icons/EvilIcons';
-import { FontAwesome5 } from '@expo/vector-icons';
+import { FontAwesome5 , Feather } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { format } from "date-fns";
-import { Feather } from '@expo/vector-icons';
+
 import { decode } from 'html-entities';
 
 const { width } = Dimensions.get("window");
@@ -64,7 +64,7 @@ const AutoSlider = <T extends { id?: string | number }>({
   }, [currentIndex, data.length, autoScrollInterval]);
 
   const onViewableItemsChanged = useRef(
-    (info: { viewableItems: Array<{ index: number | null }> }) => {
+    (info: { viewableItems: { index: number | null }[] }) => {
       if (info.viewableItems.length > 0) {
         const firstIndex = info.viewableItems[0].index;
         setCurrentIndex(typeof firstIndex === 'number' && firstIndex >= 0 ? firstIndex : 0);

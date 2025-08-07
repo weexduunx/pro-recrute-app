@@ -4,8 +4,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useAuth } from '../../components/AuthProvider';
 import { Picker } from '@react-native-picker/picker';
-import { Ionicons } from '@expo/vector-icons';
-import { Feather } from '@expo/vector-icons';
+import { Ionicons , Feather } from '@expo/vector-icons';
+
 import * as Device from 'expo-device';
 
 export default function RegisterScreen() {
@@ -440,20 +440,6 @@ const styles = StyleSheet.create({
   },
   pickerIcon: { // Icône du chevron à droite
     marginLeft: 'auto', // Pousse l'icône à droite
-  },
-  inputContainer: {
-    position: 'relative',
-    marginBottom: 20,
-  },
-  input: {
-    backgroundColor: "#F9FAFB",
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    fontSize: 16,
-    color: "#1F2937",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
   },
   inputError: {
     borderColor: "#EF4444",

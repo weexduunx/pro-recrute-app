@@ -10,7 +10,7 @@ export default function AdminLayout() {
     if (!user || user.role !== 'admin') {
       router.replace('/(app)/home'); // ou une autre route
     }
-  }, [user]);
+  }, [user, router]);
 
   return <Slot />;
 }

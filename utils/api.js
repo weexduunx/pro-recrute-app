@@ -316,9 +316,43 @@ const response = await api.get('/user/export-cv-pdf', {
     if (error.response?.data) {
       // Tente de décoder la réponse d'erreur si elle est au format JSON
       try {
-        const errorData = JSON.parse(new TextDecoder().decode(error.response.data));
+        // Gestion défensive compatible React Native
+        let errorData;
+        const responseData = error.response.data;
+        
+        if (typeof responseData === 'string') {
+          // Données déjà en string
+          errorData = JSON.parse(responseData);
+        } else if (typeof responseData === 'object' && responseData !== null) {
+          // Objet JavaScript natif
+          errorData = responseData;
+        } else if (responseData instanceof ArrayBuffer) {
+          // ArrayBuffer - conversion sécurisée
+          try {
+            const uint8Array = new Uint8Array(responseData);
+            const dataStr = String.fromCharCode(...Array.from(uint8Array));
+            errorData = JSON.parse(dataStr);
+          } catch (bufferError) {
+            console.warn('Impossible de convertir ArrayBuffer:', bufferError);
+            errorData = { error: 'Format de réponse non supporté' };
+          }
+        } else if (responseData instanceof Uint8Array) {
+          // Uint8Array - conversion directe
+          try {
+            const dataStr = String.fromCharCode(...Array.from(responseData));
+            errorData = JSON.parse(dataStr);
+          } catch (arrayError) {
+            console.warn('Impossible de convertir Uint8Array:', arrayError);
+            errorData = { error: 'Format de réponse non supporté' };
+          }
+        } else {
+          // Fallback pour autres types
+          errorData = { error: String(responseData) };
+        }
+        
         errorMessage += errorData.message || errorData.error || 'Erreur inconnue du serveur.';
       } catch (e) {
+        console.warn('Erreur lors du décodage de la réponse:', e);
         errorMessage += 'Erreur de décodage de la réponse du serveur.';
       }
     } else {

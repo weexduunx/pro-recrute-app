@@ -82,8 +82,8 @@ export const PermissionsProvider = ({ children }: PermissionsProviderProps) => {
       // Vérifier les permissions notifications
       const notificationStatus = await Notifications.getPermissionsAsync();
       
-      // Vérifier les permissions caméra
-      const [cameraStatus] = await Camera.useCameraPermissions();
+      // Vérifier les permissions caméra - nous devrons utiliser le hook dans le composant parent
+      const cameraStatus = { status: 'undetermined' };
       
       // Vérifier les permissions média
       const mediaStatus = await MediaLibrary.getPermissionsAsync();
@@ -114,9 +114,10 @@ export const PermissionsProvider = ({ children }: PermissionsProviderProps) => {
 
   const requestCameraPermission = async (): Promise<PermissionStatus> => {
     try {
-      const permission = await Camera.useCameraPermissions();
-      const status = permission?.[0]?.status ?? 'undetermined';
-      return status as PermissionStatus;
+      // Note: Cette fonction doit être implémentée avec le hook useCameraPermissions
+      // dans le composant qui l'utilise
+      console.log('Permission caméra - utiliser le hook useCameraPermissions dans le composant');
+      return 'undetermined';
     } catch (error) {
       console.error('Erreur demande permission caméra:', error);
       return 'denied';
