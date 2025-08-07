@@ -22,9 +22,11 @@ import { useAuth } from '../../components/AuthProvider';
 import CustomHeader from '../../components/CustomHeader';
 import { FontAwesome5, AntDesign, Feather, FontAwesome, MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
+import * as ImagePicker from 'expo-image-picker';
 import {
   updateUserProfile,
   uploadCv,
+  uploadProfilePhoto,
   getParsedCvData,
   updateParsedCvData,
   exportCvPdf,
@@ -165,6 +167,9 @@ export default function ProfileDetailsScreen() {
     date_naissance: '', lieu_naissance: '', genre: 'Homme', telephone: '',
     titreProfil: '', photo_profil: '', status: 1, disponibilite: '',
   });
+  
+  // États pour la photo de profil
+  const [uploadingProfilePhoto, setUploadingProfilePhoto] = useState(false);
   const [candidatUpdateError, setCandidatUpdateError] = useState<string | null>(null);
 
   // États profil Intérimaire
@@ -809,6 +814,51 @@ export default function ProfileDetailsScreen() {
     }
   };
 
+  // Fonction pour gérer la sélection et l'upload de la photo de profil
+  const handleProfilePhotoUpload = async () => {
+    try {
+      setUploadingProfilePhoto(true);
+
+      // Demander les permissions pour accéder à la galerie
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          t('Permission requise'),
+          t('Permission d\'accès à la galerie requise pour sélectionner une photo de profil.')
+        );
+        return;
+      }
+
+      // Ouvrir le sélecteur d'image
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1], // Format carré pour la photo de profil
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const selectedImage = result.assets[0];
+        
+        // Upload de l'image
+        const uploadResult = await uploadProfilePhoto(selectedImage);
+        
+        Alert.alert(t('Succès'), t('Photo de profil mise à jour avec succès!'));
+        
+        // Recharger le profil candidat pour obtenir le nouveau chemin de la photo
+        await loadCandidatProfile();
+      }
+    } catch (error: any) {
+      console.error('Erreur lors de l\'upload de la photo de profil:', error);
+      Alert.alert(
+        t('Erreur'),
+        error.response?.data?.message || t('Échec de la mise à jour de la photo de profil.')
+      );
+    } finally {
+      setUploadingProfilePhoto(false);
+    }
+  };
+
   const pickDocument = async () => {
     try {
       setUploadingCv(true);
@@ -1095,6 +1145,78 @@ export default function ProfileDetailsScreen() {
           )}
         </View>
       </View>
+
+      {/* Section Photo de Profil */}
+      {(user?.role === 'user' || user?.role === 'interimaire') && (
+        <View style={styles.inputGroup}>
+          <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Photo de profil')}</Text>
+          <View style={styles.profilePhotoContainer}>
+            <TouchableOpacity
+              style={[styles.profilePhotoButton, { borderColor: colors.border, backgroundColor: colors.background }]}
+              onPress={handleProfilePhotoUpload}
+              disabled={uploadingProfilePhoto}
+            >
+              {candidatProfile?.photo_profil ? (
+                <Image
+                  source={{ 
+                    uri: candidatProfile.photo_profil.startsWith('http') 
+                      ? candidatProfile.photo_profil 
+                      : `http://192.168.1.144:8000/storage/${candidatProfile.photo_profil}`
+                  }}
+                  style={styles.profilePhoto}
+                />
+              ) : (
+                <View style={[styles.profilePhotoPlaceholder, { backgroundColor: colors.background }]}>
+                  <Ionicons name="camera-outline" size={28} color={colors.textSecondary} />
+                  <Text style={[styles.placeholderText, { color: colors.textSecondary }]}>{t('Ajouter une photo')}</Text>
+                </View>
+              )}
+              {uploadingProfilePhoto && (
+                <View style={styles.profilePhotoOverlay}>
+                  <ActivityIndicator size="small" color={colors.secondary} />
+                </View>
+              )}
+            </TouchableOpacity>
+            <View style={styles.profilePhotoActions}>
+              <TouchableOpacity
+                style={[styles.profileActionButton, { backgroundColor: colors.secondary }]}
+                onPress={handleProfilePhotoUpload}
+                disabled={uploadingProfilePhoto}
+              >
+                <Ionicons name="camera" size={16} color="#ffffff" />
+                <Text style={styles.profileActionButtonText}>
+                  {candidatProfile?.photo_profil ? t('Modifier') : t('Ajouter')}
+                </Text>
+              </TouchableOpacity>
+              {candidatProfile?.photo_profil && (
+                <TouchableOpacity
+                  style={[styles.profileActionButton, styles.removePhotoButton, { borderColor: colors.error }]}
+                  onPress={() => {
+                    Alert.alert(
+                      t('Supprimer la photo'),
+                      t('Êtes-vous sûr de vouloir supprimer votre photo de profil ?'),
+                      [
+                        { text: t('Annuler'), style: 'cancel' },
+                        { 
+                          text: t('Supprimer'), 
+                          style: 'destructive',
+                          onPress: () => {
+                            // Logique pour supprimer la photo (à implémenter)
+                          }
+                        }
+                      ]
+                    );
+                  }}
+                  disabled={uploadingProfilePhoto}
+                >
+                  <Ionicons name="trash-outline" size={16} color={colors.error} />
+                  <Text style={[styles.profileActionButtonText, { color: colors.error }]}>{t('Supprimer')}</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        </View>
+      )}
 
       {loadingCandidatProfile && (user?.role === 'user' || user?.role === 'interimaire') ? (
         <View style={styles.loadingContainer}>
@@ -3058,6 +3180,78 @@ const styles = StyleSheet.create({
     // color est géré par le style inline
   },
 
+  
+  profilePhotoContainer: {
+    alignItems: 'center',
+  },
+  
+  profilePhotoButton: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    borderWidth: 2,
+    overflow: 'hidden',
+    position: 'relative',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  
+  profilePhoto: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  
+  profilePhotoPlaceholder: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 60,
+  },
+  
+  placeholderText: {
+    fontSize: 12,
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  
+  profilePhotoOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 60,
+  },
+  
+  profilePhotoActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  
+  profileActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+    gap: 6,
+  },
+  
+  profileActionButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  
+  removePhotoButton: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+  },
   // CV Styles
   fileInfo: {
     flexDirection: 'row',
@@ -3688,5 +3882,79 @@ const cvStyles = StyleSheet.create({
     color: '#fff',
     fontWeight: '700',
     fontSize: 16,
+  },
+
+  // Styles pour la photo de profil - cohérents avec le design existant
+  profilePhotoContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 16,
+    paddingVertical: 8,
+  },
+  profilePhotoButton: {
+    width: 100,
+    height: 100,
+    borderRadius: 12, // Consistant avec borderRadius: 8 mais plus grand pour photo
+    borderWidth: 1,
+    overflow: 'hidden',
+    position: 'relative',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  profilePhoto: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  profilePhotoPlaceholder: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+  },
+  placeholderText: {
+    fontSize: 12,
+    fontWeight: '500',
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  profilePhotoOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 12,
+  },
+  profilePhotoActions: {
+    flex: 1,
+    gap: 8,
+    justifyContent: 'flex-start',
+  },
+  profileActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8, // Consistant avec les autres boutons
+    gap: 8,
+    minHeight: 44, // Même hauteur que les inputs
+  },
+  removePhotoButton: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+  },
+  profileActionButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#ffffff',
   },
 });

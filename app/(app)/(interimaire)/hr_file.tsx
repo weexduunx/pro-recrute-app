@@ -209,7 +209,7 @@ export default function HrFileScreen() {
     setExportingPdf(true);
     setExportError(null);
     try {
-      await getPdf(encryptedContratId);
+      await getPdf(encryptedContratId, 'attestation');
       Alert.alert(t("Succès"), t("Attestation téléchargée avec succès !"));
     } catch (err: any) {
       console.error("Erreur lors du téléchargement de l'attestation:", err);
@@ -402,7 +402,7 @@ export default function HrFileScreen() {
 
   // Trier les contrats par date de début dans chaque année (plus récent en premier)
   Object.keys(groupedByYear).forEach(year => {
-    groupedByYear[year].sort((a, b) => 
+    groupedByYear[year].sort((a, b) =>
       new Date(b.date_debut).getTime() - new Date(a.date_debut).getTime()
     );
   });
@@ -412,7 +412,7 @@ export default function HrFileScreen() {
     colors,
     t,
     styles
-  }:{
+  }: {
     contractHistory: {
       statut: string;
       society_name: string;
@@ -446,7 +446,7 @@ export default function HrFileScreen() {
         case "En cours":
           return colors.success;
         case "Terminé":
-          return colors.textSecondary;
+          return colors.error;
         default:
           return colors.warning;
       }
@@ -477,8 +477,8 @@ export default function HrFileScreen() {
 
                       return (
                         <View key={index} style={simpleStyles.contractItem}>
-                          <View style={[simpleStyles.statusDot, { backgroundColor: statusColor }]} />
-                          
+                          <View style={[simpleStyles.statusDot, { backgroundColor: statusColor, width: 8, height: 8, borderRadius: 4 }]} />
+
                           <View style={[simpleStyles.contractCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
                             <View style={simpleStyles.contractHeader}>
                               <Text style={[simpleStyles.companyName, { color: colors.textPrimary }]}>
@@ -488,17 +488,36 @@ export default function HrFileScreen() {
                                 {contrat.statut}
                               </Text>
                             </View>
-                            
+
                             <View style={simpleStyles.contractInfo}>
                               <Text style={[simpleStyles.infoText, { color: colors.textSecondary }]}>
-                                {new Date(contrat.date_debut).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })} 
+                                {new Date(contrat.date_debut).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}
                                 {contrat.date_terminaison && ` - ${new Date(contrat.date_terminaison).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}`}
                               </Text>
                               <Text style={[simpleStyles.duration, { color: colors.textSecondary }]}>
                                 {contrat.duration} {t("jours")} • {contrat.temps_ecoule}
                               </Text>
                             </View>
-
+                            {contrat.affectations?.length > 0 && (
+                              <View style={[modernStyles.infoBox, { backgroundColor: colors.secondary + '08' }]}>
+                                <Text style={[modernStyles.sectionSubtitle, { color: colors.textPrimary, marginBottom: 8 }]}>
+                                  {t("Affectations")}
+                                </Text>
+                                {contrat.affectations.map((affectation, idx) => (
+                                  <View key={idx} style={modernStyles.infoRow}>
+                                    <Ionicons name="location-outline" size={18} color={colors.secondary} style={modernStyles.icon} />
+                                    <View style={modernStyles.infoContent}>
+                                      <Text style={[modernStyles.infoTitle, { color: colors.textPrimary }]}>
+                                        {affectation.structure}
+                                      </Text>
+                                      <Text style={[modernStyles.infoDate, { color: colors.textSecondary }]}>
+                                        {t("Depuis le")} {new Date(affectation.dateAffectation).toLocaleDateString('fr-FR')}
+                                      </Text>
+                                    </View>
+                                  </View>
+                                ))}
+                              </View>
+                            )}
                             {contrat.rupture_motif && (
                               <View style={[simpleStyles.alertBanner, { backgroundColor: colors.error + '10' }]}>
                                 <Text style={[simpleStyles.alertText, { color: colors.error }]}>
@@ -553,14 +572,14 @@ export default function HrFileScreen() {
         <SimpleContractTimeline
           contractHistory={filteredContracts}
           colors={colors}
-          t={t} 
+          t={t}
           styles={styles}
         />
         {/* Section Attestations */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Ionicons name="documents-outline" size={22} color={colors.primary} style={styles.sectionIcon} />
-            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{t('Mes Attestations')}</Text>
+            <Text style={[simpleStyles.headerTitle, { color: colors.textPrimary }]}>{t('Mes Attestations')}</Text>
           </View>
 
           {loading ? (
@@ -610,7 +629,7 @@ export default function HrFileScreen() {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Ionicons name="school-outline" size={22} color={colors.primary} style={styles.sectionIcon} />
-            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{t('Mes Certificats')}</Text>
+            <Text style={[simpleStyles.headerTitle, { color: colors.textPrimary }]}>{t('Mes Certificats')}</Text>
           </View>
 
           {loading ? (
@@ -1044,4 +1063,175 @@ const simpleStyles = StyleSheet.create({
     fontStyle: 'italic',
   },
 });
+const modernStyles = StyleSheet.create({
+  headerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    gap: 10
+  },
+  headerIconContainer: {
+    backgroundColor: '#E8F0FE',
+    borderRadius: 12,
+    padding: 6,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    flex: 1,
+  },
+  headerBadge: {
+    backgroundColor: '#E8F0FE',
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  headerBadgeText: {
+    fontWeight: '600',
+  },
+  timelineContainer: {
+    paddingLeft: 20,
+    borderLeftWidth: 2,
+    borderLeftColor: '#ccc',
+  },
+  timelineItem: {
+    marginBottom: 30,
+    marginLeft: -15,
+    flexDirection: 'row',
+    position: 'relative',
+  },
+  timelineLine: {
+    position: 'absolute',
+    top: 36,
+    left: 22,
+    width: 2,
+    height: '100%',
+  },
+  timelinePoint: {
+    width: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timelinePointInner: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  timelineCard: {
+    flex: 1,
+    padding: 14,
+    borderRadius: 10,
+    marginLeft: 6,
+    elevation: 2,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8
+  },
+  cardHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6
+  },
+  companyName: {
+    fontWeight: 'bold',
+    fontSize: 14
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  statusText: {
+    fontWeight: '600',
+    fontSize: 12,
+  },
+  dateSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+    marginTop: 8,
+    gap: 6
+  },
+  dateItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  dateText: {
+    fontSize: 13
+  },
+  dateArrow: {
+    marginHorizontal: 6
+  },
+  metricsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 8,
+    marginBottom: 4
+  },
+  metric: {
+    flexDirection: 'column',
+    gap: 2,
+    alignItems: 'flex-start',
+  },
+  metricLabel: {
+    fontSize: 12
+  },
+  metricValue: {
+    fontWeight: '600'
+  },
+  alertSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 10,
+    gap: 6,
+    padding: 6,
+    borderRadius: 6,
+  },
+  alertText: {
+    fontSize: 13,
+  },
+  infoBox: {
+    padding: 8,
+    borderRadius: 10,
+    marginTop: 8,
+    marginBottom: 4,
+  },
 
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 4,
+  },
+
+  icon: {
+    marginRight: 10,
+    marginTop: 2,
+  },
+
+  infoContent: {
+    flex: 1,
+  },
+
+  infoTitle: {
+    fontSize: 14,
+    fontWeight: '500',
+    marginBottom: 2,
+  },
+
+  infoDetails: {
+    fontSize: 13,
+    marginBottom: 2,
+  },
+
+  infoDate: {
+    fontSize: 12,
+    fontStyle: 'italic',
+  },
+
+});

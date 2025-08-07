@@ -201,6 +201,28 @@ export const uploadCv = async (fileAsset) => {
   }
 };
 
+export const uploadProfilePhoto = async (imageAsset) => {
+  try {
+    const formData = new FormData();
+    formData.append('profile_photo', {
+      uri: imageAsset.uri,
+      name: imageAsset.fileName || 'profile_photo.jpg',
+      type: imageAsset.type || 'image/jpeg',
+    });
+
+    const response = await api.post('/user/upload-profile-photo', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    console.log("Appel API uploadProfilePhoto réussi:", response.data);
+    return response.data;
+  } catch (error) {
+    console.error("Échec de l'appel API uploadProfilePhoto:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
 export const getParsedCvData = async () => {
   try {
     const response = await api.get('/user/parsed-cv'); // Laravel: GET /api/user/parsed-cv
