@@ -341,28 +341,30 @@ export default function EntretiensScreen() {
                       <Text style={styles.modalTextSecondary}>{selectedEntretien.offre?.lieux}</Text>
                     </View>
 
-                    {/* Statuts */}
-                    <View style={styles.modalSection}>
-                      <View style={styles.modalSectionHeader}>
-                        <FontAwesome5 name="info-circle" size={16} color="#091e60" />
-                        <Text style={styles.modalSectionTitle}>Statut</Text>
-                      </View>
-                      <View style={styles.statusRow}>
-                        <Text style={styles.statusLabel}>Présence:</Text>
-                        <View style={[styles.statusBadge, { backgroundColor: selectedEntretien.presence === 1 ? '#10B981' : '#F59E0B' }]}>
-                          <Text style={styles.statusBadgeText}>{selectedEntretien.presence_label}</Text>
+                    {/* Statuts - Affiché seulement si le candidat était présent */}
+                    {selectedEntretien.presence === 1 && (
+                      <View style={styles.modalSection}>
+                        <View style={styles.modalSectionHeader}>
+                          <FontAwesome5 name="info-circle" size={16} color="#091e60" />
+                          <Text style={styles.modalSectionTitle}>Statut</Text>
+                        </View>
+                        <View style={styles.statusRow}>
+                          <Text style={styles.statusLabel}>Présence:</Text>
+                          <View style={[styles.statusBadge, { backgroundColor: '#10B981' }]}>
+                            <Text style={styles.statusBadgeText}>{selectedEntretien.presence_label}</Text>
+                          </View>
+                        </View>
+                        <View style={styles.statusRow}>
+                          <Text style={styles.statusLabel}>Décision:</Text>
+                          <View style={[styles.statusBadge, { backgroundColor: getDecisionColor(selectedEntretien.decision) }]}>
+                            <Text style={styles.statusBadgeText}>{selectedEntretien.decision_label}</Text>
+                          </View>
                         </View>
                       </View>
-                      <View style={styles.statusRow}>
-                        <Text style={styles.statusLabel}>Décision:</Text>
-                        <View style={[styles.statusBadge, { backgroundColor: getDecisionColor(selectedEntretien.decision) }]}>
-                          <Text style={styles.statusBadgeText}>{selectedEntretien.decision_label}</Text>
-                        </View>
-                      </View>
-                    </View>
+                    )}
 
-                    {/* Observations */}
-                    {selectedEntretien.observations && (
+                    {/* Observations - Affiché seulement si le candidat était présent et qu'il y a des observations */}
+                    {selectedEntretien.presence === 1 && selectedEntretien.observations && (
                       <View style={styles.modalSection}>
                         <View style={styles.modalSectionHeader}>
                           <FontAwesome5 name="sticky-note" size={16} color="#091e60" />
@@ -372,8 +374,8 @@ export default function EntretiensScreen() {
                       </View>
                     )}
 
-                    {/* Commentaire */}
-                    {selectedEntretien.commentaire && (
+                    {/* Commentaire - Affiché seulement si le candidat était présent et qu'il y a un commentaire */}
+                    {selectedEntretien.presence === 1 && selectedEntretien.commentaire && (
                       <View style={styles.modalSection}>
                         <View style={styles.modalSectionHeader}>
                           <FontAwesome5 name="comment" size={16} color="#091e60" />
@@ -383,8 +385,8 @@ export default function EntretiensScreen() {
                       </View>
                     )}
 
-                    {/* Raison du rejet */}
-                    {selectedEntretien.raison_rejet && (
+                    {/* Raison du rejet - Affiché seulement si le candidat était présent et qu'il y a une raison */}
+                    {selectedEntretien.presence === 1 && selectedEntretien.raison_rejet && (
                       <View style={styles.modalSection}>
                         <View style={styles.modalSectionHeader}>
                           <FontAwesome5 name="exclamation-triangle" size={16} color="#EF4444" />
