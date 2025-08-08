@@ -322,6 +322,38 @@ export const getRecommendedOffres = async () => {
   }
 };
 
+// Nouvelle API pour les offres basées sur la géolocalisation
+export const getLocationBasedOffres = async (latitude, longitude, radius = 50) => {
+  try {
+    const response = await api.get('/offres/nearby', {
+      params: {
+        latitude,
+        longitude,
+        radius, // rayon en km
+      }
+    });
+    return response.data;
+  } catch (error) {
+    console.error("Échec de l'appel API getLocationBasedOffres:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+// API pour sauvegarder la position de l'utilisateur (optionnel)
+export const saveUserLocation = async (latitude, longitude, address) => {
+  try {
+    const response = await api.post('/user/location', {
+      latitude,
+      longitude, 
+      address
+    });
+    return response.data;
+  } catch (error) {
+    console.error("Échec de l'appel API saveUserLocation:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
 export const updateParsedCvData = async (parsedCvData) => {
   try {
     const response = await api.put('/user/parsed-cv', parsedCvData); // Laravel: PUT /api/user/parsed-cv
