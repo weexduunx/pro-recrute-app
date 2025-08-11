@@ -3,8 +3,8 @@ import '../polyfills';
 
 import { Stack, Slot } from 'expo-router';
 import { AuthProvider, useAuth } from '../components/AuthProvider';
-import { SimplePermissionsProvider } from '../components/SimplePermissionsManager';
-import { SimpleAuthPermissionsManager } from '../components/useSimpleAuthPermissions';
+import { PermissionsProvider } from '../components/PermissionsManager';
+import { AuthPermissionsManager } from '../components/useAuthPermissions';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import React from 'react';
 import { ThemeProvider, useTheme } from '../components/ThemeContext';
@@ -22,18 +22,18 @@ import Toast from 'react-native-toast-message';
 export default function RootLayout() {
   return (
     <SafeAreaProvider>
-      <SimplePermissionsProvider>
+      <PermissionsProvider>
         <AuthProvider>
           <LanguageProvider>
             <ThemeProvider>
-              <SimpleAuthPermissionsManager>
+              <AuthPermissionsManager>
                 <RootLayoutContent />
                 <Toast />
-              </SimpleAuthPermissionsManager>
+              </AuthPermissionsManager>
             </ThemeProvider>
           </LanguageProvider>
         </AuthProvider>
-      </SimplePermissionsProvider>
+      </PermissionsProvider>
     </SafeAreaProvider>
   );
 }

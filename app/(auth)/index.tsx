@@ -1,19 +1,31 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator, Platform, Image, ScrollView, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator, Image, ScrollView, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useAuth } from '../../components/AuthProvider';
-import { FontAwesome5,Feather } from '@expo/vector-icons';
-import * as Device from 'expo-device'; // Importer Device
+import { FontAwesome5, Feather, MaterialIcons } from '@expo/vector-icons';
+import * as Device from 'expo-device';
+import { useBiometricAuth } from '../../hooks/useBiometricAuth';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [biometricLoading, setBiometricLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false); 
   const [error, setError] = useState<string | null>(null);
+  const [biometricType, setBiometricType] = useState<string>('Empreinte digitale');
 
   const { login, socialLogin, error: authError, clearError } = useAuth();
+  const {
+    isAvailable: biometricAvailable,
+    isEnabled: biometricEnabled,
+    hasStoredCredentials,
+    authenticateWithBiometrics,
+    storeCredentials,
+    getBiometricType,
+    checkBiometricStatus,
+  } = useBiometricAuth();
 
   useEffect(() => {
     // Nettoyer l'erreur du contexte AuthProvider lors du montage du composant
@@ -23,6 +35,21 @@ export default function LoginScreen() {
       setError(authError);
     }
   }, [authError, clearError]);
+
+  // Initialiser l'authentification biométrique
+  useEffect(() => {
+    const initBiometric = async () => {
+      try {
+        await checkBiometricStatus();
+        const type = await getBiometricType();
+        setBiometricType(type);
+      } catch (error) {
+        console.error('Erreur initialisation biométrique:', error);
+      }
+    };
+
+    initBiometric();
+  }, [checkBiometricStatus, getBiometricType]);
 
   const handleLogin = async () => {
     setLoading(true);
@@ -38,11 +65,33 @@ export default function LoginScreen() {
       const deviceName = Device.deviceName || 'UnknownDevice';
       // La fonction login dans AuthProvider gère maintenant la redirection OTP
       await login(email, password, deviceName); 
+      
+      // Si la connexion réussit, stocker les credentials pour l'authentification biométrique
+      await storeCredentials(email, password);
     } catch (err: any) {
-
       // Ici, on peut juste s'assurer que le loading est false
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleBiometricLogin = async () => {
+    setBiometricLoading(true);
+    setError(null);
+
+    try {
+      const credentials = await authenticateWithBiometrics();
+      
+      if (credentials) {
+        const deviceName = Device.deviceName || 'UnknownDevice';
+        await login(credentials.email, credentials.password, deviceName);
+      } else {
+        setError('Authentification biométrique échouée.');
+      }
+    } catch (err: any) {
+      setError('Erreur lors de l\'authentification biométrique.');
+    } finally {
+      setBiometricLoading(false);
     }
   };
 
@@ -156,6 +205,42 @@ export default function LoginScreen() {
             )}
           </TouchableOpacity>
 
+
+          {/* Bouton d'authentification biométrique */}
+          {biometricAvailable && (
+            <TouchableOpacity
+              style={[styles.biometricButton, biometricLoading && styles.buttonDisabled]}
+              onPress={
+                biometricEnabled && hasStoredCredentials 
+                  ? handleBiometricLogin 
+                  : () => Alert.alert(
+                      'Authentification biométrique',
+                      biometricEnabled 
+                        ? 'Connectez-vous d\'abord avec votre email et mot de passe pour activer la connexion biométrique.'
+                        : 'Activez d\'abord l\'authentification biométrique dans les paramètres, puis connectez-vous une première fois.',
+                      [{ text: 'Compris' }]
+                    )
+              }
+              disabled={loading || biometricLoading}
+            >
+              {biometricLoading ? (
+                <ActivityIndicator color="#3B82F6" size="small" />
+              ) : (
+                <View style={styles.biometricButtonContent}>
+                  <MaterialIcons name="fingerprint" size={24} color="#3B82F6" />
+                  <Text style={styles.biometricButtonText}>
+                    {biometricEnabled && hasStoredCredentials 
+                      ? `Connexion avec ${biometricType}`
+                      : biometricEnabled 
+                        ? `Configurer ${biometricType}`
+                        : `Activer ${biometricType}`
+                    }
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          )}
+
           <TouchableOpacity
             style={styles.linkButton}
             onPress={() => Alert.alert("Mot de passe oublié", "Fonctionnalité à implémenter.")}
@@ -199,8 +284,8 @@ const styles = StyleSheet.create({
   },
   scrollContainer: {
     flexGrow: 1,
-    paddingHorizontal: 24,
-    paddingVertical: 40,
+    paddingHorizontal: 20,
+    paddingVertical: 24,
   },
    textSecondary: {
      color: '#A0A0A0'
@@ -208,19 +293,19 @@ const styles = StyleSheet.create({
   // Section Header
   headerSection: {
     alignItems: "center",
-    marginBottom: 48,
-    paddingTop: 20,
+    marginBottom: 32,
+    paddingTop: 12,
   },
   logo: {
-    width: 100,
-    height: 100,
-    marginBottom: 20,
+    width: 80,
+    height: 80,
+    marginBottom: 16,
   },
   title: {
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: "700",
     color: "#1F2937",
-    marginBottom: 8,
+    marginBottom: 6,
     letterSpacing: -0.5,
   },
   subtitle: {
@@ -237,7 +322,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FEF2F2",
     borderRadius: 12,
     padding: 12,
-    marginBottom: 24,
+    marginBottom: 16,
     borderLeftWidth: 4,
     borderLeftColor: "#EF4444",
   },
@@ -247,14 +332,14 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   inputContainer: {
-    marginBottom: 20,
- position: 'relative',
+    marginBottom: 16,
+    position: 'relative',
   },
   input: {
     backgroundColor: "#F9FAFB",
     borderRadius: 12,
     paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingVertical: 14,
     fontSize: 16,
     color: "#1F2937",
     borderWidth: 1,
@@ -273,10 +358,10 @@ const styles = StyleSheet.create({
   primaryButton: {
     backgroundColor: "#0e8030",
     borderRadius: 12,
-    paddingVertical: 16,
+    paddingVertical: 14,
     alignItems: "center",
-    marginTop: 8,
-    marginBottom: 24,
+    marginTop: 6,
+    marginBottom: 16,
   },
   primaryButtonText: {
     color: "#FFFFFF",
@@ -286,9 +371,30 @@ const styles = StyleSheet.create({
   buttonDisabled: {
     opacity: 0.6,
   },
+  // Styles pour l'authentification biométrique
+  biometricButton: {
+    backgroundColor: "transparent",
+    borderWidth: 1,
+    borderColor: "#3B82F6",
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: "center",
+    marginTop: 6,
+    marginBottom: 12,
+  },
+  biometricButtonContent: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  biometricButtonText: {
+    color: "#3B82F6",
+    fontSize: 16,
+    fontWeight: "600",
+    marginLeft: 8,
+  },
   linkButton: {
     alignItems: "center",
-    paddingVertical: 8,
+    paddingVertical: 6,
   },
   linkText: {
     fontSize: 15,
@@ -296,13 +402,13 @@ const styles = StyleSheet.create({
   },
   socialButtonsContainer: {
     alignItems: 'center',
-    marginTop: 20,
-    marginBottom: 30,
+    marginTop: 16,
+    marginBottom: 20,
   },
   socialText: {
     fontSize: 14,
     color: '#6B7280',
-    marginBottom: 15,
+    marginBottom: 12,
   },
   socialButtonRow: {
     flexDirection: 'row',
@@ -323,7 +429,7 @@ const styles = StyleSheet.create({
   },
   registerButton: {
     alignItems: 'center',
-    paddingVertical: 8,
+    paddingVertical: 6,
   },
   registerText: {
     fontSize: 15,

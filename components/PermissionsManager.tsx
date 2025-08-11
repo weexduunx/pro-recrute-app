@@ -36,8 +36,8 @@ Notifications.setNotificationHandler({
     shouldShowAlert: true,
     shouldShowBanner: true,
     shouldShowList: true,
-    shouldPlaySound: false,
-    shouldSetBadge: false,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
   }),
 });
 
@@ -194,11 +194,11 @@ export const PermissionsProvider = ({ children }: PermissionsProviderProps) => {
       
       // Demander les permissions de manière séquentielle pour éviter les superpositions
       const requestSequentially = async () => {
-        // 1. Notifications
-        return new Promise<void>((resolve) => {
+        // 1. Notifications - Permission critique pour l'app
+        await new Promise<void>((resolve) => {
           Alert.alert(
-            'Notifications',
-            'Nous aimerions vous envoyer des notifications pour vous tenir informé des nouvelles opportunités et mises à jour importantes.',
+            '🔔 Notifications',
+            'Autorisez les notifications pour recevoir :\n• Alertes d\'entretien \n• Nouvelles opportunités d\'emploi\n• Mises à jour importantes',
             [
               {
                 text: 'Plus tard',
@@ -210,7 +210,63 @@ export const PermissionsProvider = ({ children }: PermissionsProviderProps) => {
                 onPress: async () => {
                   const status = await requestPermission('notifications');
                   if (status === 'denied') {
-                    showPermissionAlert('aux notifications', 'vous tenir informé des opportunités');
+                    showPermissionAlert('aux notifications', 'recevoir les alertes d\'entretien et opportunités');
+                  }
+                  resolve();
+                },
+              },
+            ]
+          );
+        });
+
+        // Petite pause entre les demandes
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        // 2. Galerie/Médias - Pour les photos de profil et documents
+        await new Promise<void>((resolve) => {
+          Alert.alert(
+            'Accès aux médias',
+            'Autorisez l\'accès à votre galerie pour :\n• Télécharger votre photo de profil\n• Sauvegarder vos documents\n• Partager vos CV et certificats',
+            [
+              {
+                text: 'Plus tard',
+                style: 'cancel',
+                onPress: () => resolve(),
+              },
+              {
+                text: 'Autoriser',
+                onPress: async () => {
+                  const status = await requestPermission('mediaLibrary');
+                  if (status === 'denied') {
+                    showPermissionAlert('à la galerie', 'gérer vos photos et documents');
+                  }
+                  resolve();
+                },
+              },
+            ]
+          );
+        });
+
+        // Petite pause entre les demandes
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        // 3. Localisation - Pour les offres d'emploi locales
+        await new Promise<void>((resolve) => {
+          Alert.alert(
+            'Localisation',
+            'Autorisez l\'accès à votre position pour :\n• Trouver des emplois près de chez vous\n• Calculer les distances\n• Offres adaptées à votre région',
+            [
+              {
+                text: 'Plus tard',
+                style: 'cancel',
+                onPress: () => resolve(),
+              },
+              {
+                text: 'Autoriser',
+                onPress: async () => {
+                  const status = await requestPermission('location');
+                  if (status === 'denied') {
+                    showPermissionAlert('à la localisation', 'trouver des emplois près de vous');
                   }
                   resolve();
                 },
@@ -224,6 +280,13 @@ export const PermissionsProvider = ({ children }: PermissionsProviderProps) => {
       
       // Vérifier le statut final de toutes les permissions
       await checkPermissions();
+
+      // Informer l'utilisateur que la configuration est terminée
+      Alert.alert(
+        'Configuration terminée',
+        'Vous pouvez modifier ces autorisations à tout moment dans les paramètres de l\'application.',
+        [{ text: 'Compris', style: 'default' }]
+      );
 
     } catch (error) {
       console.error('Erreur lors de la demande des permissions:', error);

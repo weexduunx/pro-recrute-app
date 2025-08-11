@@ -42,6 +42,7 @@ import {
 } from '../../utils/api';
 import { useTheme } from '../../components/ThemeContext';
 import { useLanguage } from '../../components/LanguageContext';
+import { useLocationBasedJobs } from '../../hooks/useLocationBasedJobs';
 
 // Configuration pour les notifications en arrière-plan (headless)
 Notifications.setNotificationHandler({
@@ -1006,71 +1007,6 @@ const getSpecificDeviceIcon = (deviceType: string, os: string, deviceName?: stri
   return getDeviceIcon(deviceType, os, deviceName);
 };
 
-const TestSessionsButton = () => {
-  const testSessions = async () => {
-    try {
-      console.log('=== TEST GET SESSIONS ===');
-      
-      // Test 1: Récupérer les sessions
-      const response = await getActiveSessions();
-      console.log('Réponse getActiveSessions:', response);
-      Alert.alert('Succès GET', JSON.stringify(response, null, 2));
-      
-    } catch (error) {
-      console.error('Erreur test sessions:', error);
-      Alert.alert('Erreur GET', `${error.message}\n\nResponse: ${JSON.stringify(error.response?.data, null, 2)}`);
-    }
-  };
-
-  const testCreateSession = async () => {
-    try {
-      console.log('=== TEST CREATE SESSION ===');
-      
-      // Test 2: Créer une session
-      const sessionData = {
-        device_name: 'Test Device',
-        device_type: 'mobile',
-        operating_system: 'Test OS',
-        browser: 'React Native App',
-        location: 'Test Location',
-        network_type: 'wifi'
-      };
-
-      const deviceHeaders = {
-        'X-Device-Name': 'Test Device',
-        'X-Device-Type': 'mobile',
-        'X-Operating-System': 'Test OS',
-        'X-Browser': 'React Native App'
-      };
-
-      const response = await storeActiveSession(sessionData, deviceHeaders);
-      console.log('Réponse storeActiveSession:', response);
-      Alert.alert('Succès CREATE', JSON.stringify(response, null, 2));
-      
-    } catch (error) {
-      console.error('Erreur test create session:', error);
-      Alert.alert('Erreur CREATE', `${error.message}\n\nResponse: ${JSON.stringify(error.response?.data, null, 2)}`);
-    }
-  };
-
-  return (
-    <View style={{ padding: 20 }}>
-      <TouchableOpacity 
-        style={{ backgroundColor: '#007AFF', padding: 15, margin: 10, borderRadius: 8 }}
-        onPress={testSessions}
-      >
-        <Text style={{ color: 'white', textAlign: 'center' }}>Test GET Sessions</Text>
-      </TouchableOpacity>
-      
-      <TouchableOpacity 
-        style={{ backgroundColor: '#34C759', padding: 15, margin: 10, borderRadius: 8 }}
-        onPress={testCreateSession}
-      >
-        <Text style={{ color: 'white', textAlign: 'center' }}>Test CREATE Session</Text>
-      </TouchableOpacity>
-    </View>
-  );
-};
 
 // Modal pour les sessions actives avec données réelles - VERSION CORRIGÉE
 const ActiveSessionsModal: React.FC<{
@@ -1441,7 +1377,10 @@ const StorageManagementModal: React.FC<{
               }}
             >
               <Text style={{ color: '#FFFFFF', fontWeight: '600' }}>
-                {t('Vider le cache (12.8 MB)')}
+                {loading 
+                  ? t('Calcul...') 
+                  : t(`Vider le cache (${storageData[0]?.size || '0 B'})`)
+                }
               </Text>
             </TouchableOpacity>
           </View>
@@ -1707,6 +1646,22 @@ export default function ParametresScreen() {
   const [fontSize, setFontSize] = useState('normal'); // 'small', 'normal', 'large', 'xlarge'
   const [storageModalVisible, setStorageModalVisible] = useState(false);
   const [permissionsModalVisible, setPermissionsModalVisible] = useState(false);
+
+  // États pour les suggestions d'offres basées sur la géolocalisation
+  const {
+    offers: locationOffers,
+    loading: locationLoading,
+    error: locationError,
+    location,
+    permissionStatus,
+    enableLocationBasedSuggestions,
+    disableLocationBasedSuggestions,
+    refreshOffers,
+    checkLocationPreferences,
+  } = useLocationBasedJobs();
+  const [locationSuggestionsEnabled, setLocationSuggestionsEnabled] = useState(false);
+  const [locationRadius, setLocationRadius] = useState(50);
+  const [showLocationModal, setShowLocationModal] = useState(false);
   // Récupérer la version depuis le fichier de configuration
   const [appVersion] = useState(__DEV__ ? '1.0.0-dev' : '1.0.0');
   const [buildNumber] = useState(__DEV__ ? 'dev' : '100');
@@ -1753,7 +1708,16 @@ export default function ParametresScreen() {
         if (savedAutoLock !== null) setAutoLockEnabled(savedAutoLock === 'true');
         if (savedAutoBackup !== null) setAutoBackupEnabled(savedAutoBackup === 'true');
         if (savedFontSize !== null) setFontSize(savedFontSize);
-        if (savedBiometricEnabled !== null) setBiometricEnabled(savedBiometricEnabled === 'true');
+
+        // Vérifier les préférences de géolocalisation
+        const locationEnabled = await checkLocationPreferences();
+        setLocationSuggestionsEnabled(locationEnabled);
+        
+        // Charger le rayon de recherche sauvegardé
+        const savedRadius = await AsyncStorage.getItem('@location_radius');
+        if (savedRadius) {
+          setLocationRadius(parseInt(savedRadius));
+        }
       } catch (error) {
         console.log('Erreur lors du chargement des préférences:', error);
       }
@@ -2473,6 +2437,95 @@ export default function ParametresScreen() {
             />
           </View>
 
+          {/* Section Géolocalisation et Offres */}
+          <SectionHeader title={t('Offres et Localisation')} icon="location-outline" />
+          <View style={[styles.section, { backgroundColor: colors.cardBackground }]}>
+            <SettingItem
+              title={t('Suggestions géolocalisées')}
+              subtitle={locationSuggestionsEnabled 
+                ? t(`Activé (rayon: ${locationRadius}km)`)
+                : t('Recevoir des offres près de vous')
+              }
+              icon="map-pin"
+              iconLibrary="Feather"
+              iconColor="#10B981"
+              hasSwitch
+              switchValue={locationSuggestionsEnabled}
+              onSwitchChange={async (enabled) => {
+                if (enabled) {
+                  try {
+                    await enableLocationBasedSuggestions(locationRadius);
+                    setLocationSuggestionsEnabled(true);
+                    await AsyncStorage.setItem('@location_radius', locationRadius.toString());
+                    Alert.alert(
+                      t('Géolocalisation activée'),
+                      t(`Vous recevrez des suggestions d'offres dans un rayon de ${locationRadius}km.`)
+                    );
+                  } catch (error) {
+                    Alert.alert(
+                      t('Erreur'),
+                      t('Impossible d\'activer la géolocalisation. Vérifiez vos permissions.')
+                    );
+                  }
+                } else {
+                  await disableLocationBasedSuggestions();
+                  setLocationSuggestionsEnabled(false);
+                  Alert.alert(
+                    t('Géolocalisation désactivée'),
+                    t('Les suggestions basées sur votre position ont été désactivées.')
+                  );
+                }
+              }}
+            />
+            {locationSuggestionsEnabled && (
+              <>
+                <SettingItem
+                  title={t('Configurer le rayon')}
+                  subtitle={t(`Distance de recherche: ${locationRadius}km`)}
+                  icon="target"
+                  iconLibrary="Feather"
+                  iconColor="#3B82F6"
+                  onPress={() => setShowLocationModal(true)}
+                />
+                <SettingItem
+                  title={t('Ma position')}
+                  subtitle={location.address || t('Position non disponible')}
+                  icon="navigation"
+                  iconLibrary="Feather"
+                  iconColor="#8B5CF6"
+                  onPress={() => {
+                    if (location.latitude && location.longitude) {
+                      Alert.alert(
+                        t('Votre position'),
+                        `${t('Adresse')}: ${location.address || 'Inconnue'}\n${t('Coordonnées')}: ${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}\n${t('Offres trouvées')}: ${locationOffers.length}`
+                      );
+                    } else {
+                      Alert.alert(
+                        t('Position non disponible'),
+                        t('Impossible de déterminer votre position actuelle.')
+                      );
+                    }
+                  }}
+                />
+                {locationOffers.length > 0 && (
+                  <SettingItem
+                    title={t('Offres géolocalisées')}
+                    subtitle={t(`${locationOffers.length} offres trouvées près de vous`)}
+                    icon="briefcase"
+                    iconLibrary="Feather"
+                    iconColor="#F59E0B"
+                    onPress={() => {
+                      Alert.alert(
+                        t('Offres géolocalisées'),
+                        t(`${locationOffers.length} offres trouvées dans un rayon de ${locationRadius}km.\nConsultez l'onglet emploi pour les voir.`)
+                      );
+                    }}
+                  />
+                )}
+              </>
+            )}
+          </View>
+
           {/* Section Réseau */}
           <SectionHeader title={t('Réseau')} icon="wifi-outline" />
           <View style={[styles.section, { backgroundColor: colors.cardBackground }]}>
@@ -2698,6 +2751,103 @@ export default function ParametresScreen() {
           visible={permissionsModalVisible}
           onClose={() => setPermissionsModalVisible(false)}
         />
+
+        {/* Modal pour configurer le rayon de géolocalisation */}
+        <Modal
+          visible={showLocationModal}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setShowLocationModal(false)}
+        >
+          <View style={[styles.modalOverlay, { backgroundColor: 'rgba(0,0,0,0.5)' }]}>
+            <View style={[styles.modalContent, { backgroundColor: colors.cardBackground }]}>
+              <View style={styles.modalHeader}>
+                <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>
+                  {t('Configurer le rayon de recherche')}
+                </Text>
+                <TouchableOpacity
+                  onPress={() => setShowLocationModal(false)}
+                  style={styles.modalCloseButton}
+                >
+                  <Feather name="x" size={24} color={colors.textPrimary} />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.modalBody}>
+                <Text style={[styles.modalSubtitle, { color: colors.textSecondary }]}>
+                  {t('Sélectionnez la distance maximale pour les suggestions d\'offres')}
+                </Text>
+
+                <View style={styles.radiusSliderContainer}>
+                  <Text style={[styles.radiusValue, { color: colors.textAccent }]}>
+                    {locationRadius} km
+                  </Text>
+                  
+                  <View style={styles.radiusOptions}>
+                    {[10, 25, 50, 100, 200].map(radius => (
+                      <TouchableOpacity
+                        key={radius}
+                        style={[
+                          styles.radiusOption,
+                          {
+                            backgroundColor: locationRadius === radius 
+                              ? colors.primary 
+                              : colors.background,
+                            borderColor: locationRadius === radius 
+                              ? colors.primary 
+                              : colors.border
+                          }
+                        ]}
+                        onPress={() => setLocationRadius(radius)}
+                      >
+                        <Text style={[
+                          styles.radiusOptionText,
+                          { 
+                            color: locationRadius === radius 
+                              ? '#FFFFFF' 
+                              : colors.textPrimary 
+                          }
+                        ]}>
+                          {radius}km
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+
+                <View style={styles.modalActions}>
+                  <TouchableOpacity
+                    style={[styles.modalButton, { backgroundColor: colors.border }]}
+                    onPress={() => setShowLocationModal(false)}
+                  >
+                    <Text style={[styles.modalButtonText, { color: colors.textSecondary }]}>
+                      {t('Annuler')}
+                    </Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity
+                    style={[styles.modalButton, { backgroundColor: colors.primary }]}
+                    onPress={async () => {
+                      await AsyncStorage.setItem('@location_radius', locationRadius.toString());
+                      if (locationSuggestionsEnabled) {
+                        await refreshOffers(locationRadius);
+                      }
+                      setShowLocationModal(false);
+                      Alert.alert(
+                        t('Rayon mis à jour'),
+                        t(`Le rayon de recherche a été défini à ${locationRadius}km.`)
+                      );
+                    }}
+                  >
+                    <Text style={[styles.modalButtonText, { color: '#FFFFFF' }]}>
+                      {t('Sauvegarder')}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </View>
+        </Modal>
       </SafeAreaView>
     </>
   );
@@ -2952,5 +3102,34 @@ modalOverlay: {
     marginLeft: 8,
     fontSize: 12,
     flex: 1,
+  },
+
+  // Styles pour le modal de géolocalisation
+  radiusSliderContainer: {
+    marginVertical: 20,
+    alignItems: 'center',
+  },
+  radiusValue: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 20,
+  },
+  radiusOptions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  radiusOption: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 20,
+    borderWidth: 2,
+    minWidth: 60,
+    alignItems: 'center',
+  },
+  radiusOptionText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
