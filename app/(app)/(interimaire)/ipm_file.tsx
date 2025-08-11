@@ -269,7 +269,6 @@ export default function IpmFileScreen() {
   };
 
   // --- Fonctions de rendu ---
-  const handleMenuPress = () => { Alert.alert(t("Menu"), t("Menu Dossier IPM pressé !")); };
   const handleAvatarPress = () => { router.push('/(app)/profile-details'); };
 
 
@@ -365,7 +364,7 @@ export default function IpmFileScreen() {
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
-      <CustomHeader title={t("Mon Dossier IPM")} user={user} onMenuPress={handleMenuPress} onAvatarPress={handleAvatarPress} />
+      <CustomHeader title={t("Mon Dossier IPM")} user={user} showBackButton={true} onAvatarPress={handleAvatarPress} />
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 

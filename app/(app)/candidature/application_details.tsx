@@ -253,21 +253,21 @@ export default function ApplicationDetailsScreen() {
 
   if (loading) return (
     <SafeAreaView style={styles.safeArea}>
-      <CustomHeader title="État de la Candidature" user={user} onAvatarPress={handleAvatarPress} />
+      <CustomHeader title="État de la Candidature" user={user} onAvatarPress={handleAvatarPress} showBackButton={true} />
       {renderLoadingState()}
     </SafeAreaView>
   );
 
   if (error) return (
     <SafeAreaView style={styles.safeArea}>
-      <CustomHeader title="État de la Candidature" user={user} onAvatarPress={handleAvatarPress} />
+      <CustomHeader title="État de la Candidature" user={user} onAvatarPress={handleAvatarPress} showBackButton={true} />
       {renderErrorState()}
     </SafeAreaView>
   );
 
   if (!applicationDetail) return (
     <SafeAreaView style={styles.safeArea}>
-      <CustomHeader title="État de la Candidature" user={user} onAvatarPress={handleAvatarPress} />
+      <CustomHeader title="État de la Candidature" user={user} onAvatarPress={handleAvatarPress} showBackButton={true} />
       {renderEmptyState()}
     </SafeAreaView>
   );
@@ -281,7 +281,7 @@ export default function ApplicationDetailsScreen() {
       <CustomHeader
         title="État de la Candidature"
         user={user}
-        onMenuPress={handleMenuPress}
+        showBackButton={true}
         onAvatarPress={handleAvatarPress}
       />
 

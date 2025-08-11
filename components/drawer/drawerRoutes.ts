@@ -1,8 +1,8 @@
 // components/drawer/drawerRoutes.ts
 
 export const allowedDrawerRoutesByRole: Record<string, string[]> = {
-  user: ['home', 'profile-details','dashboard', 'job_board', 'candidature', 'actualites',  'settings'],
-  interimaire: ['profile-details','(interimaire)','dashboard','candidature', 'job_board', 'settings'],
+  user: ['home', 'profile-details','dashboard','entretiens', 'job_board', 'candidature', 'actualites',  'settings'],
+  interimaire: ['profile-details','(interimaire)', 'dashboard', 'entretiens','candidature', 'job_board', 'settings'],
   admin: ['home', 'profile-details', 'dashboard', 'settings'],
 };
 

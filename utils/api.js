@@ -1091,22 +1091,6 @@ export const getCandidatEntretiensCalendrier = async () => {
   try {
     console.log('=== API CALL: getCandidatEntretiensCalendrier ===');
     
-    // D'abord appeler la route de debug pour voir les infos utilisateur
-    try {
-      const debugResponse = await api.get('/debug/user-info');
-      console.log('DEBUG USER INFO:', debugResponse.data);
-    } catch (debugError) {
-      console.error('Debug API error:', debugError.response?.data);
-    }
-    
-    // Tester la nouvelle requête SQL corrigée
-    try {
-      const testSqlResponse = await api.get('/test/entretiens-sql');
-      console.log('TEST SQL CORRECTED:', testSqlResponse.data);
-    } catch (testError) {
-      console.error('Test SQL error:', testError.response?.data);
-    }
-    
     const response = await api.get('/candidat/entretiens-calendrier');
     console.log('API Response status:', response.status);
     console.log('API Response data:', response.data);
@@ -1119,6 +1103,131 @@ export const getCandidatEntretiensCalendrier = async () => {
     console.error("Error status:", error.response?.status);
     // Retourner un tableau vide en cas d'erreur pour éviter de casser l'interface
     return [];
+  }
+};
+
+// Nouvelles fonctions pour le système de gestion des entretiens
+
+/**
+ * Marque un entretien comme préparé par le candidat
+ */
+export const markEntretienAsPrepared = async (entretienId) => {
+  try {
+    const response = await api.post(`/candidat/entretiens/${entretienId}/prepare`);
+    return response.data;
+  } catch (error) {
+    console.error("Échec de l'appel API markEntretienAsPrepared:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+/**
+ * Ajoute un rappel/notification pour un entretien
+ */
+export const setEntretienReminder = async (entretienId, reminderData) => {
+  try {
+    const response = await api.post(`/candidat/entretiens/${entretienId}/reminder`, reminderData);
+    return response.data;
+  } catch (error) {
+    console.error("Échec de l'appel API setEntretienReminder:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+/**
+ * Obtient les conseils personnalisés pour un entretien spécifique
+ */
+export const getEntretienConseilsPersonnalises = async (entretienId) => {
+  try {
+    const response = await api.get(`/candidat/entretiens/${entretienId}/conseils`);
+    return response.data;
+  } catch (error) {
+    console.error("Échec de l'appel API getEntretienConseilsPersonnalises:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+/**
+ * Envoie une demande de report d'entretien
+ */
+export const demandReportEntretien = async (entretienId, raison, nouvelleDate = null) => {
+  try {
+    const response = await api.post(`/candidat/entretiens/${entretienId}/demande-report`, {
+      raison,
+      nouvelle_date_souhaitee: nouvelleDate
+    });
+    return response.data;
+  } catch (error) {
+    console.error("Échec de l'appel API demandReportEntretien:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+/**
+ * Confirme la présence à un entretien
+ */
+export const confirmPresenceEntretien = async (entretienId) => {
+  try {
+    const response = await api.post(`/candidat/entretiens/${entretienId}/confirmer-presence`);
+    return response.data;
+  } catch (error) {
+    console.error("Échec de l'appel API confirmPresenceEntretien:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+/**
+ * Obtient les statistiques d'entretiens du candidat
+ */
+export const getCandidatEntretiensStats = async () => {
+  try {
+    const response = await api.get('/candidat/entretiens/statistiques');
+    return response.data;
+  } catch (error) {
+    console.error("Échec de l'appel API getCandidatEntretiensStats:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+/**
+ * Exporte le calendrier des entretiens au format iCal
+ */
+export const exportEntretiensCalendar = async () => {
+  try {
+    const response = await api.get('/candidat/entretiens/export-calendar', {
+      responseType: 'blob',
+      headers: { 'Accept': 'text/calendar' },
+    });
+    return response.data;
+  } catch (error) {
+    console.error("Échec de l'appel API exportEntretiensCalendar:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+/**
+ * Envoie un feedback après un entretien
+ */
+export const envoyerFeedbackEntretien = async (entretienId, feedbackData) => {
+  try {
+    const response = await api.post(`/candidat/entretiens/${entretienId}/feedback`, feedbackData);
+    return response.data;
+  } catch (error) {
+    console.error("Échec de l'appel API envoyerFeedbackEntretien:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+/**
+ * Test de connexion pour entretien vidéo
+ */
+export const testerConnexionEntretien = async (entretienId) => {
+  try {
+    const response = await api.post(`/candidat/entretiens/${entretienId}/test-connexion`);
+    return response.data;
+  } catch (error) {
+    console.error("Échec de l'appel API testerConnexionEntretien:", error.response?.data || error.message);
+    throw error;
   }
 };
 

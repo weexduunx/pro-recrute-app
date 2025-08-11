@@ -71,7 +71,7 @@ export default function ActualiteDetailsScreen() {
     return (
       <SafeAreaView style={styles.safeArea}>
         <StatusBar barStyle="light-content" backgroundColor="#091e60" />
-        <CustomHeader title="Détails Actualité" user={user} onMenuPress={handleMenuPress} onAvatarPress={handleAvatarPress} />
+        <CustomHeader title="Détails Actualité" user={user} showBackButton={true} onAvatarPress={handleAvatarPress} />
         <View style={styles.centerContainer}>
           <View style={styles.loadingCard}>
             <ActivityIndicator size="large" color="#0f8e35" />
@@ -85,7 +85,7 @@ export default function ActualiteDetailsScreen() {
   if (error) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <CustomHeader title="Détails Actualité" user={user} onMenuPress={handleMenuPress} onAvatarPress={handleAvatarPress} />
+        <CustomHeader title="Détails Actualité" user={user} showBackButton={true} onAvatarPress={handleAvatarPress} />
         <View style={styles.centerContainer}>
           <View style={styles.errorCard}>
             <Ionicons name="alert-circle" size={48} color="#EF4444" />
@@ -104,7 +104,7 @@ export default function ActualiteDetailsScreen() {
   if (!actualiteDetail) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <CustomHeader title="Détails Actualité" user={user} onMenuPress={handleMenuPress} onAvatarPress={handleAvatarPress} />
+        <CustomHeader title="Détails Actualité" user={user} showBackButton={true} onAvatarPress={handleAvatarPress} />
         <View style={styles.centerContainer}>
           <View style={styles.emptyCard}>
             <Ionicons name="document-outline" size={64} color="#D1D5DB" />
@@ -122,7 +122,7 @@ export default function ActualiteDetailsScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <CustomHeader title="Détails Actualité" user={user} onMenuPress={handleMenuPress} onAvatarPress={handleAvatarPress} />
+      <CustomHeader title="Détails Actualité" user={user} showBackButton={true} onAvatarPress={handleAvatarPress} />
       
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         <View style={styles.container}>

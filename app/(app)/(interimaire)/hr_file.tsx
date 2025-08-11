@@ -201,7 +201,6 @@ export default function HrFileScreen() {
     fetchEncryptedTypes().then(setEncryptedTypes).catch(console.error);
   }, []);
 
-  const handleMenuPress = () => { Alert.alert(t("Menu"), t("Menu Dossier RH pressé !")); };
   const handleAvatarPress = () => { router.push('/(app)/profile-details'); };
 
 
@@ -540,7 +539,7 @@ export default function HrFileScreen() {
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
-      <CustomHeader title={t("Mon Dossier RH")} user={user} onMenuPress={handleMenuPress} onAvatarPress={handleAvatarPress} />
+      <CustomHeader title={t("Mon Dossier RH")} user={user} showBackButton={true} onAvatarPress={handleAvatarPress} />
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Section timeline des contrats */}
         <View style={{ flexDirection: 'row', justifyContent: 'space-around', marginBottom: 16 }}>

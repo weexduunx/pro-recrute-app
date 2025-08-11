@@ -64,6 +64,7 @@ function getDrawerLabel(route: string): string {
     dashboard: 'Tableau de bord',
     settings: 'Paramètres',
     '(interimaire)': 'Espace Intérimaire',
+    entretiens: 'Mes entretiens',
     hr_file: 'Dossier RH',
     ipm_file: 'Dossier IPM',
     welcome: 'Welcome',

@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView, ActivityIndicator, StatusBar, RefreshControl, Modal, Alert, Linking } from 'react-native';
-import { useAuth } from '../../components/AuthProvider';
+import { useAuth } from '../components/AuthProvider';
 import { FontAwesome5 } from '@expo/vector-icons';
-import { getCandidatEntretiens } from '../../utils/api';
+import { getCandidatEntretiens } from '../utils/api';
 import { router } from 'expo-router';
-import CustomHeader from '../../components/CustomHeader';
-import { useTheme } from '../../components/ThemeContext';
+import CustomHeader from '../components/CustomHeader';
+import { useTheme } from '../components/ThemeContext';
 
 export default function EntretiensScreen() {
   const { user } = useAuth();

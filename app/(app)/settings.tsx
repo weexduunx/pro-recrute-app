@@ -1735,14 +1735,16 @@ export default function ParametresScreen() {
           savedCrashReporting,
           savedAutoLock,
           savedAutoBackup,
-          savedFontSize
+          savedFontSize,
+          savedBiometricEnabled
         ] = await Promise.all([
           AsyncStorage.getItem('@app_offline_mode'),
           AsyncStorage.getItem('@app_wifi_only'),
           AsyncStorage.getItem('@app_crash_reporting'),
           AsyncStorage.getItem('@app_auto_lock'),
           AsyncStorage.getItem('@app_auto_backup'),
-          AsyncStorage.getItem('@app_font_size')
+          AsyncStorage.getItem('@app_font_size'),
+          AsyncStorage.getItem('@app_biometric_enabled')
         ]);
 
         if (savedOfflineMode !== null) setOfflineModeEnabled(savedOfflineMode === 'true');
@@ -1751,6 +1753,7 @@ export default function ParametresScreen() {
         if (savedAutoLock !== null) setAutoLockEnabled(savedAutoLock === 'true');
         if (savedAutoBackup !== null) setAutoBackupEnabled(savedAutoBackup === 'true');
         if (savedFontSize !== null) setFontSize(savedFontSize);
+        if (savedBiometricEnabled !== null) setBiometricEnabled(savedBiometricEnabled === 'true');
       } catch (error) {
         console.log('Erreur lors du chargement des préférences:', error);
       }
@@ -2366,7 +2369,7 @@ export default function ParametresScreen() {
         <CustomHeader
           title={t('Paramètres')}
           user={user}
-          onMenuPress={handleMenuPress}
+          showBackButton={true}
           onAvatarPress={handleAvatarPress}
         />
 

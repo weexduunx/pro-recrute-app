@@ -14,6 +14,7 @@ export const drawerIcons: Record<string, IconRenderer> = {
   dashboard: (color, size) => <FontAwesome name="dashboard" size={size} color={color} />,
   settings: (color, size) => <FontAwesome5 name="cog" size={size} color={color} />,
   '(interimaire)': (color, size) => <Ionicons name="business" size={size} color={color} />,
+  entretiens: (color, size) => <FontAwesome name="calendar" size={size} color={color} />,
    'hr_file': (color, size) => <FontAwesome name="folder" size={size} color={color} />,
   'ipm_file': (color, size) => <FontAwesome name="medkit" size={size} color={color} />,
 };

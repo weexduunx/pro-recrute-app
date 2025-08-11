@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, Platform, Modal, Pressable, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Platform, Modal, Pressable, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FontAwesome5, Ionicons } from '@expo/vector-icons';
 import { useNavigation, DrawerActions } from '@react-navigation/native';
@@ -19,10 +19,12 @@ export interface CustomHeaderProps {
   user: any | null; // L'utilisateur connecté, peut être null si non connecté
   onAvatarPress?: () => void;
   onMenuPress?: () => void;
+  showBackButton?: boolean; // Afficher le bouton retour au lieu du menu
+  onBackPress?: () => void; // Action personnalisée pour le bouton retour
 }
 
 
-export default function CustomHeader({ title, user }: CustomHeaderProps) {
+export default function CustomHeader({ title, user, showBackButton = false, onBackPress }: CustomHeaderProps) {
   const navigation = useNavigation();
   const { logout } = useAuth();
   const [isAvatarDropdownVisible, setAvatarDropdownVisible] = useState(false);
@@ -30,6 +32,14 @@ export default function CustomHeader({ title, user }: CustomHeaderProps) {
 
   const handleMenuPress = () => {
     navigation.dispatch(DrawerActions.openDrawer());
+  };
+
+  const handleBackPress = () => {
+    if (onBackPress) {
+      onBackPress();
+    } else {
+      router.back();
+    }
   };
 
   const handleAvatarPress = () => {
@@ -67,10 +77,16 @@ const handleDropdownLogout = () => {
       <StatusBar style="light" />
 
       <View style={styles.headerContainer}>
-        {/* Bouton du menu Hamburger */}
-        <TouchableOpacity onPress={handleMenuPress} style={styles.menuButton}>
-          <FontAwesome5 name="bars" size={22} color="#FFFFFF" />
-        </TouchableOpacity>
+        {/* Bouton du menu Hamburger ou Retour */}
+        {showBackButton ? (
+          <TouchableOpacity onPress={handleBackPress} style={styles.menuButton}>
+            <FontAwesome5 name="arrow-left" size={22} color="#FFFFFF" />
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity onPress={handleMenuPress} style={styles.menuButton}>
+            <FontAwesome5 name="bars" size={22} color="#FFFFFF" />
+          </TouchableOpacity>
+        )}
 
         {/* Titre de l'en-tête */}
         <Text style={styles.headerTitle}>{title}</Text>

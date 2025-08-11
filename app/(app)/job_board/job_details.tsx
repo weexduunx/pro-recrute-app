@@ -28,7 +28,7 @@ const { width, height } = Dimensions.get('window');
 /**
  * Composant d'information avec icône
  */
-const InfoItem = ({ icon, label, value, color = '#6B7280' }) => (
+const InfoItem = ({ icon, label, value, color = '#6B7280' }: { icon: React.ReactNode, label: string, value: string, color?: string }) => (
   <View style={styles.infoItem}>
     <View style={[styles.infoIcon, { backgroundColor: `${color}20` }]}>
       <Text style={[styles.infoIconText, { color }]}>{icon}</Text>
@@ -43,7 +43,7 @@ const InfoItem = ({ icon, label, value, color = '#6B7280' }) => (
 /**
  * Composant de section avec animation
  */
-const AnimatedSection = ({ title, children, delay = 0 }) => {
+const AnimatedSection = ({ title, children, delay = 0 }: { title: string, children: React.ReactNode, delay?: number }) => {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
 
@@ -127,7 +127,7 @@ export default function OffreDetailsScreen() {
     if (!offre || applying) return;
     setApplying(true);
     try {
-      const response = await applyForOffre(offre.id);
+      const response = await applyForOffre((offre as any).id);
       Alert.alert(
         "✅ Candidature soumise", 
         response.message || "Votre candidature a été soumise avec succès !",
@@ -210,7 +210,7 @@ export default function OffreDetailsScreen() {
       <CustomHeader
         title="Détails de l'offre"
         user={user}
-        onMenuPress={handleMenuPress}
+        showBackButton={true}
         onAvatarPress={handleAvatarPress}
       />
 
@@ -218,9 +218,6 @@ export default function OffreDetailsScreen() {
       <Animated.View style={[styles.heroHeader, { opacity: headerOpacity }]}>
         <LinearGradient colors={['#091e60', '#3B82F6']} style={styles.heroGradient}>
           <View style={styles.heroTop}>
-            <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-              <AntDesign name="arrowleft" size={24} color="#ffffff" />
-            </TouchableOpacity>
             <View style={styles.heroActions}>
               <TouchableOpacity onPress={handleBookmark} style={styles.actionButton}>
                 <AntDesign 
@@ -238,16 +235,16 @@ export default function OffreDetailsScreen() {
           <View style={styles.heroContent}>
             <View style={styles.companyBadge}>
               <Text style={styles.companyBadgeText}>
-                {offre.demande?.entreprise?.libelleE || 'Entreprise'}
+                {(offre as any)?.demande?.entreprise?.libelleE || 'Entreprise'}
               </Text>
             </View>
             <Text style={styles.heroTitle}>
-              {offre.poste?.titre_poste || 'Poste non spécifié'}
+              {(offre as any).poste?.titre_poste || 'Poste non spécifié'}
             </Text>
             <View style={styles.heroLocation}>
               <EvilIcons name="location" size={20} color="#ffffff" style={styles.locationIcon} />
               
-              <Text style={styles.heroLocationText}>{offre.lieux}</Text>
+              <Text style={styles.heroLocationText}>{(offre as any).lieux || 'Lieu non spécifié'}</Text>
             </View>
           </View>
         </LinearGradient>
@@ -264,71 +261,71 @@ export default function OffreDetailsScreen() {
         {/* Informations principales */}
         <AnimatedSection title="Informations générales" delay={100}>
           <View style={styles.infoGrid}>
-            {(offre.salaire_minimum || offre.salaire_maximum) && (
+            {/* {((offre as any).salaire_minimum || (offre as any).salaire_maximum) && (
               <InfoItem
                 icon={<FontAwesome name="money" size={20} color="#10B981" />}
                 label="Salaire"
-                value={`${offre.salaire_minimum || '?'} - ${offre.salaire_maximum || '?'} FCFA`}
+                value={`${(offre as any).salaire_minimum || '?'} - ${(offre as any).salaire_maximum || '?'} FCFA`}
                 color="#10B981"
               />
-            )}
+            )} */}
             
-            {offre.typeContrat && (
+            {(offre as any).type_contrat && (
               <InfoItem
                 icon={<AntDesign name="file1" size={20} color="#3B82F6" />}
                 label="Type de contrat"
-                value={offre.typeContrat.libelle_type_contrat || 'Non spécifié'}
+                value={(offre as any).type_contrat?.libelle_type_contrat || 'Non spécifié'}
                 color="#3B82F6"
               />
             )}
             
-            {offre.experience !== null && (
+            {(offre as any).experience !== null && (
               <InfoItem
                 icon={<AntDesign name="clockcircleo" size={20} color="#F59E0B" />}
                 label="Expérience"
-                value={`${offre.experience} an${offre.experience > 1 ? 's' : ''}`}
+                value={`${(offre as any).experience} an${(offre as any).experience > 1 ? 's' : ''}`}
                 color="#F59E0B"
               />
             )}
             
-            {offre.niveau_etude && (
+            {(offre as any).niveau_etude && (
               <InfoItem
                 icon={<FontAwesome name="graduation-cap" size={20} color="#8B5CF6" />}
                 label="Niveau d'étude"
-                value={offre.niveau_etude.libelle_niveau_etude || 'Non spécifié'}
+                value={(offre as any).niveau_etude?.libelle_niveau_etude || 'Non spécifié'}
                 color="#8B5CF6"
               />
             )}
             
-            {offre.domaine_activite && (
+            {(offre as any).domaine_activite && (
               <InfoItem
                 icon={<FontAwesome name="building-o" size={20} color="#EF4444" />}
                 label="Domaine"
-                value={offre.domaine_activite.libelle_domaine || 'Non spécifié'}
+                value={(offre as any).domaine_activite?.libelle_domaine || 'Non spécifié'}
                 color="#EF4444"
               />
             )}
             
-            {offre.status_offre && (
+            {(offre as any).status_offre && (
               <InfoItem
-                icon={<AntDesign name="checkcircleo" size={20} color="#06B6D4" />}
+                icon={<AntDesign name="checkcircleo" size={20} color="#10B981" />}
                 label="Statut"
-                value={offre.status_offre}
-                color="#06B6D4"
+                value={(offre as any).status_offre}
+                color="#10B981"
               />
             )}
           </View>
         </AnimatedSection>
 
         {/* Dates importantes */}
-        {(offre.date_debut || offre.date_fin) && (
+        {((offre as any).date_debut || (offre as any).date_fin) && (
           <AnimatedSection title="Dates importantes" delay={200}>
             <View style={styles.datesContainer}>
-              {offre.date_debut && (
+              {(offre as any).date_debut && (
                 <View style={styles.dateItem}>
                   <Text style={styles.dateLabel}>Date de début</Text>
                   <Text style={styles.dateValue}>
-                    {new Date(offre.date_debut).toLocaleDateString('fr-FR', {
+                    {new Date((offre as any).date_debut).toLocaleDateString('fr-FR', {
                       weekday: 'long',
                       year: 'numeric',
                       month: 'long',
@@ -338,11 +335,11 @@ export default function OffreDetailsScreen() {
                 </View>
               )}
               
-              {offre.date_fin && (
+              {(offre as any).date_fin && (
                 <View style={styles.dateItem}>
                   <Text style={styles.dateLabel}>Date de fin</Text>
                   <Text style={styles.dateValue}>
-                    {new Date(offre.date_fin).toLocaleDateString('fr-FR', {
+                    {new Date((offre as any).date_fin).toLocaleDateString('fr-FR', {
                       weekday: 'long',
                       year: 'numeric',
                       month: 'long',
@@ -358,14 +355,14 @@ export default function OffreDetailsScreen() {
         {/* Description du poste */}
         <AnimatedSection title="Description du poste" delay={300}>
           <View style={styles.descriptionCard}>
-            <Text style={styles.descriptionText}>{offre.description}</Text>
+            <Text style={styles.descriptionText}>{(offre as any).description}</Text>
           </View>
         </AnimatedSection>
 
         {/* Profil recherché */}
         <AnimatedSection title="Profil recherché" delay={400}>
           <View style={styles.descriptionCard}>
-            <Text style={styles.descriptionText}>{offre.profil_recherche}</Text>
+            <Text style={styles.descriptionText}>{(offre as any).profil_recherche}</Text>
           </View>
         </AnimatedSection>
 
