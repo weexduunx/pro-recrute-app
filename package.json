@@ -16,6 +16,7 @@
     "@netizen-teknologi/avatar-placeholder": "^1.0.0",
     "@react-native-async-storage/async-storage": "^2.1.2",
     "@react-native-community/datetimepicker": "^8.4.1",
+    "@react-native-community/netinfo": "^11.4.1",
     "@react-native-google-signin/google-signin": "^14.0.1",
     "@react-native-picker/picker": "^2.11.1",
     "@react-navigation/bottom-tabs": "^7.3.10",
@@ -59,15 +60,19 @@
     "react-native": "0.79.4",
     "react-native-date-picker": "^5.0.13",
     "react-native-gesture-handler": "~2.24.0",
+    "react-native-gifted-chat": "^2.8.1",
     "react-native-paper": "^5.14.5",
     "react-native-reanimated": "~3.17.4",
+    "react-native-render-html": "^6.3.4",
     "react-native-safe-area-context": "5.4.0",
     "react-native-screens": "~4.11.1",
+    "react-native-super-grid": "^6.0.1",
     "react-native-svg": "15.11.2",
     "react-native-toast-message": "^2.3.3",
     "react-native-user-avatar": "^1.0.8",
     "react-native-web": "~0.20.0",
-    "react-native-webview": "13.13.5"
+    "react-native-webview": "13.13.5",
+    "socket.io-client": "^4.8.1"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",

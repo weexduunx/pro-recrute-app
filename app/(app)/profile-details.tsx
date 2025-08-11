@@ -2958,7 +2958,7 @@ export default function ProfileDetailsScreen() {
       <CustomHeader
         title={t("Mon Profil")}
         user={user}
-        showBackButton={true}
+        // showBackButton={true}
         onAvatarPress={handleAvatarPress}
       />
       {renderTabBar()}

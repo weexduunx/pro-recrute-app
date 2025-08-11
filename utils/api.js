@@ -1263,4 +1263,10 @@ export const testerConnexionEntretien = async (entretienId) => {
   }
 };
 
+// Export des nouvelles APIs
+export * from './messaging-api';
+export * from './video-api';
+export * from './ai-api';
+export * from './skills-api';
+
 export default api;
