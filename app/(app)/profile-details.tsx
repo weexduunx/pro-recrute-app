@@ -2440,7 +2440,9 @@ export default function ProfileDetailsScreen() {
         )}
 
         {/* Bouton d'exportation du CV - affiché seulement s'il y a du contenu */}
-        {hasCvContent() && (
+        {/* {hasCvContent() && (
+
+        )} */}
           <TouchableOpacity style={[styles.exportButton, { backgroundColor: colors.secondary }]} onPress={handleExportCv} disabled={exportingCv}>
             {exportingCv ? (
               <ActivityIndicator color="#FFFFFF" size="small" />
@@ -2451,8 +2453,6 @@ export default function ProfileDetailsScreen() {
               </>
             )}
           </TouchableOpacity>
-        )}
-
         {exportError && (
           <View style={[styles.errorContainer, { backgroundColor: colors.error + '10' }]}>
             <Ionicons name="alert-circle" size={16} color={colors.error} />
@@ -2955,6 +2955,7 @@ export default function ProfileDetailsScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <StatusBar barStyle="light-content" backgroundColor="#091e60" />
       <CustomHeader
         title={t("Mon Profil")}
         user={user}

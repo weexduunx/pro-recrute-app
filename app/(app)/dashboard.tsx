@@ -3,7 +3,8 @@ import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, Platform, Scrol
 import { useAuth } from '../../components/AuthProvider';
 import { FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
-import { getUserApplications, getRecommendedOffres, getCandidatEntretiensCalendrier } from '../../utils/api'; 
+import { getUserApplications, getRecommendedOffres, getCandidatEntretiensCalendrier, getCandidatProfile, getParsedCvData } from '../../utils/api';
+import { getAIJobRecommendations } from '../../utils/ai-api'; 
 import { router, useRouter  } from 'expo-router';
 import CustomHeader from '../../components/CustomHeader';
 import { useTheme } from '../../components/ThemeContext'; 
@@ -32,12 +33,72 @@ export default function DashboardScreen() {
   const [applications, setApplications] = useState<Application[]>([]);
   const [loadingApplications, setLoadingApplications] = useState(true);
   const [recommendedOffres, setRecommendedOffres] = useState<any[]>([]);
+  const [aiRecommendations, setAiRecommendations] = useState<any[]>([]);
   const [loadingRecommendations, setLoadingRecommendations] = useState(true);
+  const [loadingAiRecommendations, setLoadingAiRecommendations] = useState(true);
   const [entretiens, setEntretiens] = useState<any[]>([]);
   const [loadingEntretiens, setLoadingEntretiens] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedEntretien, setSelectedEntretien] = useState<any>(null);
   const [showEntretienModal, setShowEntretienModal] = useState(false);
+  
+  // Nouvelles stats pertinentes
+  const [profileCompletion, setProfileCompletion] = useState({
+    overall: 0,
+    profile: 0,
+    cv: 0,
+    missingFields: [] as string[]
+  });
+  const [candidatProfile, setCandidatProfile] = useState<any>(null);
+  const [parsedCv, setParsedCv] = useState<any>(null);
+  const [weeklyActivity, setWeeklyActivity] = useState({
+    newApplications: 0,
+    profileViews: 0,
+    recommendationsViewed: 0
+  });
+
+  // Fonction pour calculer la complétude du profil (même logique que profile-details.tsx)
+  const calculateProfileCompletion = useCallback(() => {
+    if (!candidatProfile) {
+      return {
+        overall: 0,
+        profile: 0,
+        cv: 0,
+        missingFields: []
+      };
+    }
+
+    const missingProfileFields = [];
+    const missingCvFields = [];
+
+    // Calcul des champs manquants du profil (5 champs)
+    if (!candidatProfile?.titreProfil) missingProfileFields.push('Titre du profil');
+    if (!candidatProfile?.telephone) missingProfileFields.push('Téléphone');
+    if (!candidatProfile?.disponibilite) missingProfileFields.push('Disponibilité');
+    if (!candidatProfile?.date_naissance) missingProfileFields.push('Date de naissance');
+    if (!candidatProfile?.genre) missingProfileFields.push('Genre');
+
+    // Calcul des champs manquants du CV (4 champs)
+    if (!parsedCv?.summary) missingCvFields.push('Résumé');
+    if (!candidatProfile?.competences?.length) missingCvFields.push('Compétences');
+    if (!candidatProfile?.experiences?.length) missingCvFields.push('Expériences');
+    if (!candidatProfile?.formations?.length) missingCvFields.push('Formations');
+
+    const totalProfileFields = 5;
+    const totalCvFields = 4;
+    const totalFields = totalProfileFields + totalCvFields;
+
+    const profilePercentage = Math.round(((totalProfileFields - missingProfileFields.length) / totalProfileFields) * 100);
+    const cvPercentage = Math.round(((totalCvFields - missingCvFields.length) / totalCvFields) * 100);
+    const overallPercentage = Math.round(((totalFields - missingProfileFields.length - missingCvFields.length) / totalFields) * 100);
+
+    return {
+      overall: overallPercentage,
+      profile: profilePercentage,
+      cv: cvPercentage,
+      missingFields: [...missingProfileFields, ...missingCvFields]
+    };
+  }, [candidatProfile, parsedCv]);
 
   const loadApplications = useCallback(async () => {
     if (user) {
@@ -45,6 +106,20 @@ export default function DashboardScreen() {
       try {
         const fetchedApplications = await getUserApplications();
         setApplications(fetchedApplications);
+        
+        // Calculer les stats d'activité hebdomadaire
+        const oneWeekAgo = new Date();
+        oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+        
+        const newApplicationsThisWeek = fetchedApplications.filter((app: any) => 
+          new Date(app.created_at) >= oneWeekAgo
+        ).length;
+        
+        setWeeklyActivity(prev => ({
+          ...prev,
+          newApplications: newApplicationsThisWeek
+        }));
+        
       } catch (error: any) {
         console.error("Erreur de chargement des candidatures:", error);
       } finally {
@@ -70,6 +145,52 @@ export default function DashboardScreen() {
     } else {
       setRecommendedOffres([]);
       setLoadingRecommendations(false);
+    }
+  }, [user]);
+
+  const loadAiRecommendations = useCallback(async () => {
+    if (user) {
+      setLoadingAiRecommendations(true);
+      try {
+        const aiResponse = await getAIJobRecommendations({ limit: 10 });
+        setAiRecommendations(aiResponse.data.recommendations || []);
+        console.log('Dashboard: Recommandations IA chargées:', aiResponse.data.recommendations?.length);
+      } catch (error: any) {
+        console.error("Erreur de chargement des recommandations IA:", error);
+        // En cas d'erreur, on garde un tableau vide
+        setAiRecommendations([]);
+      } finally {
+        setLoadingAiRecommendations(false);
+      }
+    } else {
+      setAiRecommendations([]);
+      setLoadingAiRecommendations(false);
+    }
+  }, [user]);
+
+  const loadProfileData = useCallback(async () => {
+    if (user) {
+      try {
+        // Charger le profil candidat
+        const candidatData = await getCandidatProfile();
+        setCandidatProfile(candidatData);
+
+        // Charger les données CV parsées
+        try {
+          const cvData = await getParsedCvData();
+          setParsedCv(cvData);
+        } catch (cvError) {
+          console.log('Aucune donnée CV parsée disponible');
+          setParsedCv(null);
+        }
+      } catch (error: any) {
+        console.error("Erreur de chargement des données de profil:", error);
+        setCandidatProfile(null);
+        setParsedCv(null);
+      }
+    } else {
+      setCandidatProfile(null);
+      setParsedCv(null);
     }
   }, [user]);
 
@@ -109,21 +230,29 @@ export default function DashboardScreen() {
       await Promise.all([
         loadApplications(),
         loadRecommendations(),
-        loadEntretiens()
+        loadAiRecommendations(),
+        loadEntretiens(),
+        loadProfileData()
       ]);
     } catch (error) {
       console.error("Erreur lors du rafraîchissement:", error);
     } finally {
       setRefreshing(false);
     }
-  }, [loadApplications, loadRecommendations, loadEntretiens]);
+  }, [loadApplications, loadRecommendations, loadAiRecommendations, loadEntretiens, loadProfileData]);
 
 
   useEffect(() => {
     loadApplications();
     loadRecommendations();
+    loadAiRecommendations();
     loadEntretiens();
-  }, [user, loadApplications, loadRecommendations, loadEntretiens]);
+    loadProfileData();
+  }, [user, loadApplications, loadRecommendations, loadAiRecommendations, loadEntretiens, loadProfileData]);
+
+  useEffect(() => {
+    setProfileCompletion(calculateProfileCompletion());
+  }, [candidatProfile, parsedCv, calculateProfileCompletion]);
 
   const handleRecommendedOffrePress = (offreId: string) => {
     router.push(`/(app)/job_board/job_details?id=${offreId}`);
@@ -163,7 +292,7 @@ export default function DashboardScreen() {
     tomorrow.setDate(today.getDate() + 1);
 
     if (date.toDateString() === today.toDateString()) {
-      return "Aujourd&apos;hui";
+      return "Aujourd'hui";
     } else if (date.toDateString() === tomorrow.toDateString()) {
       return "Demain";
     } else {
@@ -236,30 +365,132 @@ export default function DashboardScreen() {
           <Text style={styles.heroSubtext}>Voici un aperçu de votre activité</Text>
         </View>
 
-        {/* Quick Stats */}
+        {/* Quick Stats - 2x2 Grid */}
         <View style={styles.statsContainer}>
-          <View style={styles.statCard}>
-            <View style={styles.statIconContainer}>
-              <FontAwesome5 name="briefcase" size={16} color="#0f8e35" />
+          <View style={styles.statsRow}>
+            <View style={styles.statCard}>
+              <View style={styles.statIconContainer}>
+                <FontAwesome5 name="paper-plane" size={16} color="#0f8e35" />
+              </View>
+              <Text style={styles.statNumber}>{applications.length}</Text>
+              <Text style={styles.statLabel}>Candidatures</Text>
             </View>
-            <Text style={styles.statNumber}>{applications.length}</Text>
-            <Text style={styles.statLabel}>Candidatures</Text>
+            <View style={styles.statCard}>
+              <View style={styles.statIconContainer}>
+                <FontAwesome5 name="check-circle" size={16} color="#10B981" />
+              </View>
+              <Text style={styles.statNumber}>
+                {applications.filter(app => app.etat === 'Acceptée').length}
+              </Text>
+              <Text style={styles.statLabel}>Acceptées</Text>
+            </View>
           </View>
-           <View style={styles.statCard}>
-            <View style={styles.statIconContainer}>
-              <FontAwesome5 name="calendar-alt" size={16} color="#8B5CF6" />
+          
+          <View style={styles.statsRow}>
+            <View style={styles.statCard}>
+              <View style={styles.statIconContainer}>
+                <FontAwesome5 name="robot" size={16} color="#8B5CF6" />
+              </View>
+              <Text style={styles.statNumber}>{aiRecommendations.length}</Text>
+              <Text style={styles.statLabel}>IA Recommandées</Text>
             </View>
-            <Text style={styles.statNumber}>{entretiens.length}</Text>
-            <Text style={styles.statLabel}>Entretiens</Text>
+            <View style={styles.statCard}>
+              <View style={styles.statIconContainer}>
+                <FontAwesome5 name="calendar-check" size={16} color="#F59E0B" />
+              </View>
+              <Text style={styles.statNumber}>{entretiens.length}</Text>
+              <Text style={styles.statLabel}>Entretiens</Text>
+            </View>
           </View>
-          {/* <View style={styles.statCard}>
-            <View style={styles.statIconContainer}>
-              <FontAwesome5 name="star" size={16} color="#0f8e35" />
-            </View>
-            <Text style={styles.statNumber}>{recommendedOffres.length}</Text>
-            <Text style={styles.statLabel}>Recommandations</Text>
-          </View> */}
         </View>
+
+        {/* Section Complétude du Profil */}
+        {profileCompletion.overall < 100 && (
+          <View style={styles.section}>
+            <View style={styles.profileCompletionCard}>
+              <View style={styles.profileCompletionHeader}>
+                <FontAwesome5 name="user-circle" size={24} color="#091e60" />
+                <View style={styles.profileCompletionTextContainer}>
+                  <Text style={styles.profileCompletionTitle}>Complétez votre profil</Text>
+                  <Text style={styles.profileCompletionText}>
+                    {profileCompletion.overall}% complété
+                  </Text>
+                  <Text style={styles.profileCompletionSubDetails}>
+                    Profil: {profileCompletion.profile}% • CV: {profileCompletion.cv}%
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.profileCompletionButton}
+                  onPress={() => router.push('/(app)/profile-details')}
+                >
+                  <Text style={styles.profileCompletionButtonText}>Améliorer</Text>
+                </TouchableOpacity>
+              </View>
+              
+              <View style={styles.progressBarContainer}>
+                <View style={styles.progressBarBackground}>
+                  <View 
+                    style={[
+                      styles.progressBarFill, 
+                      { width: `${profileCompletion.overall}%` }
+                    ]} 
+                  />
+                </View>
+              </View>
+              
+              {profileCompletion.missingFields.length > 0 && (
+                <View style={styles.missingFieldsContainer}>
+                  <Text style={styles.missingFieldsTitle}>Champs manquants :</Text>
+                  <Text style={styles.missingFieldsText}>
+                    {profileCompletion.missingFields.slice(0, 3).join(', ')}
+                    {profileCompletion.missingFields.length > 3 && `... +${profileCompletion.missingFields.length - 3} autres`}
+                  </Text>
+                </View>
+              )}
+              
+              <Text style={styles.profileCompletionSubtext}>
+                Un profil complet augmente vos chances d'être contacté par les recruteurs
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {/* Section Aperçu Performance */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Aperçu Performance</Text>
+          </View>
+          
+          <View style={styles.activityContainer}>
+            <View style={styles.activityItem}>
+              <FontAwesome5 name="paper-plane" size={16} color="#0f8e35" />
+              <Text style={styles.activityText}>
+                <Text style={styles.activityNumber}>{weeklyActivity.newApplications}</Text> candidature
+                {weeklyActivity.newApplications !== 1 ? 's' : ''} cette semaine
+              </Text>
+            </View>
+            
+            <View style={styles.activityItem}>
+              <FontAwesome5 name="percentage" size={16} color="#8B5CF6" />
+              <Text style={styles.activityText}>
+                <Text style={styles.activityNumber}>
+                  {applications.length > 0 
+                    ? Math.round((applications.filter(app => app.etat === 'Acceptée').length / applications.length) * 100)
+                    : 0}%
+                </Text> taux d'acceptation
+              </Text>
+            </View>
+            
+            <View style={styles.activityItem}>
+              <FontAwesome5 name="robot" size={16} color="#F59E0B" />
+              <Text style={styles.activityText}>
+                <Text style={styles.activityNumber}>{aiRecommendations.length}</Text> recommandation
+                {aiRecommendations.length !== 1 ? 's' : ''} IA disponible{aiRecommendations.length !== 1 ? 's' : ''}
+              </Text>
+            </View>
+          </View>
+        </View>
+
         {/* Section Entretiens à venir */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -377,52 +608,56 @@ export default function DashboardScreen() {
           )}
         </View>
 
-        {/* Section Offres Recommandées */}
+        {/* Section Offres Recommandées IA */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Offres Recommandées</Text>
-            {recommendedOffres.length > 0 && (
-              <TouchableOpacity style={styles.viewAllLink} onPress={() => router.push('/(app)/job_board')}>
+            <Text style={styles.sectionTitle}>Recommandations IA</Text>
+            {aiRecommendations.length > 0 && (
+              <TouchableOpacity style={styles.viewAllLink} onPress={() => router.push('/(app)/ai-recommendations')}>
                 <Text style={styles.viewAllText}>Voir tout</Text>
                 <FontAwesome5 name="arrow-right" size={12} color="#0f8e35" style={{ marginLeft: 4 }} />
               </TouchableOpacity>
             )}
           </View>
 
-          {loadingRecommendations ? (
+          {loadingAiRecommendations ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="small" color="#0f8e35" />
-              <Text style={styles.loadingText}>Chargement...</Text>
+              <Text style={styles.loadingText}>Chargement des recommandations IA...</Text>
             </View>
-          ) : recommendedOffres.length > 0 ? (
+          ) : aiRecommendations.length > 0 ? (
             <View style={styles.listContainer}>
-              {recommendedOffres.slice(0, 3).map((offre: any) => (
+              {aiRecommendations.slice(0, 3).map((recommendation: any, index: number) => (
                 <TouchableOpacity 
-                  key={offre.id} 
+                  key={recommendation.offre?.id || index} 
                   style={styles.recommendedItem} 
-                  onPress={() => handleRecommendedOffrePress(offre.id)}
+                  onPress={() => handleRecommendedOffrePress(recommendation.offre?.id)}
                   activeOpacity={0.7}
                 >
                   <View style={styles.recommendedContent}>
                     <Text style={styles.recommendedTitle} numberOfLines={1}>
-                      {offre.poste?.titre_poste || 'Poste non spécifié'}
+                      {recommendation.offre?.titre || 'Poste non spécifié'}
                     </Text>
                     <Text style={styles.recommendedCompany} numberOfLines={1}>
-                      {offre.demande?.entreprise?.libelleE || 'Entreprise non spécifiée'}
+                      {recommendation.offre?.entreprise || 'Entreprise non spécifiée'}
                     </Text>
-                    <Text style={styles.recommendedLocation}>{offre.lieux}</Text>
+                    <Text style={styles.recommendedLocation}>
+                      {recommendation.offre?.lieu_travail || 'Lieu non spécifié'}
+                    </Text>
                   </View>
                   <View style={styles.matchScore}>
-                    <Text style={styles.matchScoreText}>{offre.match_score}%</Text>
+                    <Text style={styles.matchScoreText}>
+                      {recommendation.match_percentage || 0}%
+                    </Text>
                   </View>
                 </TouchableOpacity>
               ))}
             </View>
           ) : (
             <View style={styles.emptyState}>
-              <FontAwesome5 name="lightbulb" size={24} color="#9CA3AF" />
-              <Text style={styles.emptyStateTitle}>Aucune recommandation</Text>
-              <Text style={styles.emptyStateText}>Remplissez votre profil personnel et professionnel pour recevoir des recommandations personnalisées</Text>
+              <FontAwesome5 name="robot" size={24} color="#9CA3AF" />
+              <Text style={styles.emptyStateTitle}>Aucune recommandation IA</Text>
+              <Text style={styles.emptyStateText}>Complétez votre profil et vos compétences pour recevoir des recommandations personnalisées par IA</Text>
             </View>
           )}
         </View>
@@ -587,11 +822,14 @@ const styles = StyleSheet.create({
     fontWeight: '400',
   },
 
-  // Quick Stats
+  // Quick Stats - 2x2 Grid
   statsContainer: {
+    marginBottom: 32,
+  },
+  statsRow: {
     flexDirection: 'row',
     gap: 12,
-    marginBottom: 32,
+    marginBottom: 12,
   },
   statCard: {
     flex: 1,
@@ -933,5 +1171,121 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#3B82F6',
     textDecorationLine: 'underline',
+  },
+
+  // Styles pour la section de complétude du profil
+  profileCompletionCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+    borderLeftWidth: 4,
+    borderLeftColor: '#091e60',
+  },
+  profileCompletionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  profileCompletionTextContainer: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  profileCompletionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#091e60',
+    marginBottom: 2,
+  },
+  profileCompletionText: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginBottom: 2,
+  },
+  profileCompletionSubDetails: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    fontStyle: 'italic',
+  },
+  profileCompletionButton: {
+    backgroundColor: '#091e60',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 12,
+  },
+  profileCompletionButtonText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  progressBarContainer: {
+    marginBottom: 12,
+  },
+  progressBarBackground: {
+    height: 8,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: '100%',
+    backgroundColor: '#0f8e35',
+    borderRadius: 4,
+  },
+  profileCompletionSubtext: {
+    fontSize: 13,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  missingFieldsContainer: {
+    backgroundColor: '#FEF7ED',
+    padding: 12,
+    borderRadius: 8,
+    marginVertical: 12,
+    borderLeftWidth: 3,
+    borderLeftColor: '#F59E0B',
+  },
+  missingFieldsTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#B45309',
+    marginBottom: 4,
+  },
+  missingFieldsText: {
+    fontSize: 12,
+    color: '#92400E',
+    lineHeight: 16,
+  },
+
+  // Styles pour la section d'activité récente
+  activityContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  activityItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  activityText: {
+    fontSize: 14,
+    color: '#4B5563',
+    marginLeft: 12,
+    flex: 1,
+  },
+  activityNumber: {
+    fontWeight: '700',
+    color: '#091e60',
   },
 });

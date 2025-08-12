@@ -17,6 +17,7 @@ import {
 import { useAuth } from "../../components/AuthProvider";
 import CustomHeader from "../../components/CustomHeader";
 import { getOffres, getRecommendedOffres, getActualites } from "../../utils/api";
+import { getAIJobRecommendations } from "../../utils/ai-api";
 import { router } from "expo-router";
 import { LinearGradient } from 'expo-linear-gradient';
 import EvilIcons from '@expo/vector-icons/EvilIcons';
@@ -243,11 +244,44 @@ export default function HomeScreen() {
 
       try {
         setLoadingRecommendations(true);
-        const fetchedRecommendations = await getRecommendedOffres(); // Appel à votre fonction API
-        setRecommendedOffres(fetchedRecommendations.slice(0, 5));
-        console.log('HomeScreen: Recommandations récupérées:', fetchedRecommendations.length); // Log de débogage
+        
+        // Utiliser les recommandations IA à la place
+        const aiResponse = await getAIJobRecommendations({ limit: 5 });
+        
+        // Transformer les recommandations IA pour correspondre au format attendu
+        const transformedRecommendations = aiResponse.data.recommendations.map((rec: any) => ({
+          id: rec.offre?.id || Math.random().toString(),
+          poste: {
+            titre_poste: rec.offre?.titre || 'Titre non disponible'
+          },
+          entreprise: {
+            libelleE: rec.offre?.entreprise || 'Entreprise non spécifiée'
+          },
+          lieux: rec.offre?.lieu_travail || 'Lieu non spécifié',
+          typeContrat: {
+            libelle_type_contrat: rec.offre?.type_contrat || 'CDI'
+          },
+          salaire_minimum: rec.offre?.salaire_propose?.split(' - ')[0] || '0',
+          salaire_maximum: rec.offre?.salaire_propose?.split(' - ')[1] || '0',
+          match_score: rec.match_percentage || 0,
+          match_reasons: rec.reasons || [],
+          created_at: rec.offre?.created_at || new Date().toISOString()
+        }));
+        
+        setRecommendedOffres(transformedRecommendations);
+        console.log('HomeScreen: Recommandations IA récupérées:', transformedRecommendations.length, 'avec scores moyens:', 
+          transformedRecommendations.reduce((sum: number, rec: any) => sum + (rec.match_score || 0), 0) / transformedRecommendations.length);
       } catch (err: any) {
-        setErrorRecommendations("Remplissez votre profil pour recevoir des recommandations personnalisées.");
+        console.log('Erreur recommandations IA, fallback vers recommandations classiques:', err.message);
+        
+        // Fallback vers les recommandations classiques en cas d'erreur
+        try {
+          const fetchedRecommendations = await getRecommendedOffres();
+          setRecommendedOffres(fetchedRecommendations.slice(0, 5));
+          console.log('HomeScreen: Recommandations classiques récupérées:', fetchedRecommendations.length);
+        } catch (fallbackErr: any) {
+          setErrorRecommendations("Remplissez votre profil pour recevoir des recommandations personnalisées.");
+        }
       } finally {
         setLoadingRecommendations(false);
       }
@@ -472,7 +506,7 @@ export default function HomeScreen() {
         </Text>
 
         <Text style={styles.recommendationCompany} numberOfLines={1}>
-          {item.demande?.entreprise?.libelleE || "Entreprise non spécifiée"}
+          {item.entreprise?.libelleE || "Entreprise non spécifiée"}
         </Text>
 
         <View style={styles.recommendationLocationContainer}>

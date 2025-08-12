@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, FlatList, TouchableOpacity, RefreshControl, Alert, ScrollView } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, RefreshControl, Alert, ScrollView,StatusBar, SafeAreaView } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../components/ThemeContext';
@@ -58,12 +58,63 @@ export default function AIRecommendationsScreen() {
   const fetchRecommendations = useCallback(async () => {
     try {
       setLoading(true);
+      console.log('Fetching recommendations with minScore:', filterByScore);
       const response = await getAIJobRecommendations({
         minScore: filterByScore,
         limit: 20
       });
-      setRecommendations(response.data.recommendations || []);
-      setStats(response.data.stats || null);
+      
+      // Transform Laravel API response to match the interface
+      const transformedRecommendations = (response.data.recommendations || []).map((rec: any) => ({
+        id: rec.offre?.id?.toString() || Math.random().toString(),
+        title: rec.offre?.titre || 'Titre non disponible',
+        company: rec.offre?.entreprise || 'Entreprise non spécifiée',
+        location: rec.offre?.lieu_travail || 'Lieu non spécifié',
+        description: rec.offre?.description || '',
+        requirements: [],
+        salary: rec.offre?.salaire_propose ? {
+          min: parseInt(rec.offre.salaire_propose.split(' - ')[0]) || 0,
+          max: parseInt(rec.offre.salaire_propose.split(' - ')[1]) || 0,
+          currency: 'CFA'
+        } : undefined,
+        type: rec.offre?.type_contrat || 'CDI',
+        publishedAt: rec.offre?.created_at || new Date().toISOString(),
+        matchScore: rec.match_percentage || 0,
+        matchReasons: Array.isArray(rec.reasons) ? rec.reasons : [],
+        skillsMatch: {
+          matched: rec.reasons ? rec.reasons
+            .filter((reason: string) => reason.includes('Compétences correspondantes'))
+            .map((reason: string) => reason.replace('Compétences correspondantes : ', ''))
+            .join(', ')
+            .split(', ')
+            .filter(Boolean) : [],
+          missing: [],
+          additional: []
+        },
+        isRemote: false,
+        experienceLevel: 'Débutant'
+      }));
+      
+      // Filtrage côté client comme fallback
+      let filteredRecommendations = transformedRecommendations;
+      if (filterByScore !== null) {
+        filteredRecommendations = transformedRecommendations.filter(rec => rec.matchScore >= filterByScore);
+        console.log(`Filtered ${transformedRecommendations.length} recommendations to ${filteredRecommendations.length} with minScore ${filterByScore}`);
+      }
+      
+      setRecommendations(filteredRecommendations);
+      
+      // Transform stats if available
+      const transformedStats = response.data.meta ? {
+        totalRecommendations: filteredRecommendations.length,
+        averageMatch: filteredRecommendations.length > 0 
+          ? filteredRecommendations.reduce((sum, rec) => sum + rec.matchScore, 0) / filteredRecommendations.length
+          : 0,
+        appliedCount: 0,
+        viewedCount: 0
+      } : null;
+      
+      setStats(transformedStats);
     } catch (error) {
       console.error('Erreur lors du chargement des recommandations:', error);
       Alert.alert('Erreur', 'Impossible de charger les recommandations IA');
@@ -96,13 +147,17 @@ export default function AIRecommendationsScreen() {
 
   const handleJobPress = async (job: JobRecommendation) => {
     try {
-      // Tracker l'interaction
-      await trackRecommendationInteraction(job.id, 'view');
-      router.push(`/job_board/job_details?id=${job.id}`);
+      // Tracker l'interaction (ne pas bloquer si ça échoue)
+      trackRecommendationInteraction(job.id, 'view').catch(err => 
+        console.log('Tracking failed but continuing:', err.message)
+      );
+      
+      // Naviguer vers les détails de l'offre
+      router.push(`/(app)/job_board/job_details?id=${job.id}`);
     } catch (error) {
-      console.error('Erreur lors du tracking:', error);
-      // Naviguer quand même
-      router.push(`/job_board/job_details?id=${job.id}`);
+      console.error('Erreur lors de la navigation:', error);
+      // Navigation alternative si la route principale échoue
+      router.push(`/(app)/job_board/job_details?id=${job.id}`);
     }
   };
 
@@ -227,8 +282,8 @@ export default function AIRecommendationsScreen() {
           }}>
             Pourquoi cette offre vous correspond :
           </Text>
-          {item.matchReasons.slice(0, 2).map((reason, index) => (
-            <View key={index} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+          {(item.matchReasons || []).slice(0, 2).map((reason, index) => (
+            <View key={`reason-${item.id}-${index}`} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
               <Ionicons name="checkmark-circle" size={16} color={getScoreColor(item.matchScore)} />
               <Text style={{
                 marginLeft: 8,
@@ -242,52 +297,54 @@ export default function AIRecommendationsScreen() {
           ))}
         </View>
 
-        {/* Compétences correspondantes */}
-        <View style={{ marginBottom: 12 }}>
-          <Text style={{
-            fontSize: 14,
-            fontWeight: '600',
-            color: colors.text,
-            marginBottom: 6,
-          }}>
-            Compétences correspondantes ({item.skillsMatch.matched.length}):
-          </Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <View style={{ flexDirection: 'row' }}>
-              {item.skillsMatch.matched.slice(0, 4).map((skill, index) => (
-                <View
-                  key={index}
-                  style={{
-                    backgroundColor: colors.secondary + '20',
+        {/* Compétences correspondantes - Afficher seulement si il y en a */}
+        {(item.skillsMatch?.matched || []).length > 0 && (
+          <View style={{ marginBottom: 12 }}>
+            <Text style={{
+              fontSize: 14,
+              fontWeight: '600',
+              color: colors.text,
+              marginBottom: 6,
+            }}>
+              Compétences correspondantes ({(item.skillsMatch?.matched || []).length}):
+            </Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              <View style={{ flexDirection: 'row' }}>
+                {(item.skillsMatch?.matched || []).slice(0, 4).map((skill, index) => (
+                  <View
+                    key={`skill-${item.id}-${index}`}
+                    style={{
+                      backgroundColor: colors.secondary + '20',
+                      paddingHorizontal: 8,
+                      paddingVertical: 4,
+                      borderRadius: 12,
+                      marginRight: 8,
+                    }}
+                  >
+                    <Text style={{
+                      color: colors.secondary,
+                      fontSize: 12,
+                      fontWeight: '600',
+                    }}>
+                      {skill}
+                    </Text>
+                  </View>
+                ))}
+                {(item.skillsMatch?.matched || []).length > 4 && (
+                  <View style={{
                     paddingHorizontal: 8,
                     paddingVertical: 4,
-                    borderRadius: 12,
-                    marginRight: 8,
-                  }}
-                >
-                  <Text style={{
-                    color: colors.secondary,
-                    fontSize: 12,
-                    fontWeight: '600',
+                    justifyContent: 'center',
                   }}>
-                    {skill}
-                  </Text>
-                </View>
-              ))}
-              {item.skillsMatch.matched.length > 4 && (
-                <View style={{
-                  paddingHorizontal: 8,
-                  paddingVertical: 4,
-                  justifyContent: 'center',
-                }}>
-                  <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-                    +{item.skillsMatch.matched.length - 4} autres
-                  </Text>
-                </View>
-              )}
-            </View>
-          </ScrollView>
-        </View>
+                    <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                      +{(item.skillsMatch?.matched || []).length - 4} autres
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </ScrollView>
+          </View>
+        )}
 
         {/* Actions */}
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -388,9 +445,9 @@ export default function AIRecommendationsScreen() {
         { label: 'Moyennes (40%+)', value: 40 },
       ].map((filter, index) => (
         <TouchableOpacity
-          key={index}
+          key={`filter-${index}`}
           style={{
-            backgroundColor: filterByScore === filter.value ? colors.secondary : colors.surface,
+            backgroundColor: filterByScore === filter.value ? colors.secondary : colors.background,
             paddingHorizontal: 16,
             paddingVertical: 8,
             borderRadius: 20,
@@ -399,7 +456,7 @@ export default function AIRecommendationsScreen() {
           onPress={() => setFilterByScore(filter.value)}
         >
           <Text style={{
-            color: filterByScore === filter.value ? colors.textPrimary : colors.text,
+            color: filterByScore === filter.value ? colors.textTertiary : colors.textSecondary,
             fontWeight: '600',
           }}>
             {filter.label}
@@ -425,11 +482,14 @@ export default function AIRecommendationsScreen() {
       <Text style={{
         fontSize: 18,
         fontWeight: 'bold',
-        color: colors.text,
+        color: colors.error,
         marginBottom: 8,
         textAlign: 'center',
       }}>
-        Aucune recommandation disponible
+        {filterByScore !== null 
+          ? `Aucune recommandation avec un score ≥ ${filterByScore}%`
+          : 'Aucune recommandation disponible'
+        }
       </Text>
       <Text style={{
         fontSize: 14,
@@ -437,8 +497,27 @@ export default function AIRecommendationsScreen() {
         textAlign: 'center',
         marginBottom: 16,
       }}>
-        Complétez votre profil pour obtenir de meilleures recommandations personnalisées
+        {filterByScore !== null 
+          ? 'Essayez de réduire le filtre de score ou complétez votre profil'
+          : 'Complétez votre profil pour obtenir de meilleures recommandations personnalisées'
+        }
       </Text>
+      {filterByScore !== null ? (
+        <TouchableOpacity
+          style={{
+            backgroundColor: colors.secondary,
+            paddingHorizontal: 20,
+            paddingVertical: 10,
+            borderRadius: 25,
+            marginBottom: 10,
+          }}
+          onPress={() => setFilterByScore(null)}
+        >
+          <Text style={{ color: colors.textPrimary, fontWeight: '600' }}>
+            Supprimer le filtre
+          </Text>
+        </TouchableOpacity>
+      ) : null}
       <TouchableOpacity
         style={{
           backgroundColor: colors.secondary,
@@ -456,7 +535,8 @@ export default function AIRecommendationsScreen() {
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+      <StatusBar barStyle="light-content" backgroundColor="#091e60" />
       <CustomHeader 
         title="Recommandations IA" 
         showBackButton={false}
@@ -465,7 +545,7 @@ export default function AIRecommendationsScreen() {
             style={{ marginRight: 15 }}
             onPress={() => router.push('/ai-recommendations/preferences')}
           >
-            <Ionicons name="settings-outline" size={24} color={colors.textPrimary} />
+            <Ionicons name="settings-outline" size={24} color="#FFFFFF" />
           </TouchableOpacity>
         }
       />
@@ -487,6 +567,6 @@ export default function AIRecommendationsScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ flexGrow: 1 }}
       />
-    </View>
+    </SafeAreaView>
   );
 }

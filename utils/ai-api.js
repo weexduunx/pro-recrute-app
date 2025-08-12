@@ -4,7 +4,7 @@ import api from './api';
 // API pour obtenir les recommandations d'emplois basées sur l'IA
 export const getAIJobRecommendations = async (filters = {}) => {
   try {
-    const response = await api.get('/ai/job-recommendations', {
+    const response = await api.get('/recommendations', {
       params: filters
     });
     return response.data;
@@ -72,7 +72,7 @@ export const getJobPreferences = async () => {
 // API pour tracker les interactions avec les recommandations
 export const trackRecommendationInteraction = async (jobId, action, additionalData = {}) => {
   try {
-    const response = await api.post('/ai/track-interaction', {
+    const response = await api.post('/ai/track-recommendation-interaction', {
       job_id: jobId,
       action, // 'view', 'apply', 'dismiss', 'save'
       ...additionalData

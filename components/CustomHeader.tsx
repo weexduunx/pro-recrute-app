@@ -9,6 +9,9 @@ import { StatusBar } from 'expo-status-bar';
 // @ts-ignore
 import UserAvatar from 'react-native-user-avatar';
 
+// Configuration de l'URL de base (doit correspondre à utils/api.js)
+const API_BASE_URL = 'http://192.168.1.144:8000';
+
 /**
  * Composant CustomHeader:
  * Un en-tête d'application réutilisable avec un bouton de menu, un titre,
@@ -16,18 +19,35 @@ import UserAvatar from 'react-native-user-avatar';
  */
 export interface CustomHeaderProps {
   title: string;
-  user: any | null; // L'utilisateur connecté, peut être null si non connecté
+  user?: any | null; // L'utilisateur connecté, peut être null si non connecté
   onAvatarPress?: () => void;
   onMenuPress?: () => void;
   showBackButton?: boolean; // Afficher le bouton retour au lieu du menu
   onBackPress?: () => void; // Action personnalisée pour le bouton retour
+  rightComponent?: React.ReactNode; // Composant personnalisé à droite
 }
 
 
-export default function CustomHeader({ title, user, showBackButton = false, onBackPress }: CustomHeaderProps) {
+export default function CustomHeader({ title, user: propUser, showBackButton = false, onBackPress, rightComponent }: CustomHeaderProps) {
   const navigation = useNavigation();
-  const { logout } = useAuth();
+  const { logout, user: contextUser } = useAuth();
   const [isAvatarDropdownVisible, setAvatarDropdownVisible] = useState(false);
+  
+  // Utiliser le user passé en prop ou celui du contexte Auth
+  const user = propUser || contextUser;
+  
+  // Debug pour la photo de profil
+  React.useEffect(() => {
+    if (user?.photo_profil) {
+      const photoUrl = user.photo_profil.startsWith('http') 
+        ? user.photo_profil 
+        : `${API_BASE_URL}/storage/${user.photo_profil}`;
+      console.log('Photo de profil URL:', photoUrl);
+      console.log('User photo_profil raw:', user.photo_profil);
+    } else {
+      console.log('Pas de photo de profil trouvée pour:', user?.name || 'Utilisateur inconnu');
+    }
+  }, [user]);
 
 
   const handleMenuPress = () => {
@@ -91,32 +111,37 @@ const handleDropdownLogout = () => {
         {/* Titre de l'en-tête */}
         <Text style={styles.headerTitle}>{title}</Text>
 
-        {/* Avatar du profil utilisateur (avec UserAvatar) */}
-        <TouchableOpacity onPress={handleAvatarPress} >
-          <UserAvatar
-            size={50}
-            name={user?.name || ''}
-            src={user?.photo_profil ? 
-              (user.photo_profil.startsWith('http') 
-                ? user.photo_profil 
-                : `http://192.168.1.144:8000/storage/${user.photo_profil}`) 
-              : undefined}
-            bgColor="#0f8e35"
-            bgColors={['#0f8e35', '#0f8e35', '#0f8e35']}
-            initials={user?.name ? user.name.split(' ').map((n: string) => n[0]).join('') : ''}
-            style={{ borderWidth: 2, borderColor: '#FFFFFF' }}
-            textColor="#FFFFFF"
-            borderRadius={30}
-          />
-        </TouchableOpacity>
+        {/* Composant personnalisé à droite ou avatar par défaut */}
+        {rightComponent ? (
+          rightComponent
+        ) : (
+          <TouchableOpacity onPress={handleAvatarPress} >
+            <UserAvatar
+              size={50}
+              name={user?.name || ''}
+              src={user?.photo_profil ? 
+                (user.photo_profil.startsWith('http') 
+                  ? user.photo_profil 
+                  : `${API_BASE_URL}/storage/${user.photo_profil}`) 
+                : undefined}
+              bgColor="#0f8e35"
+              bgColors={['#0f8e35', '#0f8e35', '#0f8e35']}
+              initials={user?.name ? user.name.split(' ').map((n: string) => n[0]).join('') : ''}
+              style={{ borderWidth: 2, borderColor: '#FFFFFF' }}
+              textColor="#FFFFFF"
+              borderRadius={30}
+            />
+          </TouchableOpacity>
+        )}
 
-        {/* Menu déroulant de l'avatar (Modal) */}
-        <Modal
-          visible={isAvatarDropdownVisible}
-          transparent={true}
-          animationType="fade"
-          onRequestClose={closeAvatarDropdown}
-        >
+        {/* Menu déroulant de l'avatar (Modal) - seulement si pas de rightComponent */}
+        {!rightComponent && (
+          <Modal
+            visible={isAvatarDropdownVisible}
+            transparent={true}
+            animationType="fade"
+            onRequestClose={closeAvatarDropdown}
+          >
           <Pressable style={styles.modalOverlay} onPress={closeAvatarDropdown}>
             <View style={styles.dropdownContainer}>
               <TouchableOpacity style={styles.dropdownItem} onPress={handleDropdownProfile}>
@@ -135,7 +160,8 @@ const handleDropdownLogout = () => {
 
             </View>
           </Pressable>
-        </Modal>
+          </Modal>
+        )}
       </View>
     </SafeAreaView>
   );

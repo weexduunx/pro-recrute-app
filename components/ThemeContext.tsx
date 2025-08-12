@@ -11,6 +11,7 @@ const lightColors = {
   cardBackground: '#FFFFFF', // Fond des cartes/sections
   textPrimary: '#091e60', // Texte foncé principal
   textSecondary: '#6B7280', // Texte gris secondaire
+  textTertiary: '#FFFFFF', // Texte gris secondaire
   textAccent: '#3B82F6', // Texte bleu accent
   border: '#E5E7EB', // Bordures claires
   error: '#EF4444', // Rouge erreur

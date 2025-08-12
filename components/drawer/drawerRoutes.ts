@@ -1,9 +1,34 @@
 // components/drawer/drawerRoutes.ts
 
 export const allowedDrawerRoutesByRole: Record<string, string[]> = {
-  user: ['home', 'profile-details','dashboard','entretiens', 'job_board', 'candidature', 'actualites',  'settings'],
-  interimaire: ['profile-details','(interimaire)', 'dashboard', 'entretiens','candidature', 'job_board', 'settings'],
-  admin: ['home', 'profile-details', 'dashboard', 'messages', 'video-interview', 'settings'],
+  user: [
+    'home', 
+    'dashboard', 
+    'profile-details', 
+    'job_board', 
+    'ai-recommendations', 
+    'candidature', 
+    'entretiens', 
+    'actualites', 
+    'settings'
+  ],
+  interimaire: [
+    'dashboard', 
+    'profile-details', 
+    '(interimaire)', 
+    'job_board', 
+    'candidature', 
+    'entretiens', 
+    'settings'
+  ],
+  admin: [
+    'home', 
+    'dashboard', 
+    'profile-details', 
+    'messages', 
+    'video-interview', 
+    'settings'
+  ],
 };
 
-export const defaultRoutes = ['home', 'profile-details', 'settings'];
+export const defaultRoutes = ['home', 'dashboard', 'profile-details', 'settings'];

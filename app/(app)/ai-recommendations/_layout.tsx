@@ -25,13 +25,6 @@ export default function AIRecommendationsLayout() {
         }}
       />
       <Stack.Screen
-        name="job-match/[id]"
-        options={{
-          title: 'Détails de correspondance',
-          headerShown: true,
-        }}
-      />
-      <Stack.Screen
         name="preferences"
         options={{
           title: 'Préférences IA',
