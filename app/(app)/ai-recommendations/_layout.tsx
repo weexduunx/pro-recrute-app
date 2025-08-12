@@ -20,15 +20,13 @@ export default function AIRecommendationsLayout() {
       <Stack.Screen
         name="index"
         options={{
-          title: 'Recommandations IA',
-          headerShown: true,
+          headerShown: false,
         }}
       />
       <Stack.Screen
         name="preferences"
         options={{
-          title: 'Préférences IA',
-          headerShown: true,
+          headerShown: false,
         }}
       />
     </Stack>

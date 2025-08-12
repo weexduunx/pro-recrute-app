@@ -1,5 +1,3 @@
-// components/drawer/drawerRoutes.ts
-
 export const allowedDrawerRoutesByRole: Record<string, string[]> = {
   user: [
     'home', 
@@ -7,6 +5,7 @@ export const allowedDrawerRoutesByRole: Record<string, string[]> = {
     'profile-details', 
     'job_board', 
     'ai-recommendations', 
+    'skills-assessment',
     'candidature', 
     'entretiens', 
     'actualites', 
@@ -17,6 +16,7 @@ export const allowedDrawerRoutesByRole: Record<string, string[]> = {
     'profile-details', 
     '(interimaire)', 
     'job_board', 
+    'ai-recommendations', 
     'candidature', 
     'entretiens', 
     'settings'

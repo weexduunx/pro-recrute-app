@@ -130,7 +130,7 @@ export default function AIPreferencesScreen() {
       <Text style={{
         fontSize: 18,
         fontWeight: 'bold',
-        color: colors.text,
+        color: colors.primary,
         marginBottom: 12,
       }}>
         {title}
@@ -142,7 +142,7 @@ export default function AIPreferencesScreen() {
             <TouchableOpacity
               key={item}
               style={{
-                backgroundColor: isSelected ? colors.secondary : colors.surface,
+                backgroundColor: isSelected ? colors.secondary : colors.background,
                 paddingHorizontal: 12,
                 paddingVertical: 8,
                 borderRadius: 20,
@@ -154,7 +154,8 @@ export default function AIPreferencesScreen() {
               onPress={() => onToggle(item)}
             >
               <Text style={{
-                color: isSelected ? colors.textPrimary : colors.text,
+                color: isSelected ? colors.textTertiary : colors.textSecondary,
+
                 fontWeight: isSelected ? '600' : 'normal',
               }}>
                 {item}
@@ -176,17 +177,18 @@ export default function AIPreferencesScreen() {
   ) => (
     <View style={{ marginBottom: 24 }}>
       <Text style={{
-        fontSize: 18,
+        fontSize: 17,
         fontWeight: 'bold',
-        color: colors.text,
+        color: colors.primary,
         marginBottom: 8,
       }}>
         {title}: {value}{unit}
       </Text>
       <View style={{
-        backgroundColor: colors.surface,
+        backgroundColor: colors.background,
         padding: 16,
         borderRadius: 12,
+        
       }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 }}>
           <TouchableOpacity
@@ -198,13 +200,13 @@ export default function AIPreferencesScreen() {
             }}
             onPress={() => onValueChange(Math.max(min, value - 10))}
           >
-            <Ionicons name="remove" size={16} color={colors.textPrimary} />
+            <Ionicons name="remove" size={16} color={colors.textTertiary} />
           </TouchableOpacity>
           
           <Text style={{
             fontSize: 24,
             fontWeight: 'bold',
-            color: colors.text,
+            color: colors.textSecondary,
             alignSelf: 'center',
           }}>
             {value}{unit}
@@ -219,7 +221,7 @@ export default function AIPreferencesScreen() {
             }}
             onPress={() => onValueChange(Math.min(max, value + 10))}
           >
-            <Ionicons name="add" size={16} color={colors.textPrimary} />
+            <Ionicons name="add" size={16} color={colors.textTertiary} />
           </TouchableOpacity>
         </View>
       </View>
@@ -244,7 +246,7 @@ export default function AIPreferencesScreen() {
             disabled={saving}
           >
             <Text style={{
-              color: colors.textPrimary,
+              color: colors.textTertiary,
               fontWeight: '600',
               fontSize: 14,
             }}>
@@ -296,18 +298,18 @@ export default function AIPreferencesScreen() {
           <Text style={{
             fontSize: 18,
             fontWeight: 'bold',
-            color: colors.text,
+            color: colors.primary,
             marginBottom: 12,
           }}>
             Fourchette salariale (XOF)
           </Text>
           <View style={{
-            backgroundColor: colors.surface,
+            backgroundColor: colors.background,
             padding: 16,
             borderRadius: 12,
           }}>
             <View style={{ marginBottom: 16 }}>
-              <Text style={{ color: colors.text, marginBottom: 8 }}>
+              <Text style={{ color: colors.textSecondary, marginBottom: 8 }}>
                 Salaire minimum: {preferences.salaryExpectation.min.toLocaleString()} XOF
               </Text>
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -323,7 +325,7 @@ export default function AIPreferencesScreen() {
                 >
                   <Ionicons name="remove-circle" size={24} color={colors.secondary} />
                 </TouchableOpacity>
-                <Text style={{ flex: 1, textAlign: 'center', color: colors.text, fontSize: 16 }}>
+                <Text style={{ flex: 1, textAlign: 'center', color: colors.textSecondary, fontSize: 16 }}>
                   {preferences.salaryExpectation.min.toLocaleString()}
                 </Text>
                 <TouchableOpacity
@@ -342,7 +344,7 @@ export default function AIPreferencesScreen() {
             </View>
 
             <View>
-              <Text style={{ color: colors.text, marginBottom: 8 }}>
+              <Text style={{ color: colors.textSecondary, marginBottom: 8 }}>
                 Salaire maximum: {preferences.salaryExpectation.max.toLocaleString()} XOF
               </Text>
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -358,7 +360,7 @@ export default function AIPreferencesScreen() {
                 >
                   <Ionicons name="remove-circle" size={24} color={colors.secondary} />
                 </TouchableOpacity>
-                <Text style={{ flex: 1, textAlign: 'center', color: colors.text, fontSize: 16 }}>
+                <Text style={{ flex: 1, textAlign: 'center', color: colors.textSecondary, fontSize: 16 }}>
                   {preferences.salaryExpectation.max.toLocaleString()}
                 </Text>
                 <TouchableOpacity
@@ -383,7 +385,7 @@ export default function AIPreferencesScreen() {
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'space-between',
-          backgroundColor: colors.surface,
+          backgroundColor: colors.background,
           padding: 16,
           borderRadius: 12,
           marginBottom: 24,
@@ -391,7 +393,7 @@ export default function AIPreferencesScreen() {
           <Text style={{
             fontSize: 18,
             fontWeight: 'bold',
-            color: colors.text,
+            color: colors.primary,
             flex: 1,
           }}>
             Télétravail accepté
@@ -451,20 +453,21 @@ export default function AIPreferencesScreen() {
           <Text style={{
             fontSize: 18,
             fontWeight: 'bold',
-            color: colors.text,
+            color: colors.primary,
             marginBottom: 12,
           }}>
             Niveau d'expérience
           </Text>
           <View style={{
-            backgroundColor: colors.surface,
+            backgroundColor: colors.background,
             borderRadius: 12,
             overflow: 'hidden',
           }}>
             <Picker
               selectedValue={preferences.experienceLevel}
               onValueChange={(value) => setPreferences({ ...preferences, experienceLevel: value })}
-              style={{ color: colors.text }}
+              style={{ color: colors.textSecondary }}
+
             >
               <Picker.Item label="Débutant (0-2 ans)" value="beginner" />
               <Picker.Item label="Intermédiaire (2-5 ans)" value="intermediate" />
@@ -479,20 +482,20 @@ export default function AIPreferencesScreen() {
           <Text style={{
             fontSize: 18,
             fontWeight: 'bold',
-            color: colors.text,
+            color: colors.primary,
             marginBottom: 12,
           }}>
             Fréquence des notifications
           </Text>
           <View style={{
-            backgroundColor: colors.surface,
+            backgroundColor: colors.background,
             borderRadius: 12,
             overflow: 'hidden',
           }}>
             <Picker
               selectedValue={preferences.notificationFrequency}
               onValueChange={(value) => setPreferences({ ...preferences, notificationFrequency: value })}
-              style={{ color: colors.text }}
+              style={{ color: colors.textSecondary }}
             >
               <Picker.Item label="Immédiate" value="immediate" />
               <Picker.Item label="Quotidienne" value="daily" />

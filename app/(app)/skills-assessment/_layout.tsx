@@ -20,29 +20,25 @@ export default function SkillsAssessmentLayout() {
       <Stack.Screen
         name="index"
         options={{
-          title: 'Évaluations de compétences',
-          headerShown: true,
+          headerShown: false, 
         }}
       />
       <Stack.Screen
         name="assessment/[id]"
         options={{
-          title: 'Évaluation en cours',
-          headerShown: true,
+          headerShown: false, 
         }}
       />
       <Stack.Screen
         name="results/[id]"
         options={{
-          title: 'Résultats',
-          headerShown: true,
+          headerShown: false,
         }}
       />
       <Stack.Screen
         name="create"
         options={{
-          title: 'Nouvelle évaluation',
-          headerShown: true,
+          headerShown: false, 
         }}
       />
     </Stack>

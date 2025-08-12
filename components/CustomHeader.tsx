@@ -95,7 +95,6 @@ const handleDropdownLogout = () => {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style="light" />
-
       <View style={styles.headerContainer}>
         {/* Bouton du menu Hamburger ou Retour */}
         {showBackButton ? (

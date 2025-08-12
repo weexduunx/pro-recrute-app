@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, FlatList, TouchableOpacity, RefreshControl, Alert, ScrollView,StatusBar, SafeAreaView } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, RefreshControl, Alert, ScrollView, StatusBar, SafeAreaView } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../components/ThemeContext';
 import { useAuth } from '../../../components/AuthProvider';
-import { 
-  getAIJobRecommendations, 
+import {
+  getAIJobRecommendations,
   updateJobPreferences,
   getMatchScore,
-  trackRecommendationInteraction 
+  trackRecommendationInteraction
 } from '../../../utils/ai-api';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -63,7 +63,7 @@ export default function AIRecommendationsScreen() {
         minScore: filterByScore,
         limit: 20
       });
-      
+
       // Transform Laravel API response to match the interface
       const transformedRecommendations = (response.data.recommendations || []).map((rec: any) => ({
         id: rec.offre?.id?.toString() || Math.random().toString(),
@@ -94,26 +94,26 @@ export default function AIRecommendationsScreen() {
         isRemote: false,
         experienceLevel: 'Débutant'
       }));
-      
+
       // Filtrage côté client comme fallback
       let filteredRecommendations = transformedRecommendations;
       if (filterByScore !== null) {
         filteredRecommendations = transformedRecommendations.filter(rec => rec.matchScore >= filterByScore);
         console.log(`Filtered ${transformedRecommendations.length} recommendations to ${filteredRecommendations.length} with minScore ${filterByScore}`);
       }
-      
+
       setRecommendations(filteredRecommendations);
-      
+
       // Transform stats if available
       const transformedStats = response.data.meta ? {
         totalRecommendations: filteredRecommendations.length,
-        averageMatch: filteredRecommendations.length > 0 
+        averageMatch: filteredRecommendations.length > 0
           ? filteredRecommendations.reduce((sum, rec) => sum + rec.matchScore, 0) / filteredRecommendations.length
           : 0,
         appliedCount: 0,
         viewedCount: 0
       } : null;
-      
+
       setStats(transformedStats);
     } catch (error) {
       console.error('Erreur lors du chargement des recommandations:', error);
@@ -148,10 +148,10 @@ export default function AIRecommendationsScreen() {
   const handleJobPress = async (job: JobRecommendation) => {
     try {
       // Tracker l'interaction (ne pas bloquer si ça échoue)
-      trackRecommendationInteraction(job.id, 'view').catch(err => 
+      trackRecommendationInteraction(job.id, 'view').catch(err =>
         console.log('Tracking failed but continuing:', err.message)
       );
-      
+
       // Naviguer vers les détails de l'offre
       router.push(`/(app)/job_board/job_details?id=${job.id}`);
     } catch (error) {
@@ -168,7 +168,7 @@ export default function AIRecommendationsScreen() {
     return (
       <TouchableOpacity
         style={{
-          backgroundColor: colors.surface,
+          backgroundColor: colors.background,
           marginHorizontal: 16,
           marginVertical: 8,
           padding: 16,
@@ -189,7 +189,7 @@ export default function AIRecommendationsScreen() {
             <Text style={{
               fontSize: 18,
               fontWeight: 'bold',
-              color: colors.text,
+              color: colors.primary,
               marginBottom: 4,
             }}>
               {item.title}
@@ -202,7 +202,7 @@ export default function AIRecommendationsScreen() {
               {item.company}
             </Text>
           </View>
-          
+
           <View style={{ alignItems: 'center' }}>
             <View style={{
               backgroundColor: getScoreColor(item.matchScore),
@@ -277,7 +277,7 @@ export default function AIRecommendationsScreen() {
           <Text style={{
             fontSize: 14,
             fontWeight: '600',
-            color: colors.text,
+            color: colors.primary,
             marginBottom: 6,
           }}>
             Pourquoi cette offre vous correspond :
@@ -303,7 +303,7 @@ export default function AIRecommendationsScreen() {
             <Text style={{
               fontSize: 14,
               fontWeight: '600',
-              color: colors.text,
+              color: colors.primary,
               marginBottom: 6,
             }}>
               Compétences correspondantes ({(item.skillsMatch?.matched || []).length}):
@@ -314,7 +314,7 @@ export default function AIRecommendationsScreen() {
                   <View
                     key={`skill-${item.id}-${index}`}
                     style={{
-                      backgroundColor: colors.secondary + '20',
+                      backgroundColor: getScoreColor(item.matchScore) + '20',
                       paddingHorizontal: 8,
                       paddingVertical: 4,
                       borderRadius: 12,
@@ -322,7 +322,7 @@ export default function AIRecommendationsScreen() {
                     }}
                   >
                     <Text style={{
-                      color: colors.secondary,
+                      color: getScoreColor(item.matchScore),
                       fontSize: 12,
                       fontWeight: '600',
                     }}>
@@ -352,12 +352,13 @@ export default function AIRecommendationsScreen() {
             color: colors.textSecondary,
             fontSize: 12,
           }}>
-            Publié {format(publishedDate, 'dd/MM', { locale: fr })}
+            Publié le {format(publishedDate, 'dd/MM/yyyy', { locale: fr })}
+
           </Text>
 
           <TouchableOpacity
             style={{
-              backgroundColor: colors.secondary,
+              backgroundColor: getScoreColor(item.matchScore),
               paddingHorizontal: 16,
               paddingVertical: 8,
               borderRadius: 20,
@@ -367,13 +368,13 @@ export default function AIRecommendationsScreen() {
             onPress={() => handleJobPress(item)}
           >
             <Text style={{
-              color: colors.textPrimary,
+              color: colors.textTertiary,
               fontWeight: '600',
               marginRight: 6,
             }}>
               Voir les détails
             </Text>
-            <Ionicons name="arrow-forward" size={16} color={colors.textPrimary} />
+            <Ionicons name="arrow-forward" size={16} color={colors.textTertiary} />
           </TouchableOpacity>
         </View>
       </TouchableOpacity>
@@ -385,22 +386,23 @@ export default function AIRecommendationsScreen() {
 
     return (
       <View style={{
-        backgroundColor: colors.surface,
+        backgroundColor: colors.background,
         marginHorizontal: 16,
         marginVertical: 8,
-        padding: 16,
+        padding: 12,
         borderRadius: 12,
       }}>
         <Text style={{
           fontSize: 18,
           fontWeight: 'bold',
-          color: colors.text,
+          color: colors.primary,
           marginBottom: 12,
         }}>
           Vos statistiques IA
         </Text>
-        
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between',gap:14 }}>
+
           <View style={{ alignItems: 'center' }}>
             <Text style={{ fontSize: 24, fontWeight: 'bold', color: colors.secondary }}>
               {stats.totalRecommendations}
@@ -409,7 +411,7 @@ export default function AIRecommendationsScreen() {
               Recommandations
             </Text>
           </View>
-          
+
           <View style={{ alignItems: 'center' }}>
             <Text style={{ fontSize: 24, fontWeight: 'bold', color: colors.secondary }}>
               {stats.averageMatch.toFixed(0)}%
@@ -418,7 +420,7 @@ export default function AIRecommendationsScreen() {
               Correspondance moy.
             </Text>
           </View>
-          
+
           <View style={{ alignItems: 'center' }}>
             <Text style={{ fontSize: 24, fontWeight: 'bold', color: colors.secondary }}>
               {stats.appliedCount}
@@ -433,8 +435,8 @@ export default function AIRecommendationsScreen() {
   };
 
   const FilterButtons = () => (
-    <ScrollView 
-      horizontal 
+    <ScrollView
+      horizontal
       showsHorizontalScrollIndicator={false}
       style={{ paddingHorizontal: 16, marginVertical: 8 }}
     >
@@ -451,6 +453,8 @@ export default function AIRecommendationsScreen() {
             paddingHorizontal: 16,
             paddingVertical: 8,
             borderRadius: 20,
+            borderWidth: 1,
+            borderColor: colors.border,
             marginRight: 8,
           }}
           onPress={() => setFilterByScore(filter.value)}
@@ -486,7 +490,7 @@ export default function AIRecommendationsScreen() {
         marginBottom: 8,
         textAlign: 'center',
       }}>
-        {filterByScore !== null 
+        {filterByScore !== null
           ? `Aucune recommandation avec un score ≥ ${filterByScore}%`
           : 'Aucune recommandation disponible'
         }
@@ -497,7 +501,7 @@ export default function AIRecommendationsScreen() {
         textAlign: 'center',
         marginBottom: 16,
       }}>
-        {filterByScore !== null 
+        {filterByScore !== null
           ? 'Essayez de réduire le filtre de score ou complétez votre profil'
           : 'Complétez votre profil pour obtenir de meilleures recommandations personnalisées'
         }
@@ -535,38 +539,40 @@ export default function AIRecommendationsScreen() {
   );
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+    <>
       <StatusBar barStyle="light-content" backgroundColor="#091e60" />
-      <CustomHeader 
-        title="Recommandations IA" 
-        showBackButton={false}
-        rightComponent={
-          <TouchableOpacity
-            style={{ marginRight: 15 }}
-            onPress={() => router.push('/ai-recommendations/preferences')}
-          >
-            <Ionicons name="settings-outline" size={24} color="#FFFFFF" />
-          </TouchableOpacity>
-        }
-      />
-      
-      <FlatList
-        data={recommendations}
-        keyExtractor={(item) => item.id}
-        renderItem={renderRecommendationItem}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-        ListHeaderComponent={() => (
-          <>
-            <StatsHeader />
-            <FilterButtons />
-          </>
-        )}
-        ListEmptyComponent={EmptyState}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ flexGrow: 1 }}
-      />
-    </SafeAreaView>
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+        <CustomHeader
+          title="Recommandations IA"
+          showBackButton={false}
+          rightComponent={
+            <TouchableOpacity
+              style={{ marginRight: 15 }}
+              onPress={() => router.push('/ai-recommendations/preferences')}
+            >
+              <Ionicons name="settings-outline" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+          }
+        />
+        
+        <FlatList
+          data={recommendations}
+          keyExtractor={(item) => item.id}
+          renderItem={renderRecommendationItem}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+          ListHeaderComponent={() => (
+            <>
+              <StatsHeader />
+              <FilterButtons />
+            </>
+          )}
+          ListEmptyComponent={EmptyState}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ flexGrow: 1 }}
+        />
+      </SafeAreaView>
+    </>
   );
 }

@@ -17,6 +17,7 @@ const lightColors = {
   error: '#EF4444', // Rouge erreur
   success: '#10B981', // Vert succès
   warning: '#F59E0B', // Jaune avertissement
+  shadow: 'rgba(0, 0, 0, 0.5)',
   // Couleurs spécifiques pour les éléments de paramètres
   settingIconBg: '#F3F4F6',
   settingItemBorder: '#F1F5F9',

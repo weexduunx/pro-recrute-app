@@ -693,7 +693,8 @@ export default function HomeScreen() {
           <View style={{ height: 60 }} />
         </Animated.View>
       </ScrollView>
-    </SafeAreaView></>
+    </SafeAreaView>
+    </>
 
   );
 }

@@ -11,10 +11,12 @@ import {
   Alert,
   Animated,
   Dimensions,
-  StatusBar 
+  StatusBar,
+  Share,
+  ActionSheetIOS
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
-import { getOffreById, applyForOffre } from '../../../utils/api';
+import { getOffreById, applyForOffre, toggleFavori, checkFavoriStatus, shareJobOffer, shareToSocialMedia } from '../../../utils/api';
 import CustomHeader from '../../../components/CustomHeader';
 import { useAuth } from '../../../components/AuthProvider';
 import AntDesign from '@expo/vector-icons/AntDesign';
@@ -91,6 +93,8 @@ export default function OffreDetailsScreen() {
   const [error, setError] = useState<string | null>(null);
   const [applying, setApplying] = useState(false);
   const [bookmarked, setBookmarked] = useState(false);
+  const [checkingFavoris, setCheckingFavoris] = useState(true);
+  const [togglingFavori, setTogglingFavori] = useState(false);
   
   const scrollY = useRef(new Animated.Value(0)).current;
   const headerOpacity = useRef(new Animated.Value(0)).current;
@@ -106,6 +110,18 @@ export default function OffreDetailsScreen() {
         setLoading(true);
         const fetchedOffre = await getOffreById(id);
         setOffre(fetchedOffre);
+        
+        // Vérifier si l'offre est en favoris
+        try {
+          setCheckingFavoris(true);
+          const favoriStatus = await checkFavoriStatus(id);
+          setBookmarked(favoriStatus.data.is_favorite);
+        } catch (favoriErr) {
+          console.warn("Erreur lors de la vérification des favoris:", favoriErr);
+          // Pas d'erreur critique, continuer
+        } finally {
+          setCheckingFavoris(false);
+        }
         
         // Animation d'entrée
         Animated.timing(headerOpacity, {
@@ -147,12 +163,30 @@ export default function OffreDetailsScreen() {
     }
   };
 
-  const handleBookmark = () => {
-    setBookmarked(!bookmarked);
-    Alert.alert(
-      bookmarked ? "Supprimé des favoris" : "Ajouté aux favoris",
-      bookmarked ? "L'offre a été supprimée de vos favoris" : "L'offre a été ajoutée à vos favoris"
-    );
+  const handleBookmark = async () => {
+    if (!offre || togglingFavori) return;
+    
+    try {
+      setTogglingFavori(true);
+      const result = await toggleFavori((offre as any).id);
+      
+      if (result.success) {
+        setBookmarked(result.data.is_favorite);
+        Alert.alert(
+          result.data.action === 'added' ? "✅ Ajouté aux favoris" : "❌ Supprimé des favoris",
+          result.message,
+          [{ text: "OK", style: "default" }]
+        );
+      }
+    } catch (error: any) {
+      console.error('Erreur lors du toggle favori:', error);
+      Alert.alert(
+        "❌ Erreur",
+        error.response?.data?.message || "Impossible de mettre à jour les favoris"
+      );
+    } finally {
+      setTogglingFavori(false);
+    }
   };
 
   const handleMenuPress = () => {
@@ -163,8 +197,61 @@ export default function OffreDetailsScreen() {
     Alert.alert("Profil", "Avatar Détails pressé !");
   };
 
-  const handleShare = () => {
-    Alert.alert("Partager", "Fonctionnalité de partage à implémenter");
+  const handleShare = async () => {
+    if (!offre) return;
+    
+    const offreData = {
+      id: (offre as any).id,
+      titre: (offre as any).poste?.titre_poste || 'Offre d\'emploi',
+      entreprise: (offre as any).demande?.entreprise?.libelleE || 'Entreprise',
+      lieu: (offre as any).lieux || 'Lieu non spécifié',
+      type_contrat: (offre as any).type_contrat?.libelle_type_contrat || 'CDI',
+      description: (offre as any).description || '',
+    };
+    
+    if (Platform.OS === 'ios') {
+      // Sur iOS, utiliser ActionSheetIOS pour plus d'options
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options: ['Annuler', 'Partager généralement', 'WhatsApp', 'Telegram', 'Facebook', 'LinkedIn'],
+          cancelButtonIndex: 0,
+          title: 'Partager cette offre d\'emploi',
+          message: `${offreData.titre} - ${offreData.entreprise}`,
+        },
+        async (buttonIndex) => {
+          try {
+            switch (buttonIndex) {
+              case 1:
+                await shareJobOffer(offreData);
+                break;
+              case 2:
+                await shareToSocialMedia('whatsapp', offreData);
+                break;
+              case 3:
+                await shareToSocialMedia('telegram', offreData);
+                break;
+              case 4:
+                await shareToSocialMedia('facebook', offreData);
+                break;
+              case 5:
+                await shareToSocialMedia('linkedin', offreData);
+                break;
+              default:
+                break;
+            }
+          } catch (error: any) {
+            Alert.alert("Erreur", error.message || "Erreur lors du partage");
+          }
+        }
+      );
+    } else {
+      // Sur Android, utiliser le partage simple d'abord
+      try {
+        await shareJobOffer(offreData);
+      } catch (error: any) {
+        Alert.alert("Erreur", error.message || "Erreur lors du partage");
+      }
+    }
   };
 
   // États de chargement et d'erreur avec design amélioré
@@ -219,12 +306,20 @@ export default function OffreDetailsScreen() {
         <LinearGradient colors={['#091e60', '#3B82F6']} style={styles.heroGradient}>
           <View style={styles.heroTop}>
             <View style={styles.heroActions}>
-              <TouchableOpacity onPress={handleBookmark} style={styles.actionButton}>
-                <AntDesign 
-                  name={bookmarked ? "heart" : "hearto"} 
-                  size={22} 
-                  color={bookmarked ? "#EF4444" : "#ffffff"} 
-                />
+              <TouchableOpacity 
+                onPress={handleBookmark} 
+                style={[styles.actionButton, togglingFavori && { opacity: 0.6 }]}
+                disabled={togglingFavori || checkingFavoris}
+              >
+                {togglingFavori ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <AntDesign 
+                    name={bookmarked ? "heart" : "hearto"} 
+                    size={22} 
+                    color={bookmarked ? "#EF4444" : "#ffffff"} 
+                  />
+                )}
               </TouchableOpacity>
               <TouchableOpacity onPress={handleShare} style={styles.actionButton}>
                 <AntDesign name="sharealt" size={22} color="#ffffff" />

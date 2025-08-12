@@ -7,9 +7,9 @@ import { Alert, TouchableOpacity, Text } from 'react-native';
 import * as Device from 'expo-device';
 
 // **IMPORTANT: Mettez à jour cette URL avec l'adresse IP et le port du  backend Laravel**
-const API_URL = 'http://192.168.1.144:8000/api' || process.env.EXPO_PUBLIC_API_URL; // Fallback pour le développement
+const API_URL = 'http://192.168.1.144:8000/api' || process.env.EXPO_PUBLIC_API_URL; //Fallback pour le développement
 
-console.log('API_URL configuré:', API_URL); // Debug
+console.log('API_URL configuré:', API_URL); //Debug
 
 const api = axios.create({
   baseURL: API_URL,
@@ -1259,6 +1259,171 @@ export const testerConnexionEntretien = async (entretienId) => {
     return response.data;
   } catch (error) {
     console.error("Échec de l'appel API testerConnexionEntretien:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+// ============================================
+// FONCTIONS API POUR LES FAVORIS
+// ============================================
+
+/**
+ * Obtient tous les favoris de l'utilisateur connecté
+ */
+export const getFavoris = async () => {
+  try {
+    const response = await api.get('/favoris');
+    return response.data;
+  } catch (error) {
+    console.error("Échec de l'appel API getFavoris:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+/**
+ * Vérifie si une offre est dans les favoris
+ */
+export const checkFavoriStatus = async (offreId) => {
+  try {
+    const response = await api.get(`/favoris/${offreId}`);
+    return response.data;
+  } catch (error) {
+    console.error("Échec de l'appel API checkFavoriStatus:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+/**
+ * Ajoute une offre aux favoris
+ */
+export const addToFavoris = async (offreId) => {
+  try {
+    const response = await api.post('/favoris', { offre_id: offreId });
+    return response.data;
+  } catch (error) {
+    console.error("Échec de l'appel API addToFavoris:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+/**
+ * Supprime une offre des favoris
+ */
+export const removeFromFavoris = async (offreId) => {
+  try {
+    const response = await api.delete(`/favoris/${offreId}`);
+    return response.data;
+  } catch (error) {
+    console.error("Échec de l'appel API removeFromFavoris:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+/**
+ * Toggle favori - ajoute si pas en favoris, supprime si déjà en favoris
+ */
+export const toggleFavori = async (offreId) => {
+  try {
+    const response = await api.post('/favoris/toggle', { offre_id: offreId });
+    return response.data;
+  } catch (error) {
+    console.error("Échec de l'appel API toggleFavori:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+// ============================================
+// FONCTIONS POUR LE PARTAGE D'OFFRES
+// ============================================
+
+/**
+ * Partage une offre d'emploi via les options natives du système
+ */
+export const shareJobOffer = async (offreData) => {
+  try {
+    const { Share } = require('react-native');
+    
+    // Construire le message de partage
+    const shareTitle = `Offre d'emploi: ${offreData.titre || 'Opportunité d\'emploi'}`;
+    const shareMessage = `
+🔥 Découvrez cette opportunité d'emploi !
+
+${offreData.titre || 'Titre non disponible'}
+${offreData.entreprise || 'Entreprise non spécifiée'}
+${offreData.lieu || 'Lieu non spécifié'}
+${offreData.type_contrat || 'Type de contrat non spécifié'}
+
+${offreData.description ? offreData.description.substring(0, 150) + '...' : ''}
+
+📱 Trouvé via l'app Pro-Recrute
+`.trim();
+
+    const result = await Share.share(
+      {
+        title: shareTitle,
+        message: shareMessage,
+        url: `prorecruteapp://job/${offreData.id}`, // Deep link vers l'offre
+      },
+      {
+        dialogTitle: 'Partager cette offre d\'emploi',
+        subject: shareTitle, // Pour les emails
+      }
+    );
+
+    if (result.action === Share.sharedAction) {
+      console.log('Offre partagée avec succès');
+      return { success: true, message: 'Offre partagée avec succès' };
+    } else if (result.action === Share.dismissedAction) {
+      console.log('Partage annulé');
+      return { success: false, message: 'Partage annulé' };
+    }
+  } catch (error) {
+    console.error('Erreur lors du partage:', error);
+    throw error;
+  }
+};
+
+/**
+ * Partage une offre via des réseaux sociaux spécifiques (URL schemes)
+ */
+export const shareToSocialMedia = async (platform, offreData) => {
+  try {
+    const { Linking } = require('react-native');
+    
+    const shareText = `Découvrez cette offre d'emploi: ${offreData.titre} chez ${offreData.entreprise}`;
+    const encodedText = encodeURIComponent(shareText);
+    
+    let url = '';
+    
+    switch (platform.toLowerCase()) {
+      case 'whatsapp':
+        url = `whatsapp://send?text=${encodedText}`;
+        break;
+      case 'telegram':
+        url = `tg://msg?text=${encodedText}`;
+        break;
+      case 'facebook':
+        url = `fb://facewebmodal/f?href=${encodeURIComponent('https://www.facebook.com/sharer.php?u=' + encodedText)}`;
+        break;
+      case 'twitter':
+        url = `twitter://post?message=${encodedText}`;
+        break;
+      case 'linkedin':
+        url = `linkedin://sharing?message=${encodedText}`;
+        break;
+      default:
+        throw new Error(`Plateforme non supportée: ${platform}`);
+    }
+    
+    const supported = await Linking.canOpenURL(url);
+    if (supported) {
+      await Linking.openURL(url);
+      return { success: true, message: `Partage sur ${platform} ouvert` };
+    } else {
+      throw new Error(`${platform} n'est pas installé sur cet appareil`);
+    }
+  } catch (error) {
+    console.error(`Erreur lors du partage sur ${platform}:`, error);
     throw error;
   }
 };

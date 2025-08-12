@@ -1,15 +1,15 @@
 // utils/skills-api.js
 import api from './api';
 
-// API pour obtenir les évaluations de compétences
-export const getSkillsAssessments = async (filters = {}) => {
+// API pour obtenir les tests disponibles
+export const getAvailableTests = async (filters = {}) => {
   try {
-    const response = await api.get('/skills/assessments', {
+    const response = await api.get('/skill-assessments/available-tests', {
       params: filters
     });
     return response.data;
   } catch (error) {
-    console.error("Échec de l'appel API getSkillsAssessments:", error.response?.data || error.message);
+    console.error("Échec de l'appel API getAvailableTests:", error.response?.data || error.message);
     throw error;
   }
 };
@@ -25,45 +25,35 @@ export const getAssessmentCategories = async () => {
   }
 };
 
-// API pour démarrer une évaluation
-export const startAssessment = async (assessmentId) => {
+// API pour démarrer un test
+export const startTest = async (testId) => {
   try {
-    const response = await api.post(`/skills/assessments/${assessmentId}/start`);
+    const response = await api.post(`/skill-assessments/tests/${testId}/start`);
     return response.data;
   } catch (error) {
-    console.error("Échec de l'appel API startAssessment:", error.response?.data || error.message);
+    console.error("Échec de l'appel API startTest:", error.response?.data || error.message);
     throw error;
   }
 };
 
-// API pour obtenir les détails d'une session d'évaluation
-export const getAssessmentSession = async (sessionId) => {
+// API pour obtenir les questions d'un assessment
+export const getAssessmentQuestions = async (assessmentId) => {
   try {
-    const response = await api.get(`/skills/assessment-sessions/${sessionId}`);
+    const response = await api.get(`/skill-assessments/assessments/${assessmentId}/questions`);
     return response.data;
   } catch (error) {
-    console.error("Échec de l'appel API getAssessmentSession:", error.response?.data || error.message);
-    throw error;
-  }
-};
-
-// API pour obtenir la question suivante dans une évaluation
-export const getNextQuestion = async (sessionId) => {
-  try {
-    const response = await api.get(`/skills/assessment-sessions/${sessionId}/next-question`);
-    return response.data;
-  } catch (error) {
-    console.error("Échec de l'appel API getNextQuestion:", error.response?.data || error.message);
+    console.error("Échec de l'appel API getAssessmentQuestions:", error.response?.data || error.message);
     throw error;
   }
 };
 
 // API pour soumettre une réponse
-export const submitAnswer = async (sessionId, questionId, answer) => {
+export const submitAnswer = async (assessmentId, questionId, answer, timeTaken = null) => {
   try {
-    const response = await api.post(`/skills/assessment-sessions/${sessionId}/answer`, {
+    const response = await api.post(`/skill-assessments/assessments/${assessmentId}/answer`, {
       question_id: questionId,
-      answer: answer
+      answer: answer,
+      time_taken: timeTaken
     });
     return response.data;
   } catch (error) {
@@ -72,21 +62,21 @@ export const submitAnswer = async (sessionId, questionId, answer) => {
   }
 };
 
-// API pour terminer une évaluation
-export const finishAssessment = async (sessionId) => {
+// API pour terminer/soumettre un test
+export const submitTest = async (assessmentId) => {
   try {
-    const response = await api.post(`/skills/assessment-sessions/${sessionId}/finish`);
+    const response = await api.post(`/skill-assessments/assessments/${assessmentId}/submit`);
     return response.data;
   } catch (error) {
-    console.error("Échec de l'appel API finishAssessment:", error.response?.data || error.message);
+    console.error("Échec de l'appel API submitTest:", error.response?.data || error.message);
     throw error;
   }
 };
 
-// API pour obtenir les résultats d'une évaluation
-export const getAssessmentResults = async (sessionId) => {
+// API pour obtenir les résultats d'un assessment
+export const getAssessmentResults = async (assessmentId) => {
   try {
-    const response = await api.get(`/skills/assessment-sessions/${sessionId}/results`);
+    const response = await api.get(`/skill-assessments/assessments/${assessmentId}/results`);
     return response.data;
   } catch (error) {
     console.error("Échec de l'appel API getAssessmentResults:", error.response?.data || error.message);
@@ -94,13 +84,15 @@ export const getAssessmentResults = async (sessionId) => {
   }
 };
 
-// API pour obtenir l'historique des évaluations
-export const getAssessmentHistory = async () => {
+// API pour obtenir les assessments de l'utilisateur
+export const getUserAssessments = async (filters = {}) => {
   try {
-    const response = await api.get('/skills/assessment-history');
+    const response = await api.get('/skill-assessments/my-assessments', {
+      params: filters
+    });
     return response.data;
   } catch (error) {
-    console.error("Échec de l'appel API getAssessmentHistory:", error.response?.data || error.message);
+    console.error("Échec de l'appel API getUserAssessments:", error.response?.data || error.message);
     throw error;
   }
 };
@@ -164,24 +156,15 @@ export const getImprovementRecommendations = async (sessionId) => {
   }
 };
 
-// API pour créer une évaluation personnalisée
-export const createCustomAssessment = async (assessmentData) => {
-  try {
-    const response = await api.post('/skills/custom-assessment', assessmentData);
-    return response.data;
-  } catch (error) {
-    console.error("Échec de l'appel API createCustomAssessment:", error.response?.data || error.message);
-    throw error;
-  }
-};
+// Note: Custom test creation removed - system now uses predefined tests only
 
 // API pour obtenir les questions d'une évaluation (pour les employeurs)
-export const getAssessmentQuestions = async (assessmentId) => {
+export const getEmployerAssessmentQuestions = async (assessmentId) => {
   try {
     const response = await api.get(`/skills/assessments/${assessmentId}/questions`);
     return response.data;
   } catch (error) {
-    console.error("Échec de l'appel API getAssessmentQuestions:", error.response?.data || error.message);
+    console.error("Échec de l'appel API getEmployerAssessmentQuestions:", error.response?.data || error.message);
     throw error;
   }
 };
