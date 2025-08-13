@@ -14,7 +14,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../../../../components/ThemeContext';
 import { useAuth } from '../../../../components/AuthProvider';
-import { getAssessmentResults } from '../../../../utils/skills-api';
+import { getAssessmentResults, startTest, cancelAssessment } from '../../../../utils/skills-api';
 import CustomHeader from '../../../../components/CustomHeader';
 import { LinearGradient } from 'expo-linear-gradient';
 import { format } from 'date-fns';
@@ -92,6 +92,61 @@ export default function SkillAssessmentResultsScreen() {
       case 'avance': return '#EF4444';
       case 'expert': return '#8B5CF6';
       default: return '#6B7280';
+    }
+  };
+
+  const handleRetakeTest = async () => {
+    if (!results) return;
+
+    const testId = results.test.id.toString();
+
+    try {
+      // Essayer de démarrer un nouveau test
+      await startTest(testId);
+      // Si ça marche, naviguer vers l'écran de test
+      router.push(`/skills-assessment/test/${testId}`);
+    } catch (error: any) {
+      console.error('Erreur lors du redémarrage du test:', error);
+      
+      // Vérifier si c'est une erreur 409 (test en cours)
+      if (error.response?.status === 409) {
+        const errorData = error.response.data;
+        console.log('Erreur 409 détectée depuis les résultats:', errorData);
+        
+        if (errorData?.assessment_id) {
+          const existingAssessmentId = errorData.assessment_id;
+          
+          Alert.alert(
+            'Test en cours',
+            'Un autre test est en cours. Que voulez-vous faire ?',
+            [
+              {
+                text: 'Annuler',
+                style: 'cancel'
+              },
+              {
+                text: 'Redémarrer',
+                onPress: async () => {
+                  try {
+                    // Annuler l'assessment existant
+                    await cancelAssessment(existingAssessmentId);
+                    // Démarrer un nouveau test
+                    await startTest(testId);
+                    // Naviguer vers l'écran de test
+                    router.push(`/skills-assessment/test/${testId}`);
+                  } catch (restartError) {
+                    console.error('Erreur lors du redémarrage:', restartError);
+                    Alert.alert('Erreur', 'Impossible de redémarrer le test');
+                  }
+                }
+              }
+            ]
+          );
+          return;
+        }
+      }
+      
+      Alert.alert('Erreur', 'Impossible de redémarrer le test');
     }
   };
 
@@ -465,7 +520,7 @@ ${results.assessment.passed ? '✅ Réussi' : '❌ Échoué'}
 
           <TouchableOpacity
             style={[styles.actionButton, { backgroundColor: colors.secondary }]}
-            onPress={() => router.push(`/skills-assessment/test/${results.test.id}`)}
+            onPress={handleRetakeTest}
           >
             <Ionicons name="refresh" size={20} color="#FFFFFF" />
             <Text style={[styles.actionButtonText, { color: '#FFFFFF' }]}>

@@ -10,6 +10,7 @@ import {
   getMatchScore,
   trackRecommendationInteraction
 } from '../../../utils/ai-api';
+import { getCandidatProfile } from '../../../utils/api';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import CustomHeader from '../../../components/CustomHeader';
@@ -54,14 +55,39 @@ export default function AIRecommendationsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filterByScore, setFilterByScore] = useState<number | null>(null);
+  const [candidatProfile, setCandidatProfile] = useState<any>(null);
 
   const fetchRecommendations = useCallback(async () => {
     try {
       setLoading(true);
       console.log('Fetching recommendations with minScore:', filterByScore);
+      
+      // Récupérer le profil candidat complet comme dans profile-details.tsx
+      console.log('Récupération du profil candidat via getCandidatProfile...');
+      const candidatData = await getCandidatProfile();
+      setCandidatProfile(candidatData);
+      
+      // Récupérer les IDs des compétences depuis le profil candidat
+      const userCompetenceIds = candidatData?.competences?.map(comp => comp.id) || [];
+      
+      console.log('Profil candidat récupéré:', {
+        userId: user?.id,
+        candidatId: candidatData?.id,
+        competencesCount: userCompetenceIds.length,
+        competenceIds: userCompetenceIds,
+        competenceNames: candidatData?.competences?.map(c => c.libelle_competence) || [],
+        hasExperiences: candidatData?.experiences?.length > 0,
+        hasParsedCv: !!candidatData?.parsed_cv?.summary,
+        parsedCvSummary: candidatData?.parsed_cv?.summary ? 'Présent' : 'Manquant'
+      });
+      
       const response = await getAIJobRecommendations({
         minScore: filterByScore,
-        limit: 20
+        limit: 20,
+        // Envoyer explicitement les IDs des compétences depuis candidat_has_competences
+        competence_ids: userCompetenceIds,
+        // S'assurer que le backend utilise les compétences relationnelles
+        source: 'candidat_competences' // Indique au backend d'utiliser la relation candidat_has_competences
       });
 
       // Transform Laravel API response to match the interface
@@ -502,8 +528,10 @@ export default function AIRecommendationsScreen() {
         marginBottom: 16,
       }}>
         {filterByScore !== null
-          ? 'Essayez de réduire le filtre de score ou complétez votre profil'
-          : 'Complétez votre profil pour obtenir de meilleures recommandations personnalisées'
+          ? 'Essayez de réduire le filtre de score pour voir plus d\'offres'
+          : candidatProfile?.competences?.length > 0
+            ? 'Aucune offre ne correspond actuellement à votre profil. Revenez plus tard pour découvrir de nouvelles opportunités.'
+            : 'Ajoutez des compétences à votre profil pour recevoir des recommandations personnalisées'
         }
       </Text>
       {filterByScore !== null ? (
@@ -522,19 +550,21 @@ export default function AIRecommendationsScreen() {
           </Text>
         </TouchableOpacity>
       ) : null}
-      <TouchableOpacity
-        style={{
-          backgroundColor: colors.secondary,
-          paddingHorizontal: 20,
-          paddingVertical: 10,
-          borderRadius: 25,
-        }}
-        onPress={() => router.push('/profile-details')}
-      >
-        <Text style={{ color: colors.textPrimary, fontWeight: '600' }}>
-          Compléter mon profil
-        </Text>
-      </TouchableOpacity>
+      {candidatProfile?.competences?.length === 0 && (
+        <TouchableOpacity
+          style={{
+            backgroundColor: colors.secondary,
+            paddingHorizontal: 20,
+            paddingVertical: 10,
+            borderRadius: 25,
+          }}
+          onPress={() => router.push('/profile-details')}
+        >
+          <Text style={{ color: colors.textPrimary, fontWeight: '600' }}>
+            Ajouter des compétences
+          </Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 

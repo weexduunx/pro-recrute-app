@@ -39,6 +39,35 @@ interface User {
   photo_profil?: string;
   is_otp_verified?: boolean;
   is_contract_active?: boolean;
+  candidat_profile?: {
+    competences?: Array<{
+      id: number;
+      libelle_competence: string;
+      pivot?: { niveau_competence?: number };
+    }>;
+    experiences?: Array<{
+      titre: string;
+      entreprise: string;
+      lieux?: string;
+      date_debut: string;
+      date_fin: string;
+      missions?: string;
+    }>;
+    formations?: Array<{
+      nomDiplome: string;
+      universite: string;
+      dateDebut?: string;
+      dateFin?: string;
+      description?: string;
+    }>;
+    parsed_cv?: {
+      full_name?: string;
+      email?: string;
+      phone?: string;
+      summary?: string;
+    };
+    [key: string]: any;
+  };
 }
 
 interface AuthContextType {
@@ -57,6 +86,7 @@ interface AuthContextType {
   clearError: () => void;
   isAppReady: boolean;
   fetchUser: () => Promise<void>;
+  refreshUserProfile: () => Promise<void>;
   completeOnboarding: () => Promise<void>;
 }
 
@@ -111,6 +141,33 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       await AsyncStorage.removeItem(STORAGE_KEYS.USER_TOKEN);
       setUser(null);
       setToken(null);
+      throw e; 
+    }
+  }, []);
+
+  const refreshUserProfile = useCallback(async () => {
+    try {
+      console.log('Rechargement du profil utilisateur avec toutes les relations...');
+      const fetchedUser = await fetchUserProfile();
+      if (fetchedUser && fetchedUser.role === 'interimaire') { 
+        const interimProfile = await getInterimProfile();
+        if (interimProfile) {
+          fetchedUser.is_contract_active = interimProfile.is_contract_active;
+        } else {
+          fetchedUser.is_contract_active = false;
+        }
+      }
+      console.log('Profil utilisateur rechargé:', {
+        userId: fetchedUser?.id,
+        hasCandidatProfile: !!fetchedUser?.candidat_profile,
+        competencesCount: fetchedUser?.candidat_profile?.competences?.length || 0,
+        experiencesCount: fetchedUser?.candidat_profile?.experiences?.length || 0,
+        hasParsedCv: !!fetchedUser?.candidat_profile?.parsed_cv?.summary
+      });
+      setUser(fetchedUser);
+      return fetchedUser;
+    } catch (e: any) { 
+      console.error("AuthProvider: Échec de refreshUserProfile:", e);
       throw e; 
     }
   }, []);
@@ -454,6 +511,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     clearError,
     isAppReady,
     fetchUser,
+    refreshUserProfile,
     completeOnboarding,
   };
 

@@ -8,7 +8,8 @@ import {
   Alert,
   ActivityIndicator,
   ScrollView,
-  Dimensions
+  Dimensions,
+  TextInput
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -18,7 +19,9 @@ import {
   startTest, 
   getAssessmentQuestions, 
   submitAnswer, 
-  submitTest 
+  submitTest,
+  cancelAssessment,
+  resumeSkillAssessment
 } from '../../../../utils/skills-api';
 import CustomHeader from '../../../../components/CustomHeader';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -28,7 +31,7 @@ const { width } = Dimensions.get('window');
 interface Question {
   id: number;
   question: string;
-  type_question: 'qcm' | 'qcu' | 'text' | 'boolean';
+  type_question: 'multiple_choice' | 'true_false' | 'text' | 'code' | 'practical' | 'qcm' | 'qcu' | 'boolean';
   options: string[] | null;
   points: number;
   ordre: number;
@@ -54,7 +57,7 @@ interface TestData {
 export default function SkillTestScreen() {
   const { colors } = useTheme();
   const { user } = useAuth();
-  const { testId } = useLocalSearchParams();
+  const { testId, resumeAssessmentId } = useLocalSearchParams();
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -93,19 +96,235 @@ export default function SkillTestScreen() {
         }
       }
     } catch (error: any) {
-      console.error('Erreur lors du démarrage du test:', error);
+      // Vérifier si c'est une erreur 409 (test déjà en cours)
+      if (error.response?.status === 409) {
+        const errorData = error.response.data;
+        
+        if (errorData?.assessment_id) {
+          const existingAssessmentId = errorData.assessment_id;
+          
+          // S'assurer que l'état est réinitialisé avant d'afficher l'Alert
+          setStarting(false);
+          setLoading(false);
+          
+          // Utiliser setTimeout pour s'assurer que l'Alert s'affiche après que l'état soit mis à jour
+          setTimeout(() => {
+            try {
+              Alert.alert(
+                'Test en cours',
+                'Vous avez déjà un test en cours. Vous pouvez reprendre où vous vous étiez arrêté ou redémarrer complètement.',
+                [
+                  {
+                    text: 'Annuler',
+                    style: 'cancel',
+                    onPress: () => {
+                      console.log('Utilisateur a choisi Annuler');
+                      router.back();
+                    }
+                  },
+                  {
+                    text: 'Reprendre',
+                    onPress: () => {
+                      console.log('Utilisateur a choisi Reprendre');
+                      setStarting(true);
+                      resumeExistingAssessment(existingAssessmentId);
+                    }
+                  },
+                  {
+                    text: 'Redémarrer',
+                    onPress: () => {
+                      console.log('Utilisateur a choisi Redémarrer');
+                      setStarting(true);
+                      restartAssessment(existingAssessmentId);
+                    }
+                  }
+                ]
+              );
+            } catch (alertError) {
+              console.error('Erreur lors de l\'affichage de l\'Alert:', alertError);
+            }
+          }, 100);
+          return;
+        } else {
+          Alert.alert(
+            'Test en cours', 
+            'Vous avez déjà un test en cours. Veuillez terminer le test en cours avant d\'en commencer un nouveau.',
+            [
+              {
+                text: 'OK',
+                onPress: () => {
+                  setStarting(false);
+                  setLoading(false);
+                  router.back();
+                }
+              }
+            ]
+          );
+          return;
+        }
+      } else {
+        // Pour les autres erreurs (non 409)
+        console.error('Erreur lors du démarrage du test:', error);
+      }
+      
       Alert.alert('Erreur', 'Impossible de démarrer le test');
-    } finally {
       setStarting(false);
       setLoading(false);
     }
   }, [testId]);
 
+  const resumeExistingAssessment = useCallback(async (assessmentId: number) => {
+    try {
+      console.log('Tentative de reprise avec assessment ID:', assessmentId);
+      
+      // Utiliser le nouveau endpoint resumeSkillAssessment
+      const resumeResponse = await resumeSkillAssessment(assessmentId);
+      console.log('Réponse de reprise:', resumeResponse);
+      
+      if (resumeResponse.success) {
+        const assessmentData = resumeResponse.data;
+        
+        setAssessment({ 
+          id: assessmentData.assessment_id,
+          time_remaining: assessmentData.time_remaining,
+          progress: assessmentData.progress
+        });
+        
+        setTestData(assessmentData.test);
+        setTimeRemaining(assessmentData.time_remaining);
+        
+        console.log('Assessment ID:', assessmentData.assessment_id);
+        console.log('Temps restant:', assessmentData.time_remaining);
+        console.log('Progrès:', assessmentData.progress);
+        
+        // Charger les questions
+        const questionsResponse = await getAssessmentQuestions(assessmentData.assessment_id);
+        if (questionsResponse.success) {
+          setQuestions(questionsResponse.data.questions);
+          console.log('Questions configurées:', questionsResponse.data.questions.length);
+          
+          // Restaurer les réponses existantes si disponibles
+          if (assessmentData.existing_answers) {
+            setAnswers(assessmentData.existing_answers);
+            console.log('Réponses existantes restaurées:', Object.keys(assessmentData.existing_answers).length);
+            
+            // Calculer la question courante basée sur les réponses
+            const answeredQuestions = Object.keys(assessmentData.existing_answers).length;
+            setCurrentQuestionIndex(Math.min(answeredQuestions, questionsResponse.data.questions.length - 1));
+            console.log('Question courante définie à:', answeredQuestions);
+          } else {
+            // Aucune réponse existante, commencer au début
+            setAnswers({});
+            setCurrentQuestionIndex(0);
+          }
+          
+          questionStartTime.current = Date.now();
+          console.log('Test repris avec succès');
+        }
+      } else {
+        console.error('Échec de reprise:', resumeResponse);
+        throw new Error(resumeResponse.message || 'Impossible de reprendre le test');
+      }
+    } catch (error: any) {
+      console.error('Erreur lors de la reprise du test:', error);
+      console.error('Détails de l\'erreur:', error.response?.data || error.message);
+      
+      // Afficher une erreur spécifique selon le type d'erreur
+      let errorMessage = 'Impossible de reprendre le test.';
+      if (error.response?.status === 404) {
+        errorMessage = 'Le test demandé n\'existe pas ou n\'est plus disponible.';
+      } else if (error.response?.status === 403) {
+        errorMessage = 'Vous n\'avez pas l\'autorisation d\'accéder à ce test.';
+      } else if (error.response?.status === 400) {
+        const responseData = error.response?.data;
+        if (responseData?.reason) {
+          errorMessage = responseData.reason;
+        }
+      }
+      
+      Alert.alert('Erreur', errorMessage + ' Nous allons vous rediriger vers la liste des tests.');
+      router.back();
+    } finally {
+      setStarting(false);
+      setLoading(false);
+    }
+  }, []);
+
+  const restartAssessment = useCallback(async (existingAssessmentId: number) => {
+    try {
+      console.log('Tentative de redémarrage avec assessment ID existant:', existingAssessmentId);
+      
+      // D'abord, essayer d'annuler l'assessment existant
+      try {
+        console.log('Annulation de l\'assessment existant...');
+        await cancelAssessment(existingAssessmentId);
+        console.log('Assessment annulé avec succès');
+      } catch (cancelError: any) {
+        console.warn('Impossible d\'annuler l\'assessment existant:', cancelError.response?.data || cancelError.message);
+        // Si l'annulation échoue, essayer quand même de reprendre
+        await resumeExistingAssessment(existingAssessmentId);
+        return;
+      }
+      
+      // Ensuite, démarrer un nouveau test
+      console.log('Démarrage d\'un nouveau test...');
+      const response = await startTest(testId as string);
+      
+      if (response.success) {
+        setTestData(response.data.test);
+        setAssessment({ 
+          id: response.data.assessment_id,
+          time_remaining: response.data.test.duree_minutes * 60,
+          progress: 0 
+        });
+        setTimeRemaining(response.data.test.duree_minutes * 60);
+        setAnswers({}); // Réinitialiser les réponses
+        setCurrentQuestionIndex(0); // Recommencer à la première question
+        
+        // Charger les questions
+        const questionsResponse = await getAssessmentQuestions(response.data.assessment_id);
+        if (questionsResponse.success) {
+          setQuestions(questionsResponse.data.questions);
+          questionStartTime.current = Date.now();
+          console.log('Test redémarré avec succès');
+        }
+      }
+      
+    } catch (error: any) {
+      console.error('Erreur lors du redémarrage du test:', error);
+      
+      Alert.alert(
+        'Impossible de redémarrer',
+        'Le test ne peut pas être redémarré pour le moment. Nous allons vous rediriger vers la liste des tests.',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              setStarting(false);
+              setLoading(false);
+              router.back();
+            }
+          }
+        ]
+      );
+      return;
+    } finally {
+      setStarting(false);
+      setLoading(false);
+    }
+  }, [testId, resumeExistingAssessment]);
+
   useEffect(() => {
     if (testId) {
-      startAssessment();
+      // Si on a un resumeAssessmentId depuis l'index, reprendre directement l'assessment
+      if (resumeAssessmentId) {
+        console.log('Reprise directe de l\'assessment:', resumeAssessmentId);
+        resumeExistingAssessment(Number(resumeAssessmentId));
+      } else {
+        startAssessment();
+      }
     }
-  }, [testId, startAssessment]);
+  }, [testId, resumeAssessmentId, startAssessment, resumeExistingAssessment]);
 
   // Timer effect
   useEffect(() => {
@@ -222,11 +441,28 @@ export default function SkillTestScreen() {
     return '#EF4444';
   };
 
+  // Helper function to extract text and value from options (can be string or object)
+  const getOptionData = (option: any) => {
+    if (typeof option === 'string') {
+      return { text: option, value: option };
+    }
+    if (typeof option === 'object' && option !== null) {
+      return {
+        text: option.text || option.label || option.value || String(option),
+        value: option.value || option.text || option.label || String(option)
+      };
+    }
+    return { text: String(option), value: String(option) };
+  };
+
   const renderQuestion = () => {
     if (!questions[currentQuestionIndex]) return null;
     
     const question = questions[currentQuestionIndex];
     const currentAnswer = answers[question.id];
+    
+    // Debug log pour voir la structure des options
+    console.log('Question options:', question.options);
 
     return (
       <View style={styles.questionContainer}>
@@ -234,10 +470,15 @@ export default function SkillTestScreen() {
           {question.question}
         </Text>
 
-        {question.type_question === 'qcm' && question.options && (
+        {(question.type_question === 'multiple_choice' || question.type_question === 'qcm') && question.options && (
           <View style={styles.optionsContainer}>
             {question.options.map((option, index) => {
-              const isSelected = Array.isArray(currentAnswer) && currentAnswer.includes(option);
+              const { text: optionText, value: optionValue } = getOptionData(option);
+              
+              // Pour les questions à choix multiple, on peut avoir plusieurs réponses
+              const isSelected = question.type_question === 'multiple_choice' 
+                ? (Array.isArray(currentAnswer) ? currentAnswer.includes(optionValue) : currentAnswer === optionValue)
+                : (Array.isArray(currentAnswer) && currentAnswer.includes(optionValue));
               
               return (
                 <TouchableOpacity
@@ -250,31 +491,39 @@ export default function SkillTestScreen() {
                     }
                   ]}
                   onPress={() => {
-                    let newAnswer = Array.isArray(currentAnswer) ? [...currentAnswer] : [];
-                    if (isSelected) {
-                      newAnswer = newAnswer.filter(a => a !== option);
+                    // Si c'est une question 'multiple_choice', on traite comme choix unique
+                    if (question.type_question === 'multiple_choice') {
+                      handleAnswer(optionValue);
                     } else {
-                      newAnswer.push(option);
+                      // Sinon, traitement multiple choice classique
+                      let newAnswer = Array.isArray(currentAnswer) ? [...currentAnswer] : [];
+                      if (isSelected) {
+                        newAnswer = newAnswer.filter(a => a !== optionValue);
+                      } else {
+                        newAnswer.push(optionValue);
+                      }
+                      handleAnswer(newAnswer);
                     }
-                    handleAnswer(newAnswer);
                   }}
                 >
                   <View style={[
-                    styles.optionCheckbox,
+                    question.type_question === 'multiple_choice' ? styles.optionRadio : styles.optionCheckbox,
                     {
                       backgroundColor: isSelected ? colors.secondary : 'transparent',
                       borderColor: isSelected ? colors.secondary : '#9CA3AF'
                     }
                   ]}>
                     {isSelected && (
-                      <Ionicons name="checkmark" size={16} color="#FFFFFF" />
+                      question.type_question === 'multiple_choice' 
+                        ? <View style={[styles.optionRadioDot, { backgroundColor: colors.secondary }]} />
+                        : <Ionicons name="checkmark" size={16} color="#FFFFFF" />
                     )}
                   </View>
                   <Text style={[
                     styles.optionText,
                     { color: isSelected ? colors.secondary : colors.textSecondary }
                   ]}>
-                    {option}
+                    {optionText}
                   </Text>
                 </TouchableOpacity>
               );
@@ -282,10 +531,12 @@ export default function SkillTestScreen() {
           </View>
         )}
 
-        {question.type_question === 'qcu' && question.options && (
+        {(question.type_question === 'qcu') && question.options && (
           <View style={styles.optionsContainer}>
             {question.options.map((option, index) => {
-              const isSelected = currentAnswer === option;
+              const { text: optionText, value: optionValue } = getOptionData(option);
+              
+              const isSelected = currentAnswer === optionValue;
               
               return (
                 <TouchableOpacity
@@ -297,7 +548,7 @@ export default function SkillTestScreen() {
                       borderColor: isSelected ? colors.secondary : '#E5E7EB'
                     }
                   ]}
-                  onPress={() => handleAnswer(option)}
+                  onPress={() => handleAnswer(optionValue)}
                 >
                   <View style={[
                     styles.optionRadio,
@@ -316,7 +567,7 @@ export default function SkillTestScreen() {
                     styles.optionText,
                     { color: isSelected ? colors.secondary : colors.textSecondary }
                   ]}>
-                    {option}
+                    {optionText}
                   </Text>
                 </TouchableOpacity>
               );
@@ -324,7 +575,7 @@ export default function SkillTestScreen() {
           </View>
         )}
 
-        {question.type_question === 'boolean' && (
+        {(question.type_question === 'true_false' || question.type_question === 'boolean') && (
           <View style={styles.booleanContainer}>
             {[true, false].map((value) => {
               const isSelected = currentAnswer === value;
@@ -351,6 +602,54 @@ export default function SkillTestScreen() {
                 </TouchableOpacity>
               );
             })}
+          </View>
+        )}
+
+        {(question.type_question === 'text' || question.type_question === 'code') && (
+          <View style={styles.textInputContainer}>
+            <TextInput
+              style={[
+                styles.textInput,
+                {
+                  backgroundColor: colors.background,
+                  borderColor: '#E5E7EB',
+                  color: colors.text,
+                  minHeight: question.type_question === 'code' ? 150 : 100,
+                }
+              ]}
+              multiline
+              placeholder={question.type_question === 'code' 
+                ? "Entrez votre code ici..." 
+                : "Entrez votre réponse ici..."}
+              placeholderTextColor={colors.textSecondary}
+              value={currentAnswer || ''}
+              onChangeText={(text) => setAnswers(prev => ({
+                ...prev,
+                [question.id]: text
+              }))}
+              textAlignVertical="top"
+              fontSize={question.type_question === 'code' ? 14 : 16}
+              fontFamily={question.type_question === 'code' ? 'monospace' : undefined}
+            />
+            <TouchableOpacity
+              style={[
+                styles.submitTextButton,
+                { 
+                  backgroundColor: currentAnswer && currentAnswer.trim() ? colors.secondary : '#E5E7EB',
+                }
+              ]}
+              onPress={() => handleAnswer(currentAnswer)}
+              disabled={!currentAnswer || !currentAnswer.trim()}
+            >
+              <Text style={[
+                styles.submitTextButtonText,
+                { 
+                  color: currentAnswer && currentAnswer.trim() ? '#FFFFFF' : '#9CA3AF'
+                }
+              ]}>
+                Valider la réponse
+              </Text>
+            </TouchableOpacity>
           </View>
         )}
       </View>
@@ -646,5 +945,27 @@ const styles = {
     fontSize: 16,
     fontWeight: '600' as const,
     marginHorizontal: 8,
+  },
+  textInputContainer: {
+    marginTop: 8,
+  },
+  textInput: {
+    borderWidth: 2,
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 16,
+    lineHeight: 22,
+    marginBottom: 16,
+  },
+  submitTextButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  submitTextButtonText: {
+    fontSize: 16,
+    fontWeight: '600' as const,
   },
 };

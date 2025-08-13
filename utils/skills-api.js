@@ -26,12 +26,37 @@ export const getAssessmentCategories = async () => {
 };
 
 // API pour démarrer un test
-export const startTest = async (testId) => {
+export const startTest = async (testId, options = {}) => {
   try {
-    const response = await api.post(`/skill-assessments/tests/${testId}/start`);
+    const response = await api.post(`/skill-assessments/tests/${testId}/start`, options);
     return response.data;
   } catch (error) {
-    console.error("Échec de l'appel API startTest:", error.response?.data || error.message);
+    // Pour les erreurs autres que 409, on log normalement
+    if (error.response?.status !== 409) {
+      console.error("Erreur API startTest:", error.response?.status, error.response?.data || error.message);
+    }
+    throw error;
+  }
+};
+
+// API pour annuler/supprimer un assessment existant
+export const cancelAssessment = async (assessmentId) => {
+  try {
+    const response = await api.delete(`/skill-assessments/assessments/${assessmentId}`);
+    return response.data;
+  } catch (error) {
+    console.error("Échec de l'appel API cancelAssessment:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+// API pour reprendre un assessment existant
+export const resumeSkillAssessment = async (assessmentId) => {
+  try {
+    const response = await api.post(`/skill-assessments/assessments/${assessmentId}/resume`);
+    return response.data;
+  } catch (error) {
+    console.error("Échec de l'appel API resumeSkillAssessment:", error.response?.data || error.message);
     throw error;
   }
 };

@@ -49,7 +49,10 @@ api.interceptors.response.use(
       // L'AuthProvider devrait gérer la redirection vers l'écran de connexion
     } else {
       // Loggue les autres erreurs API comme des erreurs (y compris les 500)
-      console.error('Erreur API:', error.response?.status, error.response?.data || error.message);
+      // Mais pas les 409 qui sont des cas normaux pour les skill assessments
+      if (error.response?.status !== 409) {
+        console.error('Erreur API:', error.response?.status, error.response?.data || error.message);
+      }
     }
     return Promise.reject(error);
   }
@@ -83,7 +86,23 @@ export const registerUser = async (name, email, password, passwordConfirmation, 
 
 export const fetchUserProfile = async () => {
   try {
-    const response = await api.get('/user');
+    // Récupérer l'utilisateur avec toutes ses relations candidat_profile, compétences, expériences, etc.
+    const response = await api.get('/user', {
+      params: {
+        include_profile: true, // Demande d'inclure candidat_profile
+        include_competences: true, // Demande d'inclure les compétences via candidat_has_competences
+        include_experiences: true, // Demande d'inclure les expériences
+        include_formations: true, // Demande d'inclure les formations
+        include_parsed_cv: true // Demande d'inclure le CV parsé
+      }
+    });
+    console.log('Données utilisateur complètes récupérées:', {
+      userId: response.data.user?.id,
+      hasCandidatProfile: !!response.data.user?.candidat_profile,
+      competencesCount: response.data.user?.candidat_profile?.competences?.length || 0,
+      experiencesCount: response.data.user?.candidat_profile?.experiences?.length || 0,
+      hasParsedCv: !!response.data.user?.candidat_profile?.parsed_cv
+    });
     return response.data;
   } catch (error) {
     throw error; // Laisser AuthProvider gérer l'erreur (y compris le 401)

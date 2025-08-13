@@ -4,9 +4,15 @@ import api from './api';
 // API pour obtenir les recommandations d'emplois basées sur l'IA
 export const getAIJobRecommendations = async (filters = {}) => {
   try {
-    const response = await api.get('/recommendations', {
-      params: filters
+    console.log('Appel API ai/job-recommendations avec filtres:', filters);
+    const response = await api.get('/ai/job-recommendations', {
+      params: {
+        ...filters
+        // Les filtres incluent maintenant competence_ids et source
+        // qui indiquent explicitement d'utiliser candidat_has_competences
+      }
     });
+    console.log('Réponse API ai/job-recommendations:', response.data);
     return response.data;
   } catch (error) {
     console.error("Échec de l'appel API getAIJobRecommendations:", error.response?.data || error.message);
@@ -216,3 +222,4 @@ export const submitAIFeedback = async (feedbackData) => {
     throw error;
   }
 };
+

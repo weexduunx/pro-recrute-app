@@ -18,6 +18,7 @@ import { useAuth } from "../../components/AuthProvider";
 import CustomHeader from "../../components/CustomHeader";
 import { getOffres, getRecommendedOffres, getActualites } from "../../utils/api";
 import { getAIJobRecommendations } from "../../utils/ai-api";
+import { getCandidatProfile } from "../../utils/api";
 import { router } from "expo-router";
 import { LinearGradient } from 'expo-linear-gradient';
 import EvilIcons from '@expo/vector-icons/EvilIcons';
@@ -245,8 +246,35 @@ export default function HomeScreen() {
       try {
         setLoadingRecommendations(true);
         
-        // Utiliser les recommandations IA à la place
-        const aiResponse = await getAIJobRecommendations({ limit: 5 });
+        // Récupérer le profil candidat pour obtenir les compétences
+        console.log('HomeScreen: Récupération du profil candidat...');
+        const candidatData = await getCandidatProfile();
+        
+        // Récupérer les IDs des compétences depuis le profil candidat
+        const userCompetenceIds = candidatData?.competences?.map(comp => comp.id) || [];
+        
+        console.log('HomeScreen: Compétences trouvées:', {
+          competencesCount: userCompetenceIds.length,
+          competenceIds: userCompetenceIds,
+          competenceNames: candidatData?.competences?.map(c => c.libelle_competence) || []
+        });
+        
+        // Si l'utilisateur n'a pas de compétences, afficher un message approprié
+        if (userCompetenceIds.length === 0) {
+          console.log('HomeScreen: Aucune compétence trouvée, pas de recommandations personnalisées');
+          setErrorRecommendations("Ajoutez des compétences à votre profil pour recevoir des recommandations personnalisées.");
+          setLoadingRecommendations(false);
+          return;
+        }
+        
+        // Utiliser les recommandations IA avec les compétences de l'utilisateur
+        const aiResponse = await getAIJobRecommendations({ 
+          limit: 5,
+          // Envoyer explicitement les IDs des compétences depuis candidat_has_competences
+          competence_ids: userCompetenceIds,
+          // S'assurer que le backend utilise les compétences relationnelles
+          source: 'candidat_competences'
+        });
         
         // Transformer les recommandations IA pour correspondre au format attendu
         const transformedRecommendations = aiResponse.data.recommendations.map((rec: any) => ({
@@ -269,8 +297,14 @@ export default function HomeScreen() {
         }));
         
         setRecommendedOffres(transformedRecommendations);
-        console.log('HomeScreen: Recommandations IA récupérées:', transformedRecommendations.length, 'avec scores moyens:', 
-          transformedRecommendations.reduce((sum: number, rec: any) => sum + (rec.match_score || 0), 0) / transformedRecommendations.length);
+        console.log('HomeScreen: Recommandations IA récupérées:', {
+          count: transformedRecommendations.length,
+          averageScore: transformedRecommendations.length > 0 
+            ? transformedRecommendations.reduce((sum: number, rec: any) => sum + (rec.match_score || 0), 0) / transformedRecommendations.length 
+            : 0,
+          titles: transformedRecommendations.map((rec: any) => rec.poste.titre_poste).slice(0, 3),
+          userCompetences: candidatData?.competences?.map(c => c.libelle_competence) || []
+        });
       } catch (err: any) {
         console.log('Erreur recommandations IA, fallback vers recommandations classiques:', err.message);
         
@@ -280,7 +314,7 @@ export default function HomeScreen() {
           setRecommendedOffres(fetchedRecommendations.slice(0, 5));
           console.log('HomeScreen: Recommandations classiques récupérées:', fetchedRecommendations.length);
         } catch (fallbackErr: any) {
-          setErrorRecommendations("Remplissez votre profil pour recevoir des recommandations personnalisées.");
+          setErrorRecommendations("Complétez votre profil (compétences, expériences) pour recevoir des recommandations personnalisées.");
         }
       } finally {
         setLoadingRecommendations(false);
@@ -593,7 +627,7 @@ export default function HomeScreen() {
                 <View style={styles.emptyStateContainer}>
                   <Text style={styles.emptyStateIcon}>💡</Text>
                   <Text style={styles.emptyStateText}>
-                    Pas de recommandations pour le moment. Téléchargez votre CV pour en obtenir !
+                    Pas de recommandations pour le moment. Complétez votre profil (compétences, expériences) pour en obtenir !
                   </Text>
                 </View>
               )}
