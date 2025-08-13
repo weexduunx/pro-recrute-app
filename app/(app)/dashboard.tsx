@@ -50,7 +50,6 @@ export default function DashboardScreen() {
     missingFields: [] as string[]
   });
   const [candidatProfile, setCandidatProfile] = useState<any>(null);
-  const [parsedCv, setParsedCv] = useState<any>(null);
   const [weeklyActivity, setWeeklyActivity] = useState({
     newApplications: 0,
     profileViews: 0,
@@ -78,14 +77,14 @@ export default function DashboardScreen() {
     if (!candidatProfile?.date_naissance) missingProfileFields.push('Date de naissance');
     if (!candidatProfile?.genre) missingProfileFields.push('Genre');
 
-    // Calcul des champs manquants du CV (4 champs)
-    if (!parsedCv?.summary) missingCvFields.push('Résumé');
+    // Calcul des champs manquants du CV (4 champs) - même logique que profile-details.tsx
+    if (!candidatProfile?.parsed_cv?.summary) missingCvFields.push('Résumé');
     if (!candidatProfile?.competences?.length) missingCvFields.push('Compétences');
     if (!candidatProfile?.experiences?.length) missingCvFields.push('Expériences');
     if (!candidatProfile?.formations?.length) missingCvFields.push('Formations');
 
     const totalProfileFields = 5;
-    const totalCvFields = 4;
+    const totalCvFields = 4; // Résumé + Compétences + Expériences + Formations
     const totalFields = totalProfileFields + totalCvFields;
 
     const profilePercentage = Math.round(((totalProfileFields - missingProfileFields.length) / totalProfileFields) * 100);
@@ -98,7 +97,7 @@ export default function DashboardScreen() {
       cv: cvPercentage,
       missingFields: [...missingProfileFields, ...missingCvFields]
     };
-  }, [candidatProfile, parsedCv]);
+  }, [candidatProfile]);
 
   const loadApplications = useCallback(async () => {
     if (user) {
@@ -171,26 +170,15 @@ export default function DashboardScreen() {
   const loadProfileData = useCallback(async () => {
     if (user) {
       try {
-        // Charger le profil candidat
+        // Charger le profil candidat (qui inclut parsed_cv)
         const candidatData = await getCandidatProfile();
         setCandidatProfile(candidatData);
-
-        // Charger les données CV parsées
-        try {
-          const cvData = await getParsedCvData();
-          setParsedCv(cvData);
-        } catch (cvError) {
-          console.log('Aucune donnée CV parsée disponible');
-          setParsedCv(null);
-        }
       } catch (error: any) {
         console.error("Erreur de chargement des données de profil:", error);
         setCandidatProfile(null);
-        setParsedCv(null);
       }
     } else {
       setCandidatProfile(null);
-      setParsedCv(null);
     }
   }, [user]);
 
@@ -252,7 +240,7 @@ export default function DashboardScreen() {
 
   useEffect(() => {
     setProfileCompletion(calculateProfileCompletion());
-  }, [candidatProfile, parsedCv, calculateProfileCompletion]);
+  }, [candidatProfile, calculateProfileCompletion]);
 
   const handleRecommendedOffrePress = (offreId: string) => {
     router.push(`/(app)/job_board/job_details?id=${offreId}`);

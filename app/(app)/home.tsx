@@ -296,6 +296,9 @@ export default function HomeScreen() {
           created_at: rec.offre?.created_at || new Date().toISOString()
         }));
         
+        console.log('HomeScreen: DEBUG - Réponse API brute:', aiResponse.data);
+        console.log('HomeScreen: DEBUG - Recommandations transformées:', transformedRecommendations);
+        
         setRecommendedOffres(transformedRecommendations);
         console.log('HomeScreen: Recommandations IA récupérées:', {
           count: transformedRecommendations.length,

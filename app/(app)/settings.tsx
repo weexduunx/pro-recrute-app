@@ -43,6 +43,7 @@ import {
 import { useTheme } from '../../components/ThemeContext';
 import { useLanguage } from '../../components/LanguageContext';
 import { useLocationBasedJobs } from '../../hooks/useLocationBasedJobs';
+import UnifiedModal, { ModalSection, ModalText } from '../../components/UnifiedModal';
 
 // Configuration pour les notifications en arrière-plan (headless)
 Notifications.setNotificationHandler({
@@ -1087,109 +1088,94 @@ const SessionDeviceIcon = ({ session, colors }) => {
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide">
-      <View style={[styles.modalOverlay]}>
-        <View style={[styles.modalContent, styles.largeModal, { backgroundColor: colors.cardBackground }]}>
-          <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
-            <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>
-              {t('Sessions actives')}
-            </Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <TouchableOpacity onPress={refreshSessions} style={{ marginRight: 16 }}>
-                <Feather name="refresh-cw" size={20} color={colors.textPrimary} />
-              </TouchableOpacity>
-              <TouchableOpacity onPress={onClose}>
-                <Feather name="x" size={24} color={colors.textPrimary} />
-              </TouchableOpacity>
-            </View>
-          </View>
+    <UnifiedModal
+      visible={visible}
+      onClose={onClose}
+      title={t('Sessions actives')}
+      fullHeight={true}
+      rightHeaderComponent={
+        <TouchableOpacity onPress={refreshSessions} style={{ marginRight: 8 }}>
+          <Feather name="refresh-cw" size={20} color={colors.textPrimary} />
+        </TouchableOpacity>
+      }
+    >
 
-          {loading ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color={colors.secondary} />
-              <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
-                {t('Chargement des sessions...')}
-              </Text>
-            </View>
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.secondary} />
+          <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
+            {t('Chargement des sessions...')}
+          </Text>
+        </View>
+      ) : (
+        <>
+          {sessions.length === 0 ? (
+            <ModalSection last={true}>
+              <View style={styles.emptyContainer}>
+                <Feather name="smartphone" size={48} color={colors.textSecondary} />
+                <ModalText variant="secondary">
+                  {t('Aucune session active trouvée')}
+                </ModalText>
+              </View>
+            </ModalSection>
           ) : (
-            <ScrollView style={styles.sessionsList}>
-              {sessions.length === 0 ? (
-                <View style={styles.emptyContainer}>
-                  <Feather name="smartphone" size={48} color={colors.textSecondary} />
-                  <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-                    {t('Aucune session active trouvée')}
-                  </Text>
-                </View>
-              ) : (
-                sessions.map((session) => (
-                  <View key={session.id} style={[styles.sessionItem, { borderBottomColor: colors.border }]}>
-                    <View style={styles.sessionLeft}>
-                      {/* <View style={[styles.deviceIconContainer, { backgroundColor: colors.secondary + '20' }]}>
-                        <Feather 
-                          name={getDeviceIcon(session.deviceType, session.os)} 
-                          size={20} 
-                          color={colors.secondary} 
-                        />
-                      </View> */}
-                      <SessionDeviceIcon session={session} colors={colors} />
-                      <View style={styles.sessionInfo}>
-                        <View style={styles.sessionHeader}>
-                          <Text style={[styles.sessionDevice, { color: colors.textPrimary }]}>
-                            {session.device}
-                          </Text>
-                          {session.current && (
-                            <View style={[styles.currentBadge, { backgroundColor: colors.secondary }]}>
-                              <Text style={styles.currentBadgeText}>{t('Actuel')}</Text>
-                            </View>
-                          )}
-                        </View>
-                        
-                        <Text style={[styles.sessionOS, { color: colors.textSecondary }]}>
-                          {session.os}
-                        </Text>
-                        
-                        <Text style={[styles.sessionLocation, { color: colors.textSecondary }]}>
-                          📍 {session.location}
-                        </Text>
-                        
-                        <Text style={[styles.sessionActivity, { color: colors.textSecondary }]}>
-                          🕒 {t('Dernière activité')}: {session.lastActivity}
-                        </Text>
-                        
-                        {session.ip && (
-                          <Text style={[styles.sessionIP, { color: colors.textSecondary }]}>
-                            🌐 IP: {session.ip} • {session.networkType}
-                          </Text>
+            sessions.map((session, index) => (
+              <ModalSection 
+                key={session.id} 
+                icon="smartphone" 
+                title={session.device}
+                last={index === sessions.length - 1}
+              >
+                <View style={styles.sessionContent}>
+                  <View style={styles.sessionLeft}>
+                    <SessionDeviceIcon session={session} colors={colors} />
+                    <View style={styles.sessionInfo}>
+                      <View style={styles.sessionHeader}>
+                        <ModalText variant="bold">{session.device}</ModalText>
+                        {session.current && (
+                          <View style={[styles.currentBadge, { backgroundColor: colors.secondary }]}>
+                            <Text style={styles.currentBadgeText}>{t('Actuel')}</Text>
+                          </View>
                         )}
                       </View>
+                      
+                      <ModalText>{session.os}</ModalText>
+                      <ModalText>📍 {session.location}</ModalText>
+                      <ModalText>🕒 {t('Dernière activité')}: {session.lastActivity}</ModalText>
+                      
+                      {session.ip && (
+                        <ModalText variant="secondary">
+                          🌐 IP: {session.ip} • {session.networkType}
+                        </ModalText>
+                      )}
                     </View>
-
-                    {!session.current && (
-                      <TouchableOpacity
-                        style={[styles.terminateButton, { backgroundColor: colors.error }]}
-                        onPress={() => terminateSession(session.id)}
-                      >
-                        <Text style={styles.terminateButtonText}>{t('Terminer')}</Text>
-                      </TouchableOpacity>
-                    )}
                   </View>
-                ))
-              )}
-            </ScrollView>
+
+                  {!session.current && (
+                    <TouchableOpacity
+                      style={[styles.terminateButton, { backgroundColor: colors.error }]}
+                      onPress={() => terminateSession(session.id)}
+                    >
+                      <Text style={styles.terminateButtonText}>{t('Terminer')}</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </ModalSection>
+            ))
           )}
-          
-          {/* Footer avec informations de sécurité */}
-          <View style={[styles.modalFooter, { borderTopColor: colors.border, backgroundColor: colors.background }]}>
-            <View style={styles.securityInfo}>
-              <Feather name="shield" size={16} color={colors.textSecondary} />
-              <Text style={[styles.securityText, { color: colors.textSecondary }]}>
-                {t('Terminez les sessions suspectes pour protéger votre compte')}
-              </Text>
-            </View>
-          </View>
+        </>
+      )}
+      
+      {/* Footer avec informations de sécurité - Message important */}
+      <ModalSection icon="shield" title={t('Sécurité')} last={true}>
+        <View style={[styles.securityWarning, { backgroundColor: colors.error + '10', borderColor: colors.error + '30' }]}>
+          <Feather name="alert-triangle" size={16} color={colors.error} />
+          <ModalText style={{ color: colors.error, marginLeft: 8, fontWeight: '600' }}>
+            {t('Terminez les sessions suspectes pour protéger votre compte')}
+          </ModalText>
         </View>
-      </View>
-    </Modal>
+      </ModalSection>
+    </UnifiedModal>
   );
 };
 
@@ -1201,11 +1187,11 @@ const StorageManagementModal: React.FC<{
   const { colors } = useTheme();
   const { t } = useLanguage();
   const [storageData, setStorageData] = useState([
-    { label: t('Données de l\'application'), size: 'Calcul...', color: '#3B82F6', bytes: 0 },
-    { label: t('Cache'), size: 'Calcul...', color: '#EF4444', bytes: 0 },
-    { label: t('Images téléchargées'), size: 'Calcul...', color: '#10B981', bytes: 0 },
-    { label: t('Documents'), size: 'Calcul...', color: '#F59E0B', bytes: 0 },
-    { label: t('Autres'), size: 'Calcul...', color: '#8B5CF6', bytes: 0 }
+    { label: 'Données de l\'application', size: 'Calcul...', color: '#3B82F6', bytes: 0 },
+    { label: 'Cache', size: 'Calcul...', color: '#EF4444', bytes: 0 },
+    { label: 'Images téléchargées', size: 'Calcul...', color: '#10B981', bytes: 0 },
+    { label: 'Documents', size: 'Calcul...', color: '#F59E0B', bytes: 0 },
+    { label: 'Autres', size: 'Calcul...', color: '#8B5CF6', bytes: 0 }
   ]);
   const [totalSize, setTotalSize] = useState('Calcul...');
   const [loading, setLoading] = useState(false);
@@ -1319,68 +1305,61 @@ const StorageManagementModal: React.FC<{
 
   return (
     <Modal visible={visible} transparent animationType="slide">
-      <View style={styles.modalOverlay}>
-        <View style={[styles.modalContent, { backgroundColor: colors.cardBackground }]}>
-          <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
-            <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>
-              {t('Gestion du stockage')}
+      <View style={{ flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'flex-end' }}>
+        <View style={{ 
+          backgroundColor: '#FFFFFF',
+          borderTopLeftRadius: 24,
+          borderTopRightRadius: 24,
+          maxHeight: '90%',
+          paddingBottom: 20
+        }}>
+          {/* Header */}
+          <View style={{
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            padding: 20,
+            paddingBottom: 10,
+            borderBottomWidth: 1,
+            borderBottomColor: '#F3F4F6'
+          }}>
+            <Text style={{ fontSize: 20, fontWeight: '700', color: '#091e60' }}>
+              Gestion du stockage
             </Text>
-            <TouchableOpacity onPress={onClose}>
-              <Feather name="x" size={24} color={colors.textPrimary} />
+            <TouchableOpacity onPress={onClose} style={{ padding: 8 }}>
+              <Feather name="x" size={24} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
 
+          {/* Content */}
           <View style={{ padding: 20 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
-              <Text style={[{ fontSize: 16, fontWeight: '600', color: colors.textPrimary }]}>
-                {t('Espace utilisé')}: {totalSize}
-              </Text>
-              {loading && <ActivityIndicator size="small" color={colors.primary} style={{ marginLeft: 10 }} />}
-            </View>
-
+            <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#091e60' }}>
+              Espace utilisé: {totalSize}
+            </Text>
+            
+            <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#091e60', marginTop: 20 }}>
+              Détail par catégorie:
+            </Text>
+            
             {storageData.map((item, index) => (
-              <View key={index} style={[{
-                flexDirection: 'row',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                paddingVertical: 12,
-                borderBottomWidth: StyleSheet.hairlineWidth,
-                borderBottomColor: colors.border
-              }]}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                  <View style={[{
-                    width: 12,
-                    height: 12,
-                    borderRadius: 6,
-                    marginRight: 10,
-                    backgroundColor: item.color
-                  }]} />
-                  <Text style={[{ color: colors.textPrimary }]}>{item.label}</Text>
+              <View key={index} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: item.color, marginRight: 10 }} />
+                  <Text style={{ color: colors.textSecondary }}>{item.label}</Text>
                 </View>
-                <Text style={[{ color: colors.textSecondary, fontWeight: '500' }]}>
-                  {item.size}
-                </Text>
+                <Text style={{ fontWeight: 'bold', color: '#091e60' }}>{item.size}</Text>
               </View>
             ))}
-
+            
             <TouchableOpacity
-              style={[{
-                backgroundColor: colors.error,
-                padding: 12,
-                borderRadius: 8,
-                alignItems: 'center',
-                marginTop: 20
-              }]}
+              style={{ backgroundColor: colors.error, padding: 12, borderRadius: 8, alignItems: 'center', marginTop: 20 }}
               onPress={() => {
-                Alert.alert(t('Cache vidé'), t('Le cache a été vidé avec succès'));
+                Alert.alert('Cache vidé', 'Le cache a été vidé avec succès');
                 onClose();
               }}
             >
-              <Text style={{ color: '#FFFFFF', fontWeight: '600' }}>
-                {loading 
-                  ? t('Calcul...') 
-                  : t(`Vider le cache (${storageData[0]?.size || '0 B'})`)
-                }
+              <Text style={{ color: '#FFFFFF', fontWeight: 'bold' }}>
+                Vider le cache
               </Text>
             </TouchableOpacity>
           </View>
@@ -1399,11 +1378,11 @@ const PermissionsModal: React.FC<{
   const { t } = useLanguage();
   const [permissions, setPermissions] = useState([
     { name: t('Appareil photo'), status: 'checking', icon: 'camera', description: t('Prendre des photos de profil') },
-    { name: t('Galerie'), status: 'checking', icon: 'image', description: t('Sélectionner des images') },
-    { name: t('Localisation'), status: 'checking', icon: 'map-pin', description: t('Localiser les offres d\'emploi') },
+    { name: t('Galerie'), status: 'checking', icon: 'images', description: t('Sélectionner des images') },
+    { name: t('Localisation'), status: 'checking', icon: 'map-marker-alt', description: t('Localiser les offres d\'emploi') },
     { name: t('Notifications'), status: 'checking', icon: 'bell', description: t('Recevoir des alertes') },
     { name: t('Stockage'), status: 'checking', icon: 'folder', description: t('Sauvegarder des documents') },
-    { name: t('Microphone'), status: 'checking', icon: 'mic', description: t('Enregistrer des messages vocaux') }
+    { name: t('Microphone'), status: 'checking', icon: 'microphone', description: t('Enregistrer des messages vocaux') }
   ]);
 
   const checkPermissions = async () => {
@@ -1493,112 +1472,79 @@ const PermissionsModal: React.FC<{
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide">
-      <View style={styles.modalOverlay}>
-        <View style={[styles.modalContent, styles.largeModal, { backgroundColor: colors.cardBackground }]}>
-          <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
-            <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>
-              {t('Permissions de l\'application')}
-            </Text>
-            <TouchableOpacity onPress={onClose}>
-              <Feather name="x" size={24} color={colors.textPrimary} />
+    <UnifiedModal
+      visible={visible}
+      onClose={onClose}
+      title={t('Permissions de l\'application')}
+      fullHeight={true}
+    >
+      {permissions.map((permission, index) => (
+        <ModalSection 
+          key={index}
+          icon={permission.icon}
+          title={permission.name}
+          last={index === permissions.length - 1}
+        >
+          <View style={styles.permissionContent}>
+            <View style={styles.permissionInfo}>
+              <ModalText>{permission.description}</ModalText>
+              <View style={[styles.statusBadge, { backgroundColor: getStatusColor(permission.status) + '20' }]}>
+                <View style={[styles.statusDot, { backgroundColor: getStatusColor(permission.status) }]} />
+                <ModalText style={{ color: getStatusColor(permission.status), fontWeight: '600' }}>
+                  {getStatusText(permission.status)}
+                </ModalText>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.permissionButton, { backgroundColor: colors.secondary + '20' }]}
+              onPress={() => {
+                if (permission.status === 'denied' && (index === 2 || index === 3)) {
+                  // Permissions de localisation et notifications peuvent être demandées
+                  Alert.alert(
+                    t('Demander la permission'),
+                    t('Voulez-vous autoriser cette permission maintenant ?'),
+                    [
+                      { text: t('Annuler'), style: 'cancel' },
+                      { text: t('Autoriser'), onPress: () => requestPermission(index) }
+                    ]
+                  );
+                } else {
+                  Alert.alert(
+                    t('Gérer la permission'),
+                    t('Cette permission doit être modifiée dans les paramètres système de votre appareil.'),
+                    [
+                      { text: t('Annuler'), style: 'cancel' },
+                      { text: t('Ouvrir paramètres'), onPress: () => {
+                        if (Platform.OS === 'ios') {
+                          Linking.openURL('app-settings:');
+                        } else {
+                          Linking.openSettings();
+                        }
+                      }}
+                    ]
+                  );
+                }
+              }}
+            >
+              <Text style={[styles.permissionButtonText, { color: colors.secondary }]}>
+                {permission.status === 'denied' && (index === 2 || index === 3) ? t('Demander') : t('Gérer')}
+              </Text>
             </TouchableOpacity>
           </View>
-
-          <ScrollView style={{ flex: 1, padding: 20 }}>
-            {permissions.map((permission, index) => (
-              <View key={index} style={[{
-                flexDirection: 'row',
-                alignItems: 'center',
-                paddingVertical: 16,
-                borderBottomWidth: StyleSheet.hairlineWidth,
-                borderBottomColor: colors.border
-              }]}>
-                <View style={[{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 20,
-                  backgroundColor: getStatusColor(permission.status) + '20',
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  marginRight: 16
-                }]}>
-                  <Feather 
-                    name={permission.icon as any} 
-                    size={18} 
-                    color={getStatusColor(permission.status)} 
-                  />
-                </View>
-                
-                <View style={{ flex: 1 }}>
-                  <Text style={[{ fontSize: 16, fontWeight: '600', color: colors.textPrimary }]}>
-                    {permission.name}
-                  </Text>
-                  <Text style={[{ fontSize: 12, color: colors.textSecondary, marginTop: 2 }]}>
-                    {permission.description}
-                  </Text>
-                  <Text style={[{ 
-                    fontSize: 12, 
-                    color: getStatusColor(permission.status), 
-                    fontWeight: '500',
-                    marginTop: 4 
-                  }]}>
-                    {getStatusText(permission.status)}
-                  </Text>
-                </View>
-
-                <TouchableOpacity
-                  style={[{
-                    paddingHorizontal: 12,
-                    paddingVertical: 6,
-                    borderRadius: 6,
-                    backgroundColor: colors.secondary + '20'
-                  }]}
-                  onPress={() => {
-                    if (permission.status === 'denied' && (index === 2 || index === 3)) {
-                      // Permissions de localisation et notifications peuvent être demandées
-                      Alert.alert(
-                        t('Demander la permission'),
-                        t('Voulez-vous autoriser cette permission maintenant ?'),
-                        [
-                          { text: t('Annuler'), style: 'cancel' },
-                          { text: t('Autoriser'), onPress: () => requestPermission(index) }
-                        ]
-                      );
-                    } else {
-                      Alert.alert(
-                        t('Gérer la permission'),
-                        t('Cette permission doit être modifiée dans les paramètres système de votre appareil.'),
-                        [
-                          { text: t('Annuler'), style: 'cancel' },
-                          { text: t('Ouvrir paramètres'), onPress: () => {
-                            if (Platform.OS === 'ios') {
-                              Linking.openURL('app-settings:');
-                            } else {
-                              Linking.openSettings();
-                            }
-                          }}
-                        ]
-                      );
-                    }
-                  }}
-                >
-                  <Text style={[{ color: colors.secondary, fontSize: 12, fontWeight: '600' }]}>
-                    {permission.status === 'denied' && (index === 2 || index === 3) ? t('Demander') : t('Gérer')}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            ))}
-          </ScrollView>
-
-          <View style={[styles.modalFooter, { borderTopColor: colors.border, backgroundColor: colors.background }]}>
-            <Text style={[{ color: colors.textSecondary, fontSize: 12, textAlign: 'center' }]}>
-              {t('Les permissions peuvent être modifiées dans les paramètres de votre appareil')}
-            </Text>
-          </View>
+        </ModalSection>
+      ))}
+      
+      {/* Message informatif sur les permissions */}
+      <ModalSection icon="info" title={t('Information')} last={true}>
+        <View style={[styles.permissionInfo, { backgroundColor: colors.secondary + '10', borderColor: colors.secondary + '30' }]}>
+          <Feather name="info" size={16} color={colors.secondary} />
+          <ModalText style={{ color: colors.secondary, marginLeft: 8 }}>
+            {t('Les permissions permettent à l\'application de fonctionner de manière optimale. Vous pouvez les modifier à tout moment dans les paramètres système.')}
+          </ModalText>
         </View>
-      </View>
-    </Modal>
+      </ModalSection>
+    </UnifiedModal>
   );
 };
 
@@ -1708,6 +1654,7 @@ export default function ParametresScreen() {
         if (savedAutoLock !== null) setAutoLockEnabled(savedAutoLock === 'true');
         if (savedAutoBackup !== null) setAutoBackupEnabled(savedAutoBackup === 'true');
         if (savedFontSize !== null) setFontSize(savedFontSize);
+        if (savedBiometricEnabled !== null) setBiometricEnabled(savedBiometricEnabled === 'true');
 
         // Vérifier les préférences de géolocalisation
         const locationEnabled = await checkLocationPreferences();
@@ -3000,6 +2947,91 @@ modalOverlay: {
     alignItems: 'center',
     paddingVertical: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  sessionContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    width: '100%',
+  },
+  securityWarning: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    marginTop: 4,
+  },
+  storageItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    marginBottom: 4,
+  },
+  storageLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  storageColorDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginRight: 10,
+  },
+  clearCacheButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  clearCacheText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  storageWarning: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  permissionContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    width: '100%',
+  },
+  permissionInfo: {
+    flex: 1,
+    marginRight: 12,
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginTop: 8,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 6,
+  },
+  permissionButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  permissionButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
   sessionLeft: {
     flexDirection: 'row',
