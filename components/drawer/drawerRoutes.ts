@@ -12,9 +12,9 @@ export const allowedDrawerRoutesByRole: Record<string, string[]> = {
     'settings'
   ],
   interimaire: [
+    '(interimaire)', 
     'dashboard', 
     'profile-details', 
-    '(interimaire)', 
     'job_board', 
     'ai-recommendations', 
     'candidature', 

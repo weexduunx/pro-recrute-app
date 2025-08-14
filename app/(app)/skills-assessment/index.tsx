@@ -25,7 +25,7 @@ interface SkillsAssessment {
   questionCount: number;
   completionRate: number;
   averageScore: number;
-  status: 'not_started' | 'in_progress' | 'completed';
+  status: 'not_started' | 'in_progress' | 'completed' | 'expired_or_abandoned';
   lastAttempt?: {
     score: number;
     completedAt: string;
@@ -54,6 +54,7 @@ export default function SkillsAssessmentScreen() {
   const [stats, setStats] = useState<AssessmentStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [startingAssessmentId, setStartingAssessmentId] = useState<string | null>(null);
 
   const fetchAssessments = useCallback(async () => {
     try {
@@ -78,8 +79,20 @@ export default function SkillsAssessmentScreen() {
           let lastAttempt = undefined;
           
           if (userAssessment) {
+            console.log(`[Skills] Assessment trouvé pour test ${test.id}: statut=${userAssessment.statut}, id=${userAssessment.id}`);
             if (userAssessment.statut === 'en_cours') {
-              status = 'in_progress';
+              // Vérifier si c'est vraiment en cours ou abandonné
+              const now = new Date();
+              const updatedAt = new Date(userAssessment.updated_at);
+              const hoursSinceUpdate = (now.getTime() - updatedAt.getTime()) / (1000 * 60 * 60);
+              
+              // Si pas d'activité depuis plus de 2 heures, considérer comme abandonné
+              if (hoursSinceUpdate > 2) {
+                console.log(`[Skills] Assessment ${userAssessment.id} probablement abandonné (${hoursSinceUpdate.toFixed(1)}h d'inactivité)`);
+                status = 'expired_or_abandoned';
+              } else {
+                status = 'in_progress';
+              }
             } else if (userAssessment.statut === 'termine') {
               status = 'completed';
               lastAttempt = {
@@ -88,7 +101,8 @@ export default function SkillsAssessmentScreen() {
                 percentile: Math.floor(Math.random() * 40) + 60 // Mock percentile
               };
             } else if (userAssessment.statut === 'expire' || userAssessment.statut === 'abandonne') {
-              status = 'not_started'; // Permettre de refaire
+              status = 'expired_or_abandoned'; // Marquer pour nettoyage automatique
+              console.log(`[Skills] Assessment ${userAssessment.id} marqué comme expired_or_abandoned`);
             }
           }
           
@@ -130,19 +144,49 @@ export default function SkillsAssessmentScreen() {
         let averageScore = 0;
         if (completedTests > 0) {
           const validScores = completedAssessments
-            .map(a => a.pourcentage)
-            .filter(score => score != null && !isNaN(score) && score >= 0);
+            .map(a => {
+              // S'assurer que le pourcentage est un nombre
+              const score = typeof a.pourcentage === 'string' ? parseFloat(a.pourcentage) : a.pourcentage;
+              return score;
+            })
+            .filter(score => score != null && !isNaN(score) && score >= 0 && score <= 100);
           
           if (validScores.length > 0) {
             averageScore = validScores.reduce((sum, score) => sum + score, 0) / validScores.length;
           }
         }
         
+        // Calculer le temps total réel passé
+        let totalTimeSpent = 0;
+        completedAssessments.forEach(assessment => {
+          if (assessment.duree_reelle_minutes && !isNaN(assessment.duree_reelle_minutes)) {
+            totalTimeSpent += parseInt(assessment.duree_reelle_minutes);
+          } else if (assessment.debut_test && assessment.fin_test) {
+            // Calculer la durée basée sur les timestamps
+            const start = new Date(assessment.debut_test);
+            const end = new Date(assessment.fin_test);
+            const durationMinutes = (end.getTime() - start.getTime()) / (1000 * 60);
+            totalTimeSpent += Math.max(0, Math.round(durationMinutes));
+          } else {
+            // Fallback: utiliser la durée prévue du test
+            const testDuration = assessment.skill_test?.duree_minutes || 30;
+            totalTimeSpent += testDuration;
+          }
+        });
+
+        // Calculer les compétences uniques validées
+        const uniqueSkills = new Set(
+          completedAssessments
+            .filter(a => a.reussi) // Seulement les tests réussis
+            .map(a => a.skill_test?.competence_id || a.skill_test?.competence?.id)
+            .filter(id => id != null)
+        );
+
         setStats({
           totalCompleted: completedTests,
           averageScore: averageScore,
-          skillsValidated: completedTests, // Mock: assume 1 skill per completed test
-          totalTimeSpent: completedTests * 30 // 30 minutes per test (en minutes)
+          skillsValidated: uniqueSkills.size,
+          totalTimeSpent: totalTimeSpent // en minutes
         });
       }
       
@@ -253,6 +297,7 @@ export default function SkillsAssessmentScreen() {
       case 'in_progress':
         return '#FB8500';
       case 'not_started':
+      case 'expired_or_abandoned':
         return colors.textSecondary;
       default:
         return colors.textSecondary;
@@ -266,6 +311,7 @@ export default function SkillsAssessmentScreen() {
       case 'in_progress':
         return 'En cours';
       case 'not_started':
+      case 'expired_or_abandoned':
         return 'Non commencé';
       default:
         return status;
@@ -274,6 +320,14 @@ export default function SkillsAssessmentScreen() {
 
   const handleStartAssessment = async (assessment: SkillsAssessment) => {
     try {
+      // Protection contre les doubles clics
+      if (startingAssessmentId === assessment.id) {
+        console.log(`[Skills] Double clic détecté, ignoré pour: ${assessment.id}`);
+        return;
+      }
+      
+      setStartingAssessmentId(assessment.id);
+      console.log(`[Skills] Démarrage assessment: ${assessment.title}, statut: ${assessment.status}, id: ${assessment.id}`);
       if (assessment.status === 'completed') {
         Alert.alert(
           'Test déjà passé',
@@ -298,11 +352,64 @@ export default function SkillsAssessmentScreen() {
         }
       }
 
-      // Essayer de démarrer le test directement
+      // Pour les assessments expirés/abandonnés, nettoyer et redémarrer
+      if (assessment.status === 'expired_or_abandoned') {
+        console.log(`[Skills] Nettoyage assessment expiré/abandonné détecté`);
+        const userAssessmentData = assessment.userAssessmentData;
+        if (userAssessmentData?.id) {
+          try {
+            console.log(`[Skills] Suppression assessment fantôme: ${userAssessmentData.id}`);
+            // Supprimer l'assessment fantôme
+            await cancelAssessment(userAssessmentData.id);
+            console.log(`[Skills] Démarrage nouveau test propre: ${assessment.id}`);
+            // Démarrer un nouveau test propre
+            await startTest(assessment.id);
+            router.push(`/skills-assessment/test/${assessment.id}`);
+            return;
+          } catch (cleanupError: any) {
+            console.error('[Skills] Erreur lors du nettoyage de l\'assessment expiré:', cleanupError);
+            // En cas d'erreur de nettoyage, utiliser la logique de gestion d'erreur 409
+            await handleRefakeTest(assessment.id);
+            return;
+          }
+        }
+      }
+
+      // Pour les nouveaux tests (not_started), essayer de démarrer directement
+      if (assessment.status === 'not_started') {
+        console.log(`[Skills] Tentative de démarrage d'un nouveau test: ${assessment.id}`);
+        try {
+          const response = await startTest(assessment.id);
+          console.log(`[Skills] Test démarré avec succès, response:`, response);
+          if (response.success && response.data?.assessment_id) {
+            // Passer l'assessmentId et les données du test créé à l'écran de test
+            const testData = encodeURIComponent(JSON.stringify(response.data));
+            router.push(`/skills-assessment/test/${assessment.id}?assessmentId=${response.data.assessment_id}&testData=${testData}`);
+          } else {
+            router.push(`/skills-assessment/test/${assessment.id}`);
+          }
+          return;
+        } catch (startError: any) {
+          console.log(`[Skills] Erreur lors du démarrage: status=${startError.response?.status}`, startError.response?.data);
+          // Si erreur 409, alors il y a vraiment un test en cours non détecté
+          if (startError.response?.status === 409) {
+            console.log(`[Skills] Erreur 409 détectée pour nouveau test - gestion via handleRefakeTest`);
+            await handleRefakeTest(assessment.id);
+            return;
+          }
+          // Pour les autres erreurs, les propager
+          throw startError;
+        }
+      }
+
+      // Cas par défaut pour les autres statuts
       await handleRefakeTest(assessment.id);
     } catch (error) {
       console.error('Erreur lors du démarrage du test:', error);
       Alert.alert('Erreur', 'Impossible de démarrer le test');
+    } finally {
+      // Libérer le verrou après un délai
+      setTimeout(() => setStartingAssessmentId(null), 2000);
     }
   };
 
@@ -514,6 +621,7 @@ export default function SkillsAssessmentScreen() {
     const getActionText = () => {
       if (isCompleted) return 'Refaire l\'évaluation';
       if (item.status === 'in_progress') return 'Continuer';
+      if (item.status === 'expired_or_abandoned') return 'Commencer l\'évaluation';
       return 'Commencer l\'évaluation';
     };
 

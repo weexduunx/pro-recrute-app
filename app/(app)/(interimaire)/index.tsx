@@ -18,10 +18,11 @@ import CustomHeader from '../../../components/CustomHeader';
 import { useAuth } from '../../../components/AuthProvider';
 import { useTheme } from '../../../components/ThemeContext';
 import { useLanguage } from '../../../components/LanguageContext';
+import { useNotifications } from '../../../hooks/useNotifications';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { getIpmRecapByMonth, getAffiliatedStructures } from "../../../utils/api"; // NOUVEAU
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, FontAwesome5, FontAwesome6 } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { format } from "date-fns"; // Pour le formatage des dates si nécessaire
 
@@ -61,6 +62,7 @@ export default function InterimDashboardScreen() {
   const { colors } = useTheme();
   const { t } = useLanguage();
   const router = useRouter();
+  const { unreadCount } = useNotifications();
 
   // États pour l'avancement IPM
   const [ipmRecap, setIpmRecap] = useState<IpmRecap[]>([]);
@@ -191,6 +193,9 @@ export default function InterimDashboardScreen() {
   const handleAvatarPress = () => { router.push('/(app)/profile-details'); };
   const handleGoToHrFile = () => { router.push('/(app)/(interimaire)/hr_file'); }; // Chemin absolu
   const handleGoToIpmFile = () => { router.push('/(app)/(interimaire)/ipm_file'); }; // Chemin absolu
+  const handleGoToStructure = () => { router.push('/(app)/(interimaire)/structures'); }; // Chemin absolu
+  const handleGoToReports = () => { router.push('/(app)/(interimaire)/reports'); }; // Chemin absolu
+  const handleGoToAnalytics = () => { router.push('/(app)/(interimaire)/analytics'); }; // Chemin absolu
 
 
   // --- Fonctions de rendu des sections ---
@@ -491,12 +496,49 @@ export default function InterimDashboardScreen() {
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
       <StatusBar barStyle="light-content" backgroundColor="#091e60" />
+      {/* <CustomHeader
+        title={t("Espace Intérimaire")}
+        user={user}
+        onMenuPress={handleMenuPress}
+        onAvatarPress={handleAvatarPress}
+        rightComponent={() => (
+          <TouchableOpacity
+            style={styles.notificationButton}
+            onPress={() => router.push('/(interimaire)/notifications')}
+          >
+            <Ionicons name="notifications-outline" size={24} color={colors.textTertiary} />
+            {unreadCount > 0 && (
+              <View style={[styles.notificationBadge, { backgroundColor: colors.error }]}>
+                <Text style={[styles.notificationBadgeText, { color: colors.textTertiary }]}>
+                  {unreadCount > 99 ? '99+' : unreadCount.toString()}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        )}
+      /> */}
       <CustomHeader
         title={t("Espace Intérimaire")}
         user={user}
         onMenuPress={handleMenuPress}
         onAvatarPress={handleAvatarPress}
+        rightComponent={
+          <TouchableOpacity
+            style={styles.notificationButton}
+            onPress={() => router.push('/(app)/(interimaire)/notifications')}
+          >
+            <Ionicons name="notifications-outline" size={24} color={colors.textTertiary} />
+            {unreadCount > 0 && (
+              <View style={[styles.notificationBadge, { backgroundColor: colors.error }]}>
+                <Text style={[styles.notificationBadgeText, { color: colors.textTertiary }]}>
+                  {unreadCount > 99 ? '99+' : unreadCount.toString()}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        }
       />
+
       <ScrollView contentContainerStyle={styles.scrollContent}>
 
         {user?.is_contract_active === false ? ( // Si contrat inactif
@@ -529,6 +571,7 @@ export default function InterimDashboardScreen() {
               </LinearGradient>
             </View>
 
+            {/* Accés Rapide Dossier RH et IPM */}
             <View style={styles.quickAccessContainer}>
               <TouchableOpacity
                 style={[
@@ -556,6 +599,48 @@ export default function InterimDashboardScreen() {
               </TouchableOpacity>
             </View>
 
+            <View style={styles.quickAccessContainer}>
+              <TouchableOpacity
+                style={[
+                  styles.quickAccessCard,
+                  { backgroundColor: colors.cardBackground },
+                ]}
+                onPress={handleGoToReports}
+              >
+                <Ionicons name="document-attach-outline" size={30} color={colors.primary} />
+
+                <Text style={[styles.quickAccessText, { color: colors.textPrimary }]}>
+                  {t("Rapport")}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.quickAccessCard,
+                  { backgroundColor: colors.cardBackground },
+                ]}
+                onPress={handleGoToAnalytics}
+              >
+                <Ionicons name="analytics" size={30} color={colors.primary} />
+                <Text style={[styles.quickAccessText, { color: colors.textPrimary }]}>
+                  {t("Analytics")}
+                </Text>
+              </TouchableOpacity>
+            </View>
+                        <View style={styles.quickAccessContainer}>
+              <TouchableOpacity
+                style={[
+                  styles.quickAccessCard,
+                  { backgroundColor: colors.cardBackground },
+                ]}
+                onPress={handleGoToStructure}
+              >
+                <FontAwesome6 name="house-medical" size={30} color={colors.error} />
+
+                <Text style={[styles.quickAccessText, { color: colors.textPrimary }]}>
+                  {t("Structures de Soins")}
+                </Text>
+              </TouchableOpacity>
+            </View>
             {/* Section Avancement IPM par mois */}
             {renderIpmRecap()}
 
@@ -613,7 +698,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 8,
-    elevation: 2,
+    elevation: 3,
   },
   quickAccessText: {
     marginTop: 8,
@@ -969,6 +1054,31 @@ const styles = StyleSheet.create({
   rateValue: {
     fontSize: 14,
     fontWeight: 'bold',
+  },
+
+  // Styles pour le bouton de notifications
+  notificationButton: {
+    position: 'relative',
+    padding: 8,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  notificationBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  notificationBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    textAlign: 'center',
   },
 
 });

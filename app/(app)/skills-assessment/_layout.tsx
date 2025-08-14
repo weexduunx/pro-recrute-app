@@ -20,25 +20,19 @@ export default function SkillsAssessmentLayout() {
       <Stack.Screen
         name="index"
         options={{
-          headerShown: false, 
+          headerShown: false,
         }}
       />
       <Stack.Screen
-        name="assessment/[id]"
-        options={{
-          headerShown: false, 
-        }}
-      />
-      <Stack.Screen
-        name="results/[id]"
+        name="results/[assessmentId]"
         options={{
           headerShown: false,
         }}
       />
       <Stack.Screen
-        name="create"
+        name="test/[testId]"
         options={{
-          headerShown: false, 
+          headerShown: false,
         }}
       />
     </Stack>

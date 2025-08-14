@@ -57,7 +57,7 @@ interface TestData {
 export default function SkillTestScreen() {
   const { colors } = useTheme();
   const { user } = useAuth();
-  const { testId, resumeAssessmentId } = useLocalSearchParams();
+  const { testId, resumeAssessmentId, assessmentId, testData: testDataParam } = useLocalSearchParams();
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -173,6 +173,116 @@ export default function SkillTestScreen() {
     }
   }, [testId]);
 
+  const loadFromTestData = useCallback(async (assessmentId: number, encodedTestData: string) => {
+    try {
+      console.log('Chargement depuis les données de test passées');
+      setStarting(true);
+      
+      // Décoder les données du test
+      const parsedTestData = JSON.parse(decodeURIComponent(encodedTestData));
+      console.log('Données du test décodées:', parsedTestData);
+      
+      // Configurer l'assessment avec les données existantes
+      setAssessment({ 
+        id: assessmentId,
+        time_remaining: parsedTestData.test.duree_minutes * 60,
+        progress: 0 
+      });
+      
+      // Configurer les données du test
+      setTestData(parsedTestData.test);
+      setTimeRemaining(parsedTestData.test.duree_minutes * 60);
+      
+      // Maintenant charger les questions via l'API
+      const questionsResponse = await getAssessmentQuestions(assessmentId);
+      console.log('Réponse questions après configuration:', questionsResponse);
+      
+      if (questionsResponse.success && questionsResponse.data?.questions) {
+        setQuestions(questionsResponse.data.questions);
+        console.log(`${questionsResponse.data.questions.length} questions chargées`);
+        
+        // Initialiser
+        setCurrentQuestionIndex(0);
+        setAnswers({});
+        questionStartTime.current = Date.now();
+        setStarting(false);
+        setLoading(false);
+        
+        console.log('Assessment chargé avec succès depuis testData');
+      } else {
+        throw new Error('Impossible de charger les questions');
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement depuis testData:', error);
+      // Fallback: utiliser l'ancien système
+      console.log('Fallback vers loadExistingAssessment');
+      loadExistingAssessment(assessmentId);
+    }
+  }, []);
+
+  const loadExistingAssessment = useCallback(async (existingAssessmentId: number) => {
+    try {
+      console.log('Chargement de l\'assessment existant:', existingAssessmentId);
+      setStarting(true);
+      
+      // Charger les questions de l'assessment existant
+      const questionsResponse = await getAssessmentQuestions(existingAssessmentId);
+      console.log('Réponse getAssessmentQuestions:', questionsResponse);
+      
+      if (questionsResponse.success && questionsResponse.data) {
+        const assessmentData = questionsResponse.data;
+        
+        // Configurer l'assessment
+        setAssessment({ 
+          id: existingAssessmentId,
+          time_remaining: assessmentData.time_remaining || (assessmentData.test?.duree_minutes * 60) || 1800,
+          progress: assessmentData.progress || 0
+        });
+        
+        // Configurer les données du test
+        if (assessmentData.test) {
+          setTestData(assessmentData.test);
+          setTimeRemaining(assessmentData.time_remaining || (assessmentData.test.duree_minutes * 60));
+        }
+        
+        // Charger les questions
+        if (assessmentData.questions && assessmentData.questions.length > 0) {
+          setQuestions(assessmentData.questions);
+          console.log(`${assessmentData.questions.length} questions chargées`);
+        } else {
+          console.warn('Aucune question trouvée dans la réponse');
+        }
+        
+        // Initialiser
+        setCurrentQuestionIndex(0);
+        setAnswers({});
+        questionStartTime.current = Date.now();
+        setStarting(false);
+        setLoading(false);
+        
+        console.log('Assessment chargé avec succès');
+      } else {
+        throw new Error('Réponse API invalide ou échec');
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement de l\'assessment:', error);
+      setStarting(false);
+      setLoading(false);
+      
+      // En cas d'erreur, retourner à l'écran précédent
+      Alert.alert(
+        'Erreur', 
+        'Impossible de charger le test',
+        [
+          {
+            text: 'OK',
+            onPress: () => router.back()
+          }
+        ]
+      );
+    }
+  }, []);
+
   const resumeExistingAssessment = useCallback(async (assessmentId: number) => {
     try {
       console.log('Tentative de reprise avec assessment ID:', assessmentId);
@@ -237,7 +347,47 @@ export default function SkillTestScreen() {
         errorMessage = 'Vous n\'avez pas l\'autorisation d\'accéder à ce test.';
       } else if (error.response?.status === 400) {
         const responseData = error.response?.data;
-        if (responseData?.reason) {
+        
+        // Si l'assessment a été abandonné ou ne peut pas être repris
+        if (responseData?.reason?.includes('abandoned') || responseData?.message?.includes('cannot be resumed')) {
+          console.log('Assessment abandonné détecté, tentative de nettoyage et redémarrage');
+          
+          try {
+            // Supprimer l'assessment abandonné
+            await cancelAssessment(assessmentId);
+            console.log('Assessment abandonné supprimé avec succès');
+            
+            // Redémarrer un nouveau test
+            const response = await startTest(testId as string);
+            if (response.success) {
+              setTestData(response.data.test);
+              setAssessment({ 
+                id: response.data.assessment_id,
+                time_remaining: response.data.test.duree_minutes * 60,
+                progress: 0 
+              });
+              setTimeRemaining(response.data.test.duree_minutes * 60);
+              
+              // Load questions
+              const questionsResponse = await getAssessmentQuestions(response.data.assessment_id);
+              if (questionsResponse.success) {
+                setQuestions(questionsResponse.data.questions);
+                questionStartTime.current = Date.now();
+                setCurrentQuestionIndex(0);
+                setAnswers({});
+                
+                console.log('Nouveau test démarré après nettoyage');
+                setStarting(false);
+                setLoading(false);
+                return; // Exit early on success
+              }
+            }
+          } catch (cleanupError) {
+            console.error('Erreur lors du nettoyage automatique:', cleanupError);
+          }
+          
+          errorMessage = 'Le test précédent a été réinitialisé. Impossible de continuer, retour au menu.';
+        } else if (responseData?.reason) {
           errorMessage = responseData.reason;
         }
       }
@@ -320,11 +470,21 @@ export default function SkillTestScreen() {
       if (resumeAssessmentId) {
         console.log('Reprise directe de l\'assessment:', resumeAssessmentId);
         resumeExistingAssessment(Number(resumeAssessmentId));
+      } else if (assessmentId && testDataParam) {
+        // L'index.tsx a déjà créé l'assessment, utiliser les données passées
+        console.log('Chargement avec données de l\'assessment créé par index.tsx:', assessmentId);
+        loadFromTestData(Number(assessmentId), testDataParam as string);
+      } else if (assessmentId) {
+        // Fallback: charger via API
+        console.log('Chargement direct de l\'assessment créé par index.tsx:', assessmentId);
+        loadExistingAssessment(Number(assessmentId));
       } else {
+        // Fallback: démarrer un nouveau test (ancien comportement)
+        console.log('Démarrage fallback d\'un nouveau test');
         startAssessment();
       }
     }
-  }, [testId, resumeAssessmentId, startAssessment, resumeExistingAssessment]);
+  }, [testId, resumeAssessmentId, assessmentId, testDataParam, startAssessment, resumeExistingAssessment, loadExistingAssessment, loadFromTestData]);
 
   // Timer effect
   useEffect(() => {
@@ -713,7 +873,7 @@ export default function SkillTestScreen() {
         />
 
         {/* Timer and Progress */}
-        <View style={[styles.timerContainer, { backgroundColor: colors.surface }]}>
+        <View style={[styles.timerContainer, { backgroundColor: colors.background }]}>
           <View style={styles.timerInfo}>
             <View style={styles.timerBox}>
               <Ionicons name="time" size={20} color={getTimeColor()} />
@@ -743,7 +903,7 @@ export default function SkillTestScreen() {
         </ScrollView>
 
         {/* Navigation */}
-        <View style={[styles.navigationContainer, { backgroundColor: colors.surface }]}>
+        <View style={[styles.navigationContainer, { backgroundColor: colors.background }]}>
           <TouchableOpacity
             style={[
               styles.navButton,
