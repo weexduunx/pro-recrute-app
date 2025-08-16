@@ -6,10 +6,18 @@ import api from './api';
  */
 
 // Obtenir les statistiques générales du dashboard
-export const getDashboardStats = async (period = 'month') => {
+export const getDashboardStats = async (period = 'month', year = null, showAll = true) => {
   try {
+    const params = { 
+      period,
+      show_all: showAll // Par défaut, afficher toutes les données historiques pour le dashboard
+    };
+    if (year) {
+      params.year = year;
+    }
+    
     const response = await api.get('/interim/analytics/dashboard', {
-      params: { period }
+      params
     });
     return response.data;
   } catch (error) {
@@ -137,7 +145,7 @@ export const getReportsHistory = async () => {
 export const formatCurrency = (amount) => {
   return new Intl.NumberFormat('fr-FR', {
     style: 'currency',
-    currency: 'EUR'
+    currency: 'XOF'
   }).format(amount || 0);
 };
 
@@ -192,10 +200,10 @@ export const getGrowthColor = (growth, colors) => {
 
 // Constantes pour les périodes d'analyse
 export const ANALYTICS_PERIODS = [
-  { label: 'Cette semaine', value: 'week' },
-  { label: 'Ce mois', value: 'month' },
-  { label: 'Ce trimestre', value: 'quarter' },
-  { label: 'Cette année', value: 'year' },
+  { label: 'Semaine', value: 'week' },
+  { label: 'Mois', value: 'month' },
+  { label: 'Trimestre', value: 'quarter' },
+  { label: 'Année', value: 'year' },
   { label: '6 derniers mois', value: '6months' },
   { label: '12 derniers mois', value: '12months' }
 ];

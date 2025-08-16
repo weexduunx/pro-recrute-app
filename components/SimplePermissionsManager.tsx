@@ -10,11 +10,13 @@ interface SimplePermissionsContextType {
   hasRequestedNotifications: boolean;
   requestNotificationPermission: () => Promise<PermissionStatus>;
   checkNotificationPermission: () => Promise<void>;
+  syncWithSettings: () => Promise<void>;
 }
 
 const SimplePermissionsContext = createContext<SimplePermissionsContextType | undefined>(undefined);
 
 const STORAGE_KEY = 'notifications_requested';
+const ENABLED_STORAGE_KEY = 'notifications_enabled';
 
 // Configuration des notifications
 Notifications.setNotificationHandler({
@@ -38,6 +40,7 @@ export const SimplePermissionsProvider = ({ children }: SimplePermissionsProvide
   useEffect(() => {
     checkRequestedStatus();
     checkNotificationPermission();
+    syncWithSettings();
   }, []);
 
   const checkRequestedStatus = async () => {
@@ -58,6 +61,30 @@ export const SimplePermissionsProvider = ({ children }: SimplePermissionsProvide
     }
   };
 
+  const syncWithSettings = async () => {
+    try {
+      // Vérifier si les settings ont changé l'état des notifications
+      const enabledFromSettings = await AsyncStorage.getItem(ENABLED_STORAGE_KEY);
+      const systemPermission = await Notifications.getPermissionsAsync();
+      
+      if (enabledFromSettings !== null) {
+        const isEnabled = enabledFromSettings === 'true';
+        const hasSystemPermission = systemPermission.status === 'granted';
+        
+        // Mettre à jour l'état en fonction des settings ET des permissions système
+        if (isEnabled && hasSystemPermission) {
+          setNotificationPermission('granted');
+          setHasRequestedNotifications(true);
+          await AsyncStorage.setItem(STORAGE_KEY, 'true');
+        } else {
+          setNotificationPermission(hasSystemPermission ? 'granted' : 'denied');
+        }
+      }
+    } catch (error) {
+      console.error('Erreur synchronisation avec settings:', error);
+    }
+  };
+
   const requestNotificationPermission = async (): Promise<PermissionStatus> => {
     try {
       // Marquer comme demandé dès le début
@@ -66,6 +93,9 @@ export const SimplePermissionsProvider = ({ children }: SimplePermissionsProvide
 
       const { status } = await Notifications.requestPermissionsAsync();
       setNotificationPermission(status as PermissionStatus);
+      
+      // Synchroniser avec settings.tsx
+      await AsyncStorage.setItem(ENABLED_STORAGE_KEY, (status === 'granted').toString());
       
       if (status === 'denied') {
         Alert.alert(
@@ -81,6 +111,7 @@ export const SimplePermissionsProvider = ({ children }: SimplePermissionsProvide
       return status as PermissionStatus;
     } catch (error) {
       console.error('Erreur demande permission notifications:', error);
+      await AsyncStorage.setItem(ENABLED_STORAGE_KEY, 'false');
       return 'denied';
     }
   };
@@ -90,6 +121,7 @@ export const SimplePermissionsProvider = ({ children }: SimplePermissionsProvide
     hasRequestedNotifications,
     requestNotificationPermission,
     checkNotificationPermission,
+    syncWithSettings,
   };
 
   return (

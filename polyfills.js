@@ -220,4 +220,7 @@ if (typeof global.FormData === 'undefined') {
   };
 }
 
+// Charger les polyfills de sécurité
+require('./polyfills-security.js');
+
 console.log('✅ Polyfills React Native complets chargés avec succès');

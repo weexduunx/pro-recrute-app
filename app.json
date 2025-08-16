@@ -31,8 +31,8 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "com.weexduunx88.prorecrutegbg",
-      "googleServicesFile":"./google-services.json",
-       "permissions": [
+      "googleServicesFile": "./google-services.json",
+      "permissions": [
         "CAMERA",
         "RECORD_AUDIO",
         "READ_EXTERNAL_STORAGE",
@@ -52,7 +52,6 @@
         "ACCESS_NETWORK_STATE",
         "ACCESS_WIFI_STATE"
       ]
-
     },
     "web": {
       "bundler": "metro",
@@ -75,7 +74,8 @@
         }
       ],
       "expo-web-browser",
-      "expo-notifications"
+      "expo-notifications",
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true

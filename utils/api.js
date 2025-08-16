@@ -1447,10 +1447,11 @@ export const shareToSocialMedia = async (platform, offreData) => {
   }
 };
 
-// Export des nouvelles APIs
-export * from './messaging-api';
-export * from './video-api';
-export * from './ai-api';
-export * from './skills-api';
+// Note: Export des nouvelles APIs commenté pour éviter les cycles d'import
+// Uncomment seulement si les modules n'importent pas api.js
+// export * from './messaging-api';
+// export * from './video-api';
+// export * from './ai-api';
+// export * from './skills-api';
 
 export default api;

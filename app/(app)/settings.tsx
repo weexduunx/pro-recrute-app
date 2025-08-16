@@ -42,6 +42,7 @@ import {
 } from '../../utils/api';
 import { useTheme } from '../../components/ThemeContext';
 import { useLanguage } from '../../components/LanguageContext';
+import { useSimplePermissions } from '../../components/SimplePermissionsManager';
 import { useLocationBasedJobs } from '../../hooks/useLocationBasedJobs';
 import UnifiedModal, { ModalSection, ModalText } from '../../components/UnifiedModal';
 
@@ -1614,8 +1615,27 @@ export default function ParametresScreen() {
 
   useEffect(() => {
     async function getInitialNotificationStatus() {
-      const { status } = await Notifications.getPermissionsAsync();
-      setNotificationEnabled(status === 'granted');
+      try {
+        // Vérifier d'abord les préférences utilisateur sauvegardées
+        const savedNotificationEnabled = await AsyncStorage.getItem('notifications_enabled');
+        
+        if (savedNotificationEnabled !== null) {
+          // Utiliser les préférences sauvegardées
+          const isEnabled = savedNotificationEnabled === 'true';
+          setNotificationEnabled(isEnabled);
+        } else {
+          // Fallback - vérifier les permissions système
+          const { status } = await Notifications.getPermissionsAsync();
+          const isGranted = status === 'granted';
+          setNotificationEnabled(isGranted);
+          
+          // Sauvegarder l'état initial
+          await AsyncStorage.setItem('notifications_enabled', isGranted.toString());
+        }
+      } catch (error) {
+        console.error('Erreur chargement statut notifications:', error);
+        setNotificationEnabled(false);
+      }
     }
     getInitialNotificationStatus();
 
@@ -1724,6 +1744,7 @@ export default function ParametresScreen() {
       if (finalStatus !== 'granted') {
         Alert.alert(t('Permission refusée'), t('Impossible d\'obtenir le push token pour la notification ! Vous pouvez l\'activer dans les paramètres de votre appareil.'));
         setNotificationEnabled(false);
+        await AsyncStorage.setItem('notifications_enabled', 'false');
         return;
       }
 
@@ -1731,6 +1752,11 @@ export default function ParametresScreen() {
       console.log('Expo Push Token:', token);
 
       await savePushToken(token);
+      
+      // Synchroniser avec SimplePermissionsManager
+      await AsyncStorage.setItem('notifications_requested', 'true');
+      await AsyncStorage.setItem('notifications_enabled', 'true');
+      
       Alert.alert(t('Succès'), t('Notifications activées !'));
       setNotificationEnabled(true);
 
@@ -1738,14 +1764,23 @@ export default function ParametresScreen() {
       console.error("Erreur d'enregistrement des notifications:", error);
       Alert.alert(t('Erreur'), t('Impossible d\'activer les notifications. ') + (error.message || t('Veuillez réessayer.')));
       setNotificationEnabled(false);
+      await AsyncStorage.setItem('notifications_enabled', 'false');
     } finally {
       setRegisteringToken(false);
     }
   };
 
   const unregisterForPushNotificationsAsync = async () => {
-    Alert.alert(t('Notifications désactivées'), t('Les notifications ont été désactivées.'));
-    setNotificationEnabled(false);
+    try {
+      // Synchroniser avec SimplePermissionsManager
+      await AsyncStorage.setItem('notifications_enabled', 'false');
+      
+      Alert.alert(t('Notifications désactivées'), t('Les notifications ont été désactivées.'));
+      setNotificationEnabled(false);
+    } catch (error) {
+      console.error('Erreur désactivation notifications:', error);
+      setNotificationEnabled(false);
+    }
   };
 
   const toggleNotifications = async (value: boolean) => {

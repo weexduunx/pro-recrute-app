@@ -7,12 +7,12 @@ import {
   TouchableOpacity,
   SafeAreaView,
   Platform,
-  FlatList,
   Dimensions,
   ActivityIndicator,
   Alert,
   Animated,
   StatusBar,
+   RefreshControl,
 } from "react-native";
 import CustomHeader from '../../../components/CustomHeader';
 import { useAuth } from '../../../components/AuthProvider';
@@ -21,39 +21,29 @@ import { useLanguage } from '../../../components/LanguageContext';
 import { useNotifications } from '../../../hooks/useNotifications';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { getIpmRecapByMonth, getAffiliatedStructures } from "../../../utils/api"; // NOUVEAU
+import { getDashboardStats } from "../../../utils/analytics-api";
 import { Ionicons, FontAwesome5, FontAwesome6 } from '@expo/vector-icons';
-import { Image } from 'expo-image';
-import { format } from "date-fns"; // Pour le formatage des dates si nécessaire
+import { format } from "date-fns";
 
 const { width } = Dimensions.get("window");
 
-// Interfaces pour les données IPM et Structures
-interface IpmRecap {
-  id: number;
-  mois: number;
-  annee: number;
-  consultations: number;
-  soins: number;
-  medicaments: number;
-  protheses: number;
-  examens: number;
-  retenu: number;
-  exclu: number;
-  remboursement: number;
-  name?: string; // Nom de la société, si joint
+// Interface pour les statistiques du dashboard
+interface DashboardStats {
+  total_hours: number;
+  total_revenue: number;
+  active_contracts: number;
+  unique_societies: number;
+  current_society: string;
 }
 
-interface Structure {
-  id: number;
-  name: string;
-  adresse: string;
-  region: string;
-  tel: string;
-  email: string;
-  type: string;
-  PersonneRessource: string;
-  affilie: boolean; // Ou number (0/1) si ce n'est pas casté en boolean par Laravel
+// Interface pour les actions rapides
+interface QuickAction {
+  id: string;
+  title: string;
+  icon: string;
+  color: string;
+  route: string;
+  description?: string;
 }
 
 
@@ -64,24 +54,67 @@ export default function InterimDashboardScreen() {
   const router = useRouter();
   const { unreadCount } = useNotifications();
 
-  // États pour l'avancement IPM
-  const [ipmRecap, setIpmRecap] = useState<IpmRecap[]>([]);
-  const [loadingIpmRecap, setLoadingIpmRecap] = useState(true);
-  const [errorIpmRecap, setErrorIpmRecap] = useState<string | null>(null);
-  const [tauxRetenu, setTauxRetenu] = useState<string | null>(null); // NOUVEAU : État pour le taux de retenue
-  const [tauxRemboursse, setTauxRemboursse] = useState<string | null>(null);
+  // États pour les données du dashboard
+  const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
-  // États pour les structures affiliées
-  const [affiliatedStructures, setAffiliatedStructures] = useState<Structure[]>([]);
-  const [loadingStructures, setLoadingStructures] = useState(true);
-  const [errorStructures, setErrorStructures] = useState<string | null>(null);
-  const [structuresPage, setStructuresPage] = useState(1); // Page actuelle
-  const [hasMoreStructures, setHasMoreStructures] = useState(true); // Y a-t-il plus de pages ?
-  const [loadingMoreStructures, setLoadingMoreStructures] = useState(false); // Chargement de pages supplémentaires
-
-  // Animation d'entrée des sections (peut être conservée ou retirée)
+  // Animation d'entrée des sections
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
+
+  // Actions rapides disponibles
+  const quickActions: QuickAction[] = [
+    {
+      id: 'hr_file',
+      title: t('Dossier RH'),
+      icon: 'folder-outline',
+      color: colors.primary,
+      route: '/(app)/(interimaire)/hr_file',
+      description: 'Documents et informations RH'
+    },
+    {
+      id: 'ipm_file',
+      title: t('Dossier IPM'),
+      icon: 'medkit-outline',
+      color: colors.secondary,
+      route: '/(app)/(interimaire)/ipm_file',
+      description: 'Remboursements santé'
+    },
+    {
+      id: 'analytics',
+      title: t('Analytics'),
+      icon: 'analytics',
+      color: '#8B5CF6',
+      route: '/(app)/(interimaire)/analytics',
+      description: 'Statistiques détaillées'
+    },
+    {
+      id: 'reports',
+      title: t('Rapports'),
+      icon: 'document-attach-outline',
+      color: '#F59E0B',
+      route: '/(app)/(interimaire)/reports',
+      description: 'Générer des rapports'
+    },
+    {
+      id: 'structures',
+      title: t('Structures de Soins'),
+      icon: 'business-outline',
+      color: colors.error,
+      route: '/(app)/(interimaire)/structures',
+      description: 'Centres de santé'
+    },
+    {
+      id: 'notifications',
+      title: t('Notifications'),
+      icon: 'notifications-outline',
+      color: '#10B981',
+      route: '/(app)/(interimaire)/notifications',
+      description: 'Messages et alertes'
+    }
+  ];
 
   useEffect(() => {
     Animated.parallel([
@@ -98,558 +131,225 @@ export default function InterimDashboardScreen() {
     ]).start();
   }, []);
 
-  // --- LOGIQUE DE RÉCUPÉRATION DES DONNÉES ---
-  const loadIpmRecap = useCallback(async () => {
+  // Charger les données du dashboard
+  const loadDashboardData = useCallback(async () => {
     if (!user) {
-      setIpmRecap([]);
-      setTauxRetenu(null); // Nettoyer les taux si pas d'utilisateur
-      setTauxRemboursse(null); // Nettoyer les taux si pas d'utilisateur
-      setLoadingIpmRecap(false);
-      return;
-    }
-    setLoadingIpmRecap(true);
-    setErrorIpmRecap(null);
-    try {
-      // L'API getIpmRecapByMonth doit retourner un objet { recap_ipm: [...], taux_retenu: "X%", taux_remboursse: "Y%" }
-      const response = await getIpmRecapByMonth();
-      setIpmRecap(response.recap_ipm || []); // Accéder à la propriété recap_ipm
-      setTauxRetenu(response.taux_retenu || null); // Accéder à la propriété taux_retenu
-      setTauxRemboursse(response.taux_remboursse || null); // Accéder à la propriété taux_remboursse
-    } catch (err: any) {
-      console.error("Erreur de chargement du récap IPM:", err);
-      setErrorIpmRecap(err.message || t("Impossible de charger l'état d'avancement IPM."));
-      setIpmRecap([]);
-      setTauxRetenu(null); // Nettoyer en cas d'erreur
-      setTauxRemboursse(null); // Nettoyer en cas d'erreur
-    } finally {
-      setLoadingIpmRecap(false);
-    }
-  }, [user, t]);
-
-  const loadAffiliatedStructures = useCallback(async (page = 1, append = false) => {
-    if (!user) {
-      setAffiliatedStructures([]);
-      setLoadingStructures(false);
-      setLoadingMoreStructures(false);
-      setHasMoreStructures(false);
+      setDashboardStats(null);
+      setLoading(false);
       return;
     }
 
-    if (page === 1) {
-      setLoadingStructures(true);
-    } else {
-      setLoadingMoreStructures(true);
-    }
-
-    setErrorStructures(null);
+    setLoading(true);
+    setError(null);
 
     try {
-      const response = await getAffiliatedStructures(page, 3);
-
-      const structures = response.data; // ✅ le vrai tableau
-      const currentPage = response.current_page;
-      const lastPage = response.last_page;
-
-      if (append) {
-        setAffiliatedStructures(prev => {
-          const newStructures = structures.filter(
-            (newItem: Structure) => !prev.some(existingItem => existingItem.id === newItem.id)
-          );
-          return [...prev, ...newStructures];
-        });
-      } else {
-        setAffiliatedStructures(structures);
+      const response = await getDashboardStats('month');
+      if (response.success && response.data) {
+        setDashboardStats(response.data);
       }
-
-      setStructuresPage(currentPage);
-      setHasMoreStructures(currentPage < lastPage);
-      console.log("✅ Page mise à jour:", currentPage, "/", lastPage);
-
     } catch (err: any) {
-      console.error("Erreur de chargement des structures affiliées:", err);
-      setErrorStructures(err.message || t("Impossible de charger les structures affiliées."));
+      console.error("Erreur chargement dashboard:", err);
+      setError(err.message || t("Impossible de charger les données"));
     } finally {
-      setLoadingStructures(false);
-      setLoadingMoreStructures(false);
+      setLoading(false);
     }
   }, [user, t]);
 
+  // Fonction de rafraîchissement
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadDashboardData();
+    setRefreshing(false);
+  }, [loadDashboardData]);
 
   useEffect(() => {
-    loadIpmRecap();
-    loadAffiliatedStructures();
-  }, [loadIpmRecap, loadAffiliatedStructures]);
-
-  // Fonction pour charger plus de structures
-  const handleLoadMoreStructures = () => {
-    console.log("→ Clic sur Charger plus !");
-    if (!hasMoreStructures || loadingMoreStructures || loadingStructures) return;
-    loadAffiliatedStructures(structuresPage + 1, true);
-  };
+    loadDashboardData();
+  }, [loadDashboardData]);
 
 
-  // --- Fonctions de navigation ou d'action ---
+  // Fonctions de navigation
   const handleMenuPress = () => { Alert.alert(t("Menu"), t("Menu Intérimaire pressé !")); };
   const handleAvatarPress = () => { router.push('/(app)/profile-details'); };
-  const handleGoToHrFile = () => { router.push('/(app)/(interimaire)/hr_file'); }; // Chemin absolu
-  const handleGoToIpmFile = () => { router.push('/(app)/(interimaire)/ipm_file'); }; // Chemin absolu
-  const handleGoToStructure = () => { router.push('/(app)/(interimaire)/structures'); }; // Chemin absolu
-  const handleGoToReports = () => { router.push('/(app)/(interimaire)/reports'); }; // Chemin absolu
-  const handleGoToAnalytics = () => { router.push('/(app)/(interimaire)/analytics'); }; // Chemin absolu
 
+  // Formatage des données
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('fr-FR', {
+      style: 'currency',
+      currency: 'XOF',
+      minimumFractionDigits: 0
+    }).format(amount).replace('XOF', 'FCFA');
+  };
 
-  // --- Fonctions de rendu des sections ---
+  const formatNumber = (num: number) => {
+    return new Intl.NumberFormat('fr-FR').format(num);
+  };
 
-  // Rendu de l'état d'avancement IPM
-  const renderIpmRecap = () => {
-    // Calculer le total et le pourcentage pour la barre de progression globale
-    const totalConsultations = ipmRecap.reduce((sum, item) => sum + item.consultations, 0);
-    const totalSoins = ipmRecap.reduce((sum, item) => sum + item.soins, 0);
-    const totalMedicaments = ipmRecap.reduce((sum, item) => sum + item.medicaments, 0);
-    const totalProtheses = ipmRecap.reduce((sum, item) => sum + item.protheses, 0);
-    const totalExamens = ipmRecap.reduce((sum, item) => sum + item.examens, 0);
+  // --- Fonctions de rendu des nouvelles sections ---
 
-    const overallTotal = totalConsultations + totalSoins + totalMedicaments + totalProtheses + totalExamens;
-    const overallCovered = ipmRecap.reduce((sum, item) => sum + item.remboursement, 0);
-    const completionPercentage = overallTotal > 0 ? (overallCovered / overallTotal) * 100 : 0;
-
-    const getMonthName = (monthNum: number) => {
-      const date = new Date(2000, monthNum - 1, 1); // Mois est 0-indexed
-      return date.toLocaleString(t('fr-FR'), { month: 'long' }); // Utilisez la langue de l'app
-    };
-
+  // Section header de bienvenue
+  const renderWelcomeHeader = () => {
+    const userName = user?.name || 'Utilisateur';
+    const firstName = userName.split(' ')[0]; // Prendre le prénom
+    
     return (
-      <View style={[styles.sectionCard, { backgroundColor: colors.cardBackground }]}>
-        {/* Header avec design épuré */}
-        <View style={styles.sectionHeaderInner}>
-          <View style={[styles.iconContainer, { backgroundColor: colors.primary + '15' }]}>
-            <Ionicons name="stats-chart-outline" size={18} color={colors.primary} />
-          </View>
-          <Text style={[styles.sectionTitleInner, { color: colors.textPrimary }]}>
-            {t('Votre Recap IPM')}
+      <Animated.View
+        style={[
+          styles.welcomeContainer,
+          {
+            opacity: fadeAnim,
+            transform: [{ translateY: slideAnim }]
+          }
+        ]}
+      >
+        <View style={styles.welcomeContent}>
+          <Text style={[styles.welcomeTitle, { color: colors.secondary }]}>
+            {t('Bienvenue')} {firstName}
+          </Text>
+          <Text style={[styles.welcomeSubtitle, { color: colors.textSecondary }]}>
+            {t('Dans votre espace intérimaire, vous pouvez accéder à vos documents, vos notifications, et plus encore.')}
+
           </Text>
         </View>
-
-        {loadingIpmRecap ? (
-          <View style={styles.loadingContainer}>
-            <View style={[styles.loadingIndicator, { backgroundColor: colors.primary + '10' }]}>
-              <ActivityIndicator size="small" color={colors.secondary} />
-            </View>
-            <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
-              {t('Chargement du récap IPM...')}
-            </Text>
-          </View>
-        ) : errorIpmRecap ? (
-          <View style={[styles.errorContainer, { backgroundColor: colors.error + '08' }]}>
-            <View style={[styles.errorIconContainer, { backgroundColor: colors.error + '15' }]}>
-              <Ionicons name="alert-circle-outline" size={18} color={colors.error} />
-            </View>
-            <Text style={[styles.errorText, { color: colors.error }]}>{errorIpmRecap}</Text>
-          </View>
-        ) : ipmRecap.length === 0 && !tauxRetenu && !tauxRemboursse ? (
-          <View style={styles.emptyStateContent}>
-            <View style={[styles.emptyIconContainer, { backgroundColor: colors.textSecondary + '10' }]}>
-              <Ionicons name="bar-chart-outline" size={28} color={colors.textSecondary} />
-            </View>
-            <Text style={[styles.emptyTitleContent, { color: colors.textPrimary }]}>
-              {t('Aucun récapitulatif IPM')}
-            </Text>
-            <Text style={[styles.emptyTextContent, { color: colors.textSecondary }]}>
-              {t('Les données d\'avancement IPM s\'afficheront ici.')}
-            </Text>
-          </View>
-        ) : (
-          <>
-            {/* Barre de progression modernisée */}
-            <View style={styles.progressBarContainer}>
-              <View style={styles.progressHeader}>
-                <Text style={[styles.progressBarLabel, { color: colors.textPrimary }]}>
-                  {t('Progress Bar')}
-                </Text>
-                <View style={[styles.percentageBadge, { backgroundColor: colors.success + '15' }]}>
-                  <Text style={[styles.percentageText, { color: colors.success }]}>
-                    {completionPercentage.toFixed(1)}%
-                  </Text>
-                </View>
-              </View>
-              <View style={[styles.progressBarBackground, { backgroundColor: colors.border }]}>
-                <View style={[
-                  styles.progressBarFill,
-                  {
-                    width: `${completionPercentage}%`,
-                    backgroundColor: colors.success
-                  }
-                ]} />
-              </View>
-            </View>
-
-            <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
-              {t('Taux de retenue')}: <Text style={[styles.rateValue, { color: colors.textPrimary }]}>{tauxRetenu || t('N/A')}</Text>
-            </Text>
-            <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
-              {t('Taux de remboursement')}: <Text style={[styles.rateValue, { color: colors.textPrimary }]}>{tauxRemboursse || t('N/A')}</Text>
-            </Text>
-            {/* Liste des récaps avec design restructuré */}
-            <FlatList
-              data={ipmRecap}
-              keyExtractor={item => item.id.toString()}
-              scrollEnabled={false}
-              showsVerticalScrollIndicator={false}
-              renderItem={({ item, index }) => (
-                <View style={[
-                  styles.ipmRecapItem,
-                  {
-                    backgroundColor: colors.background,
-                    marginBottom: index === ipmRecap.length - 1 ? 0 : 16
-                  }
-                ]}>
-                  <View style={styles.itemHeader}>
-                    <View style={[styles.monthBadge, { backgroundColor: colors.primary + '10' }]}>
-                      <Text style={[styles.ipmRecapMonth, { color: colors.primary }]}>
-                        {getMonthName(item.mois)} {item.annee}
-                      </Text>
-                    </View>
-                  </View>
-
-                  {/* Section principale regroupée */}
-                  <View style={[styles.mainDetailsContainer, { backgroundColor: colors.cardBackground }]}>
-                    <View style={styles.mainDetailsColumn}>
-                      {Number(item.consultations) > 0 && (
-                        <View style={styles.detailColumnItem}>
-                          <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
-                            {t('Consultations')}
-                          </Text>
-                          <Text style={[styles.detailValue, { color: colors.textPrimary }]}>
-                            {item.consultations} fcfa
-                          </Text>
-                        </View>
-                      )}
-
-                      {Number(item.soins) > 0 && (
-                        <View style={styles.detailColumnItem}>
-                          <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
-                            {t('Soins')}
-                          </Text>
-                          <Text style={[styles.detailValue, { color: colors.textPrimary }]}>
-                            {item.soins} fcfa
-                          </Text>
-                        </View>
-                      )}
-
-                      {Number(item.medicaments) > 0 && (
-                        <View style={styles.detailColumnItem}>
-                          <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
-                            {t('Médicaments')}
-                          </Text>
-                          <Text style={[styles.detailValue, { color: colors.textPrimary }]}>
-                            {item.medicaments} fcfa
-                          </Text>
-                        </View>
-                      )}
-
-                      {Number(item.protheses) > 0 && (
-                        <View style={styles.detailColumnItem}>
-                          <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
-                            {t('Prothèses')}
-                          </Text>
-                          <Text style={[styles.detailValue, { color: colors.textPrimary }]}>
-                            {item.protheses} fcfa
-                          </Text>
-                        </View>
-                      )}
-
-                      {Number(item.examens) > 0 && (
-                        <View style={styles.detailColumnItem}>
-                          <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
-                            {t('Examens')}
-                          </Text>
-                          <Text style={[styles.detailValue, { color: colors.textPrimary }]}>
-                            {item.examens} fcfa
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-                  </View>
-
-                  {/* Section des montants finaux */}
-                  <View style={styles.finalAmountsContainer}>
-                    <View style={[styles.amountCard, { backgroundColor: colors.success + '10' }]}>
-                      <Text style={[styles.amountLabel, { color: colors.textSecondary }]}>
-                        {t('Remboursement')}
-                      </Text>
-                      <Text style={[styles.amountValue, { color: colors.success }]}>
-                        {item.remboursement} fcfa
-                      </Text>
-                    </View>
-
-                    <View style={[styles.amountCard, { backgroundColor: colors.error + '10' }]}>
-                      <Text style={[styles.amountLabel, { color: colors.textSecondary }]}>
-                        {t('Retenu')}
-                      </Text>
-                      <Text style={[styles.amountValue, { color: colors.error }]}>
-                        {item.retenu} fcfa
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-              )}
-            />
-          </>
-        )}
-      </View>
-
+        <View style={[styles.welcomeIcon, { backgroundColor: colors.secondary + '15' }]}>
+          <Ionicons name="hand-right-outline" size={24} color={colors.secondary} />
+        </View>
+      </Animated.View>
     );
   };
 
-  // Rendu des structures affiliées
-  const renderAffiliatedStructures = () => {
+  // Section de statut actuel
+  const renderCurrentStatus = () => {
     return (
-      <View style={[styles.sectionCard, { backgroundColor: colors.cardBackground }]}>
-        <View style={styles.sectionHeaderInner}>
-          <View style={[styles.iconContainer, { backgroundColor: colors.primary + '15' }]}>
-            <Ionicons name="business-outline" size={20} color={colors.primary} />
+      <Animated.View
+        style={[
+          styles.statusContainer,
+          { backgroundColor: colors.background || colors.background },
+          {
+            opacity: fadeAnim,
+            transform: [{ translateY: slideAnim }]
+          }
+        ]}
+      >
+        <View style={styles.statusHeader}>
+          <View style={[styles.statusIcon, { backgroundColor: colors.success + '15' }]}>
+            <Ionicons name="checkmark-circle-outline" size={24} color={colors.success} />
           </View>
-          <Text style={[styles.sectionTitleInner, { color: colors.textPrimary }]}>
-            {t('Structures Affiliées')}
-          </Text>
+          <View style={styles.statusInfo}>
+            <Text style={[styles.statusTitle, { color: colors.primary }]}>
+              {t('Statut actuel')}
+            </Text>
+            <Text style={[styles.statusText, { color: colors.success }]}>
+              {user?.is_contract_active ? t('Contrat actif') : t('Contrat inactif')}
+            </Text>
+          </View>
+        </View>
+        
+        {dashboardStats?.current_society && (
+          <View style={styles.currentSociety}>
+            <Ionicons name="business-outline" size={16} color={colors.textSecondary} />
+            <Text style={[styles.currentSocietyText, { color: colors.textSecondary }]}>
+              {dashboardStats.current_society}
+            </Text>
+          </View>
+        )}
+      </Animated.View>
+    );
+  };
+
+  // Section actions rapides améliorée
+  const renderQuickActions = () => {
+    const primaryActions = quickActions.slice(0, 4);
+    const secondaryActions = quickActions.slice(4);
+
+    return (
+      <Animated.View
+        style={[
+          styles.actionsContainer,
+          {
+            opacity: fadeAnim,
+            transform: [{ translateY: slideAnim }]
+          }
+        ]}
+      >
+        <Text style={[styles.sectionTitle, { color: colors.primary }]}>
+          {t('Menu Interimaire')}
+        </Text>
+        
+        {/* Actions principales */}
+        <View style={styles.primaryActionsGrid}>
+          {primaryActions.map((action) => (
+            <TouchableOpacity
+              key={action.id}
+              style={[styles.primaryActionCard, { backgroundColor: colors.background || colors.background }]}
+              onPress={() => router.push(action.route as any)}
+            >
+              <View style={[styles.actionIcon, { backgroundColor: action.color + '15' }]}>
+                <Ionicons name={action.icon as any} size={24} color={action.color} />
+              </View>
+              <Text style={[styles.actionTitle, { color: colors.primary }]}>
+                {action.title}
+              </Text>
+              <Text style={[styles.actionDescription, { color: colors.textSecondary }]} numberOfLines={2}>
+                {action.description}
+              </Text>
+            </TouchableOpacity>
+          ))}
         </View>
 
-        {loadingStructures && affiliatedStructures.length === 0 ? (
-          <View style={styles.loadingContainer}>
-            <View style={[styles.loadingIndicator, { backgroundColor: colors.primary + '10' }]}>
-              <ActivityIndicator size="small" color={colors.secondary} />
-            </View>
-            <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
-              {t('Chargement des structures...')}
-            </Text>
-          </View>
-        ) : errorStructures ? (
-          <View style={[styles.errorContainer, { backgroundColor: colors.error + '10' }]}>
-            <Ionicons name="alert-circle-outline" size={20} color={colors.error} />
-            <Text style={[styles.errorText, { color: colors.error }]}>{errorStructures}</Text>
-          </View>
-        ) : affiliatedStructures.length === 0 ? (
-          <View style={styles.emptyStateContent}>
-            <Ionicons name="home-outline" size={48} color={colors.textSecondary} />
-            <Text style={[styles.emptyTitleContent, { color: colors.textPrimary }]}>
-              {t('Aucune structure affiliée')}
-            </Text>
-            <Text style={[styles.emptyTextContent, { color: colors.textSecondary }]}>
-              {t('Aucune structure affiliée disponible pour le moment.')}
-            </Text>
-          </View>
-        ) : (
-          <>
-            <FlatList
-              data={affiliatedStructures}
-              keyExtractor={(item, index) => `structure-${item.id || index}`}
-              scrollEnabled={false}
-              renderItem={({ item }) => (
-                <View style={[styles.structureItem, { borderBottomColor: colors.border }]}>
-                  <Text style={[styles.structureName, { color: colors.textPrimary }]}>
-                    {item.name}
+        {/* Actions secondaires */}
+        <View style={styles.secondaryActionsRow}>
+          {secondaryActions.map((action) => (
+            <TouchableOpacity
+              key={action.id}
+              style={[styles.secondaryActionCard, { backgroundColor: colors.background || colors.background }]}
+              onPress={() => router.push(action.route as any)}
+            >
+              <View style={[styles.secondaryActionIcon, { backgroundColor: action.color + '15' }]}>
+                <Ionicons name={action.icon as any} size={20} color={action.color} />
+              </View>
+              <Text style={[styles.secondaryActionTitle, { color: colors.primary }]}>
+                {action.title}
+              </Text>
+              {action.id === 'notifications' && unreadCount > 0 && (
+                <View style={[styles.notificationBadge, { backgroundColor: colors.error }]}>
+                  <Text style={[styles.notificationBadgeText, { color: colors.textTertiary }]}>
+                    {unreadCount > 99 ? '99+' : unreadCount.toString()}
                   </Text>
-                  <Text style={[styles.structureDetail, { color: colors.textSecondary }]}>
-                    {t('Adresse')}: {item.adresse}, {item.region}
-                  </Text>
-                  <Text style={[styles.structureDetail, { color: colors.textSecondary }]}>
-                    {t('Téléphone')}: {item.tel}
-                  </Text>
-                  {item.PersonneRessource && (
-                    <Text style={[styles.structureDetail, { color: colors.textSecondary }]}>
-                      {t('Personne Ressource')}: {item.PersonneRessource}
-                    </Text>
-                  )}
                 </View>
               )}
-            />
-
-            {/* Footer manuel au lieu de onEndReached */}
-            {hasMoreStructures && (
-              <View style={{ marginTop: 10 }}>
-                {loadingMoreStructures ? (
-                  <ActivityIndicator size="small" color={colors.secondary} />
-                ) : (
-                  <TouchableOpacity onPress={handleLoadMoreStructures} style={styles.loadMoreButton}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <Ionicons
-                        name="eye-outline"
-                        size={18}
-                        color={colors.secondary}
-                        style={{ marginLeft: 8 }}
-                      />
-                      <Text style={[styles.loadMoreButtonText, { color: colors.secondary }]}>
-                        {t(' Plus de structures')}
-                      </Text>
-
-                    </View>
-                  </TouchableOpacity>
-                )}
-              </View>
-            )}
-          </>
-        )}
-      </View>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </Animated.View>
     );
   };
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
       <StatusBar barStyle="light-content" backgroundColor="#091e60" />
-      {/* <CustomHeader
-        title={t("Espace Intérimaire")}
-        user={user}
-        onMenuPress={handleMenuPress}
-        onAvatarPress={handleAvatarPress}
-        rightComponent={() => (
-          <TouchableOpacity
-            style={styles.notificationButton}
-            onPress={() => router.push('/(interimaire)/notifications')}
-          >
-            <Ionicons name="notifications-outline" size={24} color={colors.textTertiary} />
-            {unreadCount > 0 && (
-              <View style={[styles.notificationBadge, { backgroundColor: colors.error }]}>
-                <Text style={[styles.notificationBadgeText, { color: colors.textTertiary }]}>
-                  {unreadCount > 99 ? '99+' : unreadCount.toString()}
-                </Text>
-              </View>
-            )}
-          </TouchableOpacity>
-        )}
-      /> */}
       <CustomHeader
-        title={t("Espace Intérimaire")}
+        title={t('Espace Intérimaire')}
         user={user}
         onMenuPress={handleMenuPress}
         onAvatarPress={handleAvatarPress}
-        rightComponent={
-          <TouchableOpacity
-            style={styles.notificationButton}
-            onPress={() => router.push('/(app)/(interimaire)/notifications')}
-          >
-            <Ionicons name="notifications-outline" size={24} color={colors.textTertiary} />
-            {unreadCount > 0 && (
-              <View style={[styles.notificationBadge, { backgroundColor: colors.error }]}>
-                <Text style={[styles.notificationBadgeText, { color: colors.textTertiary }]}>
-                  {unreadCount > 99 ? '99+' : unreadCount.toString()}
-                </Text>
-              </View>
-            )}
-          </TouchableOpacity>
-        }
       />
-
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-
-        {user?.is_contract_active === false ? ( // Si contrat inactif
-          <View style={[styles.emptyStateFull, { backgroundColor: colors.cardBackground }]}>
-            <Ionicons name="alert-circle-outline" size={48} color={colors.error} />
-            <Text style={[styles.emptyTitleFull, { color: colors.textPrimary }]}>{t('Accès restreint')}</Text>
-            <Text style={[styles.emptyTextFull, { color: colors.textSecondary }]}>
-              {t('Votre contrat intérimaire est terminé ou inactif. Vous n\'avez plus accès à cet espace.')}
-            </Text>
-            <Text style={[styles.emptyTextFull, { color: colors.textSecondary }]}>
-              {t('Veuillez contacter l\'administration pour plus d\'informations.')}
-            </Text>
-          </View>
-        ) : (
-          <>
-            {/* Section de Bienvenue et accès rapide */}
-            <View style={styles.welcomeContainer}>
-              <LinearGradient
-                colors={['#1c6003', '#13af3f']}
-                style={styles.welcomeGradient}
-              >
-                <Text style={styles.welcomeText}>
-                  {t("Bonjour")}, {user?.name || t("Intérimaire")}! 👋
-                </Text>
-                <Text style={styles.welcomeSubtext}>
-                  {t("Bienvenue sur l'app Pro Recrute de")}{" "}
-                  <Text style={{ fontWeight: "bold" }}>GBG</Text>,{" "}
-                  {t("ici vous pouvez gérer vos informations et accéder à vos dossiers RH et IPM.")}
-                </Text>
-              </LinearGradient>
-            </View>
-
-            {/* Accés Rapide Dossier RH et IPM */}
-            <View style={styles.quickAccessContainer}>
-              <TouchableOpacity
-                style={[
-                  styles.quickAccessCard,
-                  { backgroundColor: colors.cardBackground },
-                ]}
-                onPress={handleGoToHrFile}
-              >
-                <Ionicons name="folder-outline" size={30} color={colors.primary} />
-                <Text style={[styles.quickAccessText, { color: colors.textPrimary }]}>
-                  {t("Dossier RH")}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.quickAccessCard,
-                  { backgroundColor: colors.cardBackground },
-                ]}
-                onPress={handleGoToIpmFile}
-              >
-                <Ionicons name="medkit-outline" size={30} color={colors.primary} />
-                <Text style={[styles.quickAccessText, { color: colors.textPrimary }]}>
-                  {t("Dossier IPM")}
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.quickAccessContainer}>
-              <TouchableOpacity
-                style={[
-                  styles.quickAccessCard,
-                  { backgroundColor: colors.cardBackground },
-                ]}
-                onPress={handleGoToReports}
-              >
-                <Ionicons name="document-attach-outline" size={30} color={colors.primary} />
-
-                <Text style={[styles.quickAccessText, { color: colors.textPrimary }]}>
-                  {t("Rapport")}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.quickAccessCard,
-                  { backgroundColor: colors.cardBackground },
-                ]}
-                onPress={handleGoToAnalytics}
-              >
-                <Ionicons name="analytics" size={30} color={colors.primary} />
-                <Text style={[styles.quickAccessText, { color: colors.textPrimary }]}>
-                  {t("Analytics")}
-                </Text>
-              </TouchableOpacity>
-            </View>
-                        <View style={styles.quickAccessContainer}>
-              <TouchableOpacity
-                style={[
-                  styles.quickAccessCard,
-                  { backgroundColor: colors.cardBackground },
-                ]}
-                onPress={handleGoToStructure}
-              >
-                <FontAwesome6 name="house-medical" size={30} color={colors.error} />
-
-                <Text style={[styles.quickAccessText, { color: colors.textPrimary }]}>
-                  {t("Structures de Soins")}
-                </Text>
-              </TouchableOpacity>
-            </View>
-            {/* Section Avancement IPM par mois */}
-            {renderIpmRecap()}
-
-            {/* Section Structures Affiliées */}
-            {renderAffiliatedStructures()}
-            {/* Espacement pour le bas de l'écran */}
-            <View style={{ height: 60 }} />
-          </>
-        )}
+      <ScrollView
+        style={[styles.container, { backgroundColor: colors.background }]}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[colors.primary]}
+            tintColor={colors.primary}
+          />
+        }
+      >
+        <View style={styles.content}>
+          {renderWelcomeHeader()}
+          {renderCurrentStatus()}
+          {renderQuickActions()}
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -659,92 +359,263 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
   },
-  scrollContent: {
-    padding: 16,
-    paddingBottom: 20,
-  },
-  welcomeContainer: {
-    marginBottom: 20,
-    borderRadius: 16,
-    overflow: 'hidden',
-  },
-  welcomeGradient: {
-    padding: 20,
-    borderRadius: 16,
-  },
-  welcomeText: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    marginBottom: 8,
-    color: '#FFFFFF',
-  },
-  welcomeSubtext: {
-    fontSize: 14,
-    lineHeight: 20,
-    color: '#FFFFFF',
-  },
-  quickAccessContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: 20,
-    gap: 12,
-  },
-  quickAccessCard: {
+  container: {
     flex: 1,
+  },
+  content: {
+    padding: 16,
+    gap: 20,
+  },
+  
+  // Welcome Header Styles
+  welcomeContainer: {
+    backgroundColor: '#f8fafc',
     borderRadius: 16,
-    padding: 15,
+    padding: 20,
+    marginBottom: 6,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 8,
+    elevation: 2,
+  },
+  
+  welcomeContent: {
+    flex: 1,
+  },
+  
+  welcomeTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  
+  welcomeSubtitle: {
+    fontSize: 14,
+    opacity: 0.7,
+    fontStyle: 'italic',
+  },
+  
+  welcomeIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  
+  // Quick Metrics Styles (supprimés)
+  sectionCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
     elevation: 3,
   },
-  quickAccessText: {
+  
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  
+  metricsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  
+  metricCard: {
+    flex: 1,
+    minWidth: '45%',
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  
+  metricIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  
+  metricTitle: {
+    fontSize: 12,
+    fontWeight: '500',
+    textAlign: 'center',
+    opacity: 0.7,
+  },
+  
+  metricValue: {
+    fontSize: 24,
+    fontWeight: '700',
     marginTop: 8,
+    marginBottom: 4,
+  },
+  
+  metricLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+    textAlign: 'center',
+    opacity: 0.7,
+  },
+  
+  // Status Styles
+  statusContainer: {
+    backgroundColor: '#f0f9ff',
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  
+  statusHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 8,
+  },
+  
+  statusInfo: {
+    flex: 1,
+  },
+  
+  currentSociety: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 4,
+  },
+  
+  currentSocietyText: {
     fontSize: 14,
+    fontStyle: 'italic',
+  },
+  
+  statusIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  
+  statusContent: {
+    flex: 1,
+  },
+  
+  statusTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  
+  statusText: {
+    fontSize: 14,
+    opacity: 0.7,
+  },
+  
+  // Actions Container Styles
+  actionsContainer: {
+    paddingVertical: 8,
+  },
+  
+  // Primary Actions Grid
+  primaryActionsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginBottom: 16,
+  },
+  
+  primaryActionCard: {
+    flex: 1,
+    minWidth: '45%',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  
+  // Secondary Actions Row
+  secondaryActionsRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  
+  secondaryActionCard: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 12,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+    position: 'relative',
+  },
+  
+  secondaryActionIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+  },
+  
+  secondaryActionTitle: {
+    fontSize: 12,
     fontWeight: '600',
     textAlign: 'center',
   },
-  sectionCard: {
-    borderRadius: 20,
-    padding: 15,
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 3,
-  },
-
-  sectionHeaderInner: {
+  
+  // Quick Actions Styles
+  actionsGrid: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  
+  actionCard: {
+    flex: 1,
+    minWidth: '45%',
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 16,
     alignItems: 'center',
-    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
   },
-
-  iconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-
-  sectionTitleInner: {
-    fontSize: 18,
-    fontWeight: '700',
-    letterSpacing: -0.2,
-  },
-
-  loadingContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 32,
-  },
-
-  loadingIndicator: {
+  
+  actionIcon: {
     width: 48,
     height: 48,
     borderRadius: 24,
@@ -752,333 +623,54 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 12,
   },
-
-  loadingText: {
-    fontSize: 15,
-    fontWeight: '500',
+  
+  actionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: 4,
   },
-
-  errorContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    borderRadius: 12,
+  
+  actionDescription: {
+    fontSize: 12,
+    textAlign: 'center',
+    opacity: 0.6,
+    lineHeight: 16,
   },
-
-  errorIconContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
+  
+  // Notification Badge Styles
+  notificationBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: '#ef4444',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    paddingHorizontal: 6,
   },
-
-  errorText: {
+  
+  notificationBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  
+  // Loading Styles
+  loadingContainer: {
     flex: 1,
-    fontSize: 14,
-    fontWeight: '500',
-  },
-
-  emptyStateContent: {
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 32,
   },
-
-  emptyIconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-
-  emptyTitleContent: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-
-  emptyTextContent: {
+  
+  loadingText: {
     fontSize: 14,
+    marginTop: 12,
     textAlign: 'center',
     lineHeight: 20,
-    opacity: 0.8,
-  },
-  emptyStateFull: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 40,
-    paddingHorizontal: 20,
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05, shadowRadius: 8, elevation: 2,
-  },
-  emptyTitleFull: {
-    fontSize: 20,
-    fontWeight: '700',
-    marginBottom: 10,
-    textAlign: 'center',
-  },
-  emptyTextFull: {
-    fontSize: 16,
-    textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: 10,
-  },
-  // Styles de la barre de progression
-  progressBarContainer: {
-    marginBottom: 24,
-  },
-  // Styles existants mis à jour
-  ipmRecapItem: {
-    borderRadius: 16,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 1,
-  },
-
-  progressBarLabel: {
-    fontSize: 15,
-    fontWeight: '600',
-  },
-
-  detailLabel: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: '#6B7280',
-  },
-
-  detailValue: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1F2937',
-  },
-
-  progressHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-
-  // progressBarLabel: {
-  //   fontSize: 15,
-  //   fontWeight: '600',
-  // },
-
-  percentageBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-
-  percentageText: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-
-  progressBarBackground: {
-    height: 8,
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-
-  progressBarFill: {
-    height: '100%',
-    borderRadius: 4,
-  },
-
-  // Styles des items IPM
-  // ipmRecapItem: {
-  //   borderRadius: 16,
-  //   padding: 12,
-  //   shadowColor: '#000',
-  //   shadowOffset: { width: 0, height: 2 },
-  //   shadowOpacity: 0.04,
-  //   shadowRadius: 8,
-  //   elevation: 1,
-  // },
-
-  itemHeader: {
-    marginBottom: 16,
-  },
-
-  monthBadge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-  },
-
-  ipmRecapMonth: {
-    fontSize: 14,
-    fontWeight: '700',
-  },
-
-  ipmRecapDetails: {
-    gap: 12,
-  },
-
-  detailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-
-  detailItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-
-  // detailLabel: {
-  //   fontSize: 12,
-  //   fontWeight: '500',
-  //   marginBottom: 4,
-  //   textAlign: 'center',
-  // },
-
-  // detailValue: {
-  //   fontSize: 16,
-  //   fontWeight: '700',
-  //   textAlign: 'center',
-  // },
-  // Styles spécifiques aux structures
-  structureItem: {
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    marginBottom: 5,
-  },
-  structureName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
-  structureDetail: {
-    fontSize: 13,
-  },
-  loadMoreButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 15,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#0f8e35',
-    marginTop: 15,
-    alignSelf: 'center', // Centrer le bouton
-  },
-  loadMoreButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#0f8e35',
-  },
-
-  mainDetailsContainer: {
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-
-  sectionLabel: {
-    fontSize: 13,
-    fontWeight: '500',
-    marginBottom: 5,
-    textAlign: 'center',
-    fontStyle: 'italic',
-    lineHeight: 18,
-  },
-
-  mainDetailsColumn: {
-    flexDirection: 'column',
-    gap: 12,
-  },
-
-  detailColumnItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 4,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#E5E7EB',
-  },
-
-  finalAmountsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-
-  amountCard: {
-    flex: 1,
-    borderRadius: 12,
-    padding: 12,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
-
-  amountLabel: {
-    fontSize: 13,
-    fontWeight: '600',
     marginBottom: 8,
-    textAlign: 'center',
   },
-
-  amountValue: {
-    fontSize: 18,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  // NOUVEAU : Styles pour l'affichage des taux
-  ratesContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: 15,
-    paddingTop: 10,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderColor: '#E0E0E0',
-  },
-  rateLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  rateValue: {
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-
-  // Styles pour le bouton de notifications
-  notificationButton: {
-    position: 'relative',
-    padding: 8,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  notificationBadge: {
-    position: 'absolute',
-    top: 4,
-    right: 4,
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 4,
-  },
-  notificationBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-
 });

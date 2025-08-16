@@ -13,16 +13,14 @@ import {
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../components/ThemeContext';
-import { useAuth } from '../../../components/AuthProvider';
+import CustomHeader from '../../../components/CustomHeader';
 import {
   getDashboardStats,
-  getWorkTrends,
   getFinancialStats,
   getIpmStats,
   formatCurrency,
   formatNumber,
   formatPercentage,
-  calculateGrowth,
   getGrowthColor,
   ANALYTICS_PERIODS
 } from '../../../utils/analytics-api';
@@ -34,7 +32,7 @@ const safeFormatCurrency = (amount) => {
   }
   return new Intl.NumberFormat('fr-FR', {
     style: 'currency',
-    currency: 'EUR'
+    currency: 'XOF'
   }).format(amount || 0);
 };
 
@@ -61,108 +59,171 @@ const safeGetGrowthColor = (growth, colors) => {
   return colors.textSecondary || '#6B7280';
 };
 
-const safeCalculateGrowth = (current, previous) => {
-  if (typeof calculateGrowth === 'function') {
-    return calculateGrowth(current, previous);
-  }
-  if (!previous || previous === 0) return current > 0 ? 100 : 0;
-  return ((current - previous) / previous) * 100;
-};
-import CustomHeader from '../../../components/CustomHeader';
+// const safeCalculateGrowth = (current, previous) => {
+//   if (typeof calculateGrowth === 'function') {
+//     return calculateGrowth(current, previous);
+//   }
+//   if (!previous || previous === 0) return current > 0 ? 100 : 0;
+//   return ((current - previous) / previous) * 100;
+// };
 
 const { width } = Dimensions.get('window');
 
 export default function AnalyticsScreen() {
   const { colors } = useTheme();
-  const { user } = useAuth();
   
   // États principaux
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedPeriod, setSelectedPeriod] = useState('month');
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   
   // Données analytics
   const [dashboardStats, setDashboardStats] = useState(null);
-  const [workTrends, setWorkTrends] = useState(null);
   const [financialStats, setFinancialStats] = useState(null);
   const [ipmStats, setIpmStats] = useState(null);
 
-  useEffect(() => {
-    loadAnalyticsData();
-  }, [selectedPeriod]);
-
-  const loadAnalyticsData = async () => {
+  const loadAnalyticsData = useCallback(async () => {
     try {
       setLoading(true);
       
-      const [dashboardRes, workRes, financialRes, ipmRes] = await Promise.all([
-        getDashboardStats(selectedPeriod),
-        getWorkTrends(selectedPeriod),
-        getFinancialStats(),
-        getIpmStats()
+      const [dashboardRes, financialRes, ipmRes] = await Promise.all([
+        getDashboardStats(selectedPeriod).catch(err => {
+          console.warn('Erreur dashboard stats:', err);
+          return { success: false, error: err };
+        }),
+        getFinancialStats(selectedYear).catch(err => {
+          console.warn('Erreur financial stats:', err);
+          return { success: false, error: err };
+        }),
+        getIpmStats(selectedYear).catch(err => {
+          console.warn('Erreur IPM stats:', err);
+          return { success: false, error: err };
+        })
       ]);
 
-      if (dashboardRes.success) setDashboardStats(dashboardRes.data);
-      if (workRes.success) setWorkTrends(workRes.data);
-      if (financialRes.success) setFinancialStats(financialRes.data);
-      if (ipmRes.success) setIpmStats(ipmRes.data);
+      // Debug: Afficher les réponses en développement
+      if (__DEV__) {
+        console.log('Dashboard Response:', dashboardRes);
+        console.log('Financial Response:', financialRes);
+        console.log('IPM Response:', ipmRes);
+      }
+
+      if (dashboardRes.success && dashboardRes.data) {
+        setDashboardStats(dashboardRes.data);
+      }
+      if (financialRes.success && financialRes.data) {
+        setFinancialStats(financialRes.data);
+      }
+      if (ipmRes.success && ipmRes.data) {
+        setIpmStats(ipmRes.data);
+      }
 
     } catch (error) {
       console.error('Erreur chargement analytics:', error);
-      Alert.alert('Erreur', 'Impossible de charger les données d\'analyse');
+      Alert.alert(
+        'Erreur', 
+        'Impossible de charger certaines données d\'analyse. Veuillez réessayer.',
+        [{ text: 'OK' }]
+      );
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedPeriod, selectedYear]);
+
+  useEffect(() => {
+    loadAnalyticsData();
+  }, [loadAnalyticsData]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await loadAnalyticsData();
     setRefreshing(false);
-  }, [selectedPeriod]);
+  }, [loadAnalyticsData]);
 
   const renderPeriodSelector = () => (
-    <ScrollView 
-      horizontal 
-      showsHorizontalScrollIndicator={false}
-      style={styles.periodContainer}
-      contentContainerStyle={styles.periodContent}
-    >
-      {ANALYTICS_PERIODS.slice(0, 4).map((period) => (
-        <TouchableOpacity
-          key={period.value}
-          style={[
-            styles.periodChip,
-            {
-              backgroundColor: selectedPeriod === period.value ? colors.secondary : colors.background,
-              borderColor: colors.border
-            }
-          ]}
-          onPress={() => setSelectedPeriod(period.value)}
-        >
-          <Text
+    <View style={styles.periodContainer}>
+      <ScrollView 
+        horizontal 
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.periodContent}
+      >
+        {ANALYTICS_PERIODS.slice(0, 4).map((period) => (
+          <TouchableOpacity
+            key={period.value}
             style={[
-              styles.periodText,
-              { 
-                color: selectedPeriod === period.value ? colors.textTertiary : colors.textSecondary,
-                fontWeight: selectedPeriod === period.value ? '600' : '400'
+              styles.periodChip,
+              {
+                backgroundColor: selectedPeriod === period.value ? colors.secondary : colors.background,
+                borderColor: colors.border,
               }
             ]}
+            onPress={() => setSelectedPeriod(period.value)}
           >
-            {period.label}
-          </Text>
-        </TouchableOpacity>
-      ))}
-    </ScrollView>
+            <Text
+              style={[
+                styles.periodText,
+                { 
+                  color: selectedPeriod === period.value ? colors.textTertiary : colors.textSecondary,
+                  fontWeight: selectedPeriod === period.value ? '600' : '400'
+                }
+              ]}
+            >
+              {period.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+    </View>
   );
 
+  const renderYearSelector = () => {
+    const currentYear = new Date().getFullYear();
+    const years = [];
+    for (let i = currentYear; i >= currentYear - 2; i--) {
+      years.push(i);
+    }
+
+    return (
+      <View style={styles.yearContainer}>
+        <View style={styles.yearContent}>
+          {years.map((year) => (
+            <TouchableOpacity
+              key={year}
+              style={[
+                styles.yearChip,
+                {
+                  backgroundColor: selectedYear === year ? colors.primary : colors.background,
+                  borderColor: colors.border,
+                }
+              ]}
+              onPress={() => setSelectedYear(year)}
+            >
+              <Text
+                style={[
+                  styles.yearText,
+                  { 
+                    color: selectedYear === year ? colors.textTertiary : colors.textSecondary,
+                    fontWeight: selectedYear === year ? '600' : '400'
+                  }
+                ]}
+              >
+                {year}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+    );
+  };
+
   const renderStatCard = (title, value, change = null, iconName, color = colors.primary) => (
-    <View style={[styles.statCard, { backgroundColor: colors.background }]}>
+    <View style={[styles.statCard, { backgroundColor: colors.surface || colors.background }]}>
       <View style={styles.statHeader}>
         <View style={[styles.statIcon, { backgroundColor: color + '20' }]}>
           <Ionicons name={iconName as any} size={20} color={color} />
         </View>
-        {change !== null && (
+        {change !== null && change !== 0 && (
           <View style={styles.changeContainer}>
             <Ionicons
               name={change >= 0 ? 'trending-up' : 'trending-down'}
@@ -200,7 +261,7 @@ export default function AnalyticsScreen() {
         )}
         
         {renderStatCard(
-          'Revenus bruts',
+          'Remboursements bruts',
           safeFormatCurrency(dashboardStats.total_revenue),
           dashboardStats.revenue_growth,
           'cash-outline',
@@ -216,8 +277,8 @@ export default function AnalyticsScreen() {
         )}
         
         {renderStatCard(
-          'Structures différentes',
-          safeFormatNumber(dashboardStats.unique_structures),
+          'Sociétés travaillées',
+          safeFormatNumber(dashboardStats.unique_societies),
           null,
           'business-outline',
           '#8B5CF6'
@@ -226,91 +287,61 @@ export default function AnalyticsScreen() {
     );
   };
 
-  const renderWorkAnalytics = () => {
-    if (!workTrends) return null;
+
+  const renderCurrentSociety = () => {
+    if (!dashboardStats) return null;
 
     return (
-      <View style={[styles.section, { backgroundColor: colors.background }]}>
+      <View style={[styles.section, { backgroundColor: colors.surface || colors.background }]}>
         <Text style={[styles.sectionTitle, { color: colors.primary }]}>
-          Analyse du travail
+          Société actuelle
         </Text>
-
-        <View style={styles.workMetrics}>
-          <View style={styles.workMetricItem}>
-            <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>
-              Heures moyenne/mois
-            </Text>
-            <Text style={[styles.metricValue, { color: colors.primary }]}>
-              {safeFormatNumber(workTrends.avg_hours_per_month)}h
-            </Text>
+        <View style={styles.societyInfo}>
+          <View style={[styles.societyIcon, { backgroundColor: colors.secondary + '20' }]}>
+            <Ionicons name="business" size={24} color={colors.secondary} />
           </View>
-
-          <View style={styles.workMetricItem}>
-            <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>
-              Durée moy. contrat
+          <View style={styles.societyDetails}>
+            <Text style={[styles.societyName, { color: colors.text }]}>
+              {dashboardStats.current_society || 'Aucune société assignée'}
             </Text>
-            <Text style={[styles.metricValue, { color: colors.primary }]}>
-              {safeFormatNumber(workTrends.avg_contract_duration)} jours
-            </Text>
-          </View>
-
-          <View style={styles.workMetricItem}>
-            <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>
-              Taux d'occupation
-            </Text>
-            <Text style={[styles.metricValue, { color: colors.secondary }]}>
-              {safeFormatPercentage(workTrends.occupation_rate)}
+            <Text style={[styles.societyStats, { color: colors.textSecondary }]}>
+              {safeFormatNumber(dashboardStats.active_contracts)} contrats actifs - {safeFormatNumber(dashboardStats.unique_societies)} sociétés au total
             </Text>
           </View>
         </View>
-
-        {workTrends.top_structures && workTrends.top_structures.length > 0 && (
-          <View style={styles.topStructures}>
-            <Text style={[styles.subSectionTitle, { color: colors.primary }]}>
-              Structures principales
-            </Text>
-            {workTrends.top_structures.slice(0, 3).map((structure, index) => (
-              <View key={index} style={styles.structureItem}>
-                <View style={styles.structureInfo}>
-                  <Text style={[styles.structureName, { color: colors.text }]}>
-                    {structure.name}
-                  </Text>
-                  <Text style={[styles.structureStats, { color: colors.textSecondary }]}>
-                    {safeFormatNumber(structure.total_hours)}h • {safeFormatNumber(structure.contracts_count)} contrats
-                  </Text>
-                </View>
-                <View style={[styles.structureBar, { backgroundColor: colors.border }]}>
-                  <View
-                    style={[
-                      styles.structureBarFill,
-                      {
-                        backgroundColor: colors.secondary,
-                        width: `${(structure.total_hours / workTrends.total_hours) * 100}%`
-                      }
-                    ]}
-                  />
-                </View>
-              </View>
-            ))}
-          </View>
-        )}
       </View>
     );
   };
 
   const renderFinancialAnalytics = () => {
-    if (!financialStats) return null;
+    if (!financialStats) {
+      return (
+        <View style={[styles.section, { backgroundColor: colors.surface || colors.background }]}>
+          <Text style={[styles.sectionTitle, { color: colors.primary }]}>
+            Analyse des remboursements IPM
+          </Text>
+          <Text style={[styles.financialLabel, { color: colors.textSecondary, textAlign: 'center' }]}>
+            Aucune donnée financière disponible
+          </Text>
+        </View>
+      );
+    }
+
+    // Debug: Afficher la structure des données en développement
+    if (__DEV__) {
+      console.log('Financial Stats:', financialStats);
+    }
 
     return (
-      <View style={[styles.section, { backgroundColor: colors.background }]}>
+      <View style={[styles.section, { backgroundColor: colors.surface || colors.background }]}>
         <Text style={[styles.sectionTitle, { color: colors.primary }]}>
-          Analyse financière
+          Analyse des remboursements IPM
         </Text>
 
         <View style={styles.financialGrid}>
           <View style={styles.financialItem}>
             <Text style={[styles.financialLabel, { color: colors.textSecondary }]}>
-              Revenus bruts
+              Total remboursements
             </Text>
             <Text style={[styles.financialValue, { color: colors.success || '#10B981' }]}>
               {safeFormatCurrency(financialStats.total_gross)}
@@ -319,36 +350,54 @@ export default function AnalyticsScreen() {
 
           <View style={styles.financialItem}>
             <Text style={[styles.financialLabel, { color: colors.textSecondary }]}>
-              Prélèvements
+              Total retenus
             </Text>
-            <Text style={[styles.financialValue, { color: colors.error }]}>
+            <Text style={[styles.financialValue, { color: colors.error || '#EF4444' }]}>
               {safeFormatCurrency(financialStats.total_deductions)}
             </Text>
           </View>
 
           <View style={styles.financialItem}>
             <Text style={[styles.financialLabel, { color: colors.textSecondary }]}>
-              Revenus nets
+              Moyenne mensuelle
             </Text>
-            <Text style={[styles.financialValue, { color: colors.primary }]}>
-              {safeFormatCurrency(financialStats.total_net)}
+            <Text style={[styles.financialValue, { color: colors.secondary }]}>
+              {safeFormatCurrency(financialStats.avg_monthly)}
             </Text>
           </View>
 
           <View style={styles.financialItem}>
             <Text style={[styles.financialLabel, { color: colors.textSecondary }]}>
-              Taux horaire moyen
+              Mois traités
             </Text>
-            <Text style={[styles.financialValue, { color: colors.secondary }]}>
-              {safeFormatCurrency(financialStats.avg_hourly_rate)}/h
+            <Text style={[styles.financialValue, { color: colors.primary }]}>
+              {safeFormatNumber(financialStats.monthly_evolution?.length || 0)}
             </Text>
           </View>
         </View>
 
-        {financialStats.monthly_evolution && financialStats.monthly_evolution.length > 0 && (
+        {financialStats.societies_worked ? (
+          <View style={styles.societiesInfo}>
+            <Text style={[styles.subSectionTitle, { color: colors.primary }]}>
+              Informations supplémentaires
+            </Text>
+            <View style={styles.societiesDetails}>
+              <Text style={[styles.societiesText, { color: colors.text }]}>
+                Sociétés travaillées: {safeFormatNumber(financialStats.societies_worked)}
+              </Text>
+              {financialStats.current_society ? (
+                <Text style={[styles.societiesText, { color: colors.textSecondary }]}>
+                  Société actuelle: {financialStats.current_society}
+                </Text>
+              ) : null}
+            </View>
+          </View>
+        ) : null}
+
+        {financialStats.monthly_evolution && financialStats.monthly_evolution.length > 0 ? (
           <View style={styles.monthlyEvolution}>
             <Text style={[styles.subSectionTitle, { color: colors.primary }]}>
-              Évolution mensuelle
+              Évolution mensuelle ({financialStats.year || new Date().getFullYear()})
             </Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               <View style={styles.evolutionChart}>
@@ -358,13 +407,13 @@ export default function AnalyticsScreen() {
                       style={[
                         styles.monthBar,
                         {
-                          height: Math.max(4, (month.amount / financialStats.max_monthly) * 80),
+                          height: Math.max(4, (month.amount / (financialStats.max_monthly || 1)) * 80),
                           backgroundColor: colors.secondary
                         }
                       ]}
                     />
                     <Text style={[styles.monthLabel, { color: colors.textSecondary }]}>
-                      {month.month_short}
+                      {month.month_short || ''}
                     </Text>
                     <Text style={[styles.monthAmount, { color: colors.text }]}>
                       {safeFormatCurrency(month.amount)}
@@ -374,7 +423,7 @@ export default function AnalyticsScreen() {
               </View>
             </ScrollView>
           </View>
-        )}
+        ) : null}
       </View>
     );
   };
@@ -395,7 +444,7 @@ export default function AnalyticsScreen() {
             </View>
             <View style={styles.ipmContent}>
               <Text style={[styles.ipmValue, { color: colors.primary }]}>
-                {safeFormatNumber(ipmStats.total_prise_en_charge)}
+                {safeFormatNumber(ipmStats.total_prise_en_charge || 0)}
               </Text>
               <Text style={[styles.ipmLabel, { color: colors.textSecondary }]}>
                 Prises en charge
@@ -409,7 +458,7 @@ export default function AnalyticsScreen() {
             </View>
             <View style={styles.ipmContent}>
               <Text style={[styles.ipmValue, { color: colors.primary }]}>
-                {safeFormatNumber(ipmStats.total_feuilles_soins)}
+                {safeFormatNumber(ipmStats.total_feuilles_soins || 0)}
               </Text>
               <Text style={[styles.ipmLabel, { color: colors.textSecondary }]}>
                 Feuilles de soins
@@ -423,7 +472,7 @@ export default function AnalyticsScreen() {
             </View>
             <View style={styles.ipmContent}>
               <Text style={[styles.ipmValue, { color: colors.primary }]}>
-                {safeFormatCurrency(ipmStats.total_remboursements)}
+                {safeFormatCurrency(ipmStats.total_remboursements || 0)}
               </Text>
               <Text style={[styles.ipmLabel, { color: colors.textSecondary }]}>
                 Remboursements
@@ -437,7 +486,7 @@ export default function AnalyticsScreen() {
             </View>
             <View style={styles.ipmContent}>
               <Text style={[styles.ipmValue, { color: colors.primary }]}>
-                {safeFormatNumber(ipmStats.famille_members_count)}
+                {safeFormatNumber(ipmStats.famille_members_count || 0)}
               </Text>
               <Text style={[styles.ipmLabel, { color: colors.textSecondary }]}>
                 Ayants droit
@@ -458,7 +507,7 @@ export default function AnalyticsScreen() {
       <View style={styles.reportActions}>
         <TouchableOpacity
           style={[styles.reportButton, { backgroundColor: colors.secondary }]}
-          onPress={() => router.push('/interimaire/reports')}
+          onPress={() => router.push('/(app)/(interimaire)/reports')}
         >
           <Ionicons name="document-text" size={20} color={colors.textTertiary} />
           <Text style={[styles.reportButtonText, { color: colors.textTertiary }]}>
@@ -468,7 +517,7 @@ export default function AnalyticsScreen() {
 
         <TouchableOpacity
           style={[styles.reportButton, { backgroundColor: colors.primary }]}
-          onPress={() => router.push('/interimaire/charts')}
+          onPress={() => router.push('/(app)/(interimaire)/charts')}
         >
           <Ionicons name="analytics" size={20} color={colors.textTertiary} />
           <Text style={[styles.reportButtonText, { color: colors.textTertiary }]}>
@@ -498,6 +547,7 @@ export default function AnalyticsScreen() {
       <CustomHeader title="Analytics" showBackButton={true} />
       
       {renderPeriodSelector()}
+      {renderYearSelector()}
 
       <ScrollView
         style={styles.scrollView}
@@ -511,7 +561,7 @@ export default function AnalyticsScreen() {
         }
       >
         {renderQuickStats()}
-        {renderWorkAnalytics()}
+        {renderCurrentSociety()}
         {renderFinancialAnalytics()}
         {renderIpmAnalytics()}
         {renderReportActions()}
@@ -538,22 +588,51 @@ const styles = StyleSheet.create({
 
   // Period selector
   periodContainer: {
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    backgroundColor: 'transparent',
+    paddingBottom: 8,
   },
   periodContent: {
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 6,
   },
   periodChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 16,
     borderWidth: 1,
-    marginRight: 12,
+    marginRight: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 28,
   },
   periodText: {
-    fontSize: 14,
+    fontSize: 12,
+  },
+
+  // Year selector
+  yearContainer: {
+    backgroundColor: 'transparent',
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  yearContent: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+  },
+  yearChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginRight: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 26,
+  },
+  yearText: {
+    fontSize: 12,
   },
 
   // Scroll view
@@ -632,51 +711,32 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
 
-  // Work analytics
-  workMetrics: {
+  // Society info
+  societyInfo: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 20,
-  },
-  workMetricItem: {
-    flex: 1,
     alignItems: 'center',
+    paddingVertical: 12,
   },
-  metricLabel: {
-    fontSize: 12,
-    textAlign: 'center',
-    marginBottom: 4,
+  societyIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
   },
-  metricValue: {
+  societyDetails: {
+    flex: 1,
+  },
+  societyName: {
     fontSize: 16,
     fontWeight: '600',
+    marginBottom: 4,
   },
-  topStructures: {
-    marginTop: 16,
-  },
-  structureItem: {
-    marginBottom: 12,
-  },
-  structureInfo: {
-    marginBottom: 6,
-  },
-  structureName: {
+  societyStats: {
     fontSize: 14,
-    fontWeight: '500',
-    marginBottom: 2,
   },
-  structureStats: {
-    fontSize: 12,
-  },
-  structureBar: {
-    height: 4,
-    borderRadius: 2,
-    overflow: 'hidden',
-  },
-  structureBarFill: {
-    height: '100%',
-    borderRadius: 2,
-  },
+
 
   // Financial analytics
   financialGrid: {
@@ -696,6 +756,15 @@ const styles = StyleSheet.create({
   financialValue: {
     fontSize: 16,
     fontWeight: '600',
+  },
+  societiesInfo: {
+    marginBottom: 20,
+  },
+  societiesDetails: {
+    gap: 8,
+  },
+  societiesText: {
+    fontSize: 14,
   },
   monthlyEvolution: {
     marginTop: 16,

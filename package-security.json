@@ -1,0 +1,88 @@
+{
+  "name": "pro-recrute-security-dependencies",
+  "description": "Dependencies sécurisées supplémentaires pour le renforcement zero-trust",
+  "dependencies": {
+    "expo-secure-store": "~13.0.2",
+    "expo-crypto": "~13.0.2",
+    "expo-local-authentication": "~14.0.1",
+    "expo-device": "~6.0.2",
+    "expo-application": "~5.9.1",
+    "expo-network": "~6.0.1",
+    "expo-location": "~17.0.1",
+    "@react-native-async-storage/async-storage": "1.23.1"
+  },
+  "devDependencies": {
+    "react-native-root-detection": "^1.0.0"
+  },
+  "securityRecommendations": {
+    "note": "Dépendances recommandées pour un niveau de sécurité maximum",
+    "additionalPackages": [
+      {
+        "name": "react-native-keychain",
+        "description": "Stockage sécurisé des credentials avec Keychain/Keystore natif",
+        "installation": "npm install react-native-keychain",
+        "usage": "Alternative plus robuste à expo-secure-store pour le stockage sécurisé"
+      },
+      {
+        "name": "react-native-ssl-pinning",
+        "description": "Certificate pinning natif pour React Native",
+        "installation": "npm install react-native-ssl-pinning",
+        "usage": "Implémentation native du certificate pinning (requiert linking)"
+      },
+      {
+        "name": "react-native-jailmonkey",
+        "description": "Détection avancée de jailbreak/root",
+        "installation": "npm install react-native-jailmonkey",
+        "usage": "Détection plus précise des appareils compromis"
+      },
+      {
+        "name": "react-native-sensitive-info",
+        "description": "Stockage ultra-sécurisé avec chiffrement AES",
+        "installation": "npm install react-native-sensitive-info",
+        "usage": "Chiffrement AES-256 pour données sensibles"
+      },
+      {
+        "name": "rn-secure-storage",
+        "description": "Stockage sécurisé avec chiffrement RSA/AES",
+        "installation": "npm install rn-secure-storage",
+        "usage": "Alternative avec chiffrement hybride RSA/AES"
+      }
+    ]
+  },
+  "securityConfiguration": {
+    "certificatePinning": {
+      "enabled": true,
+      "domains": [
+        "api.pro-recrute.com",
+        "backup-api.pro-recrute.com"
+      ],
+      "enforcement": "strict"
+    },
+    "rootDetection": {
+      "enabled": true,
+      "blockOnDetection": true,
+      "reportViolations": true
+    },
+    "biometricAuthentication": {
+      "required": false,
+      "fallbackToPin": true,
+      "maxRetries": 3
+    },
+    "sessionManagement": {
+      "timeout": 1800000,
+      "refreshThreshold": 300000,
+      "invalidateOnSuspiciousActivity": true
+    },
+    "networkSecurity": {
+      "vpnDetection": true,
+      "dnsValidation": true,
+      "geoLocationChecks": false
+    }
+  },
+  "complianceStandards": [
+    "OWASP Mobile Top 10",
+    "ISO 27001",
+    "NIST Cybersecurity Framework",
+    "RGPD/GDPR Data Protection"
+  ]
+}

@@ -8,6 +8,7 @@ import React, {
 } from 'react';
 import {Platform,Alert} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Device from 'expo-device';
 import * as SplashScreenExpo from 'expo-splash-screen';
 import { 
   loginUser as apiLoginUser, 
@@ -19,18 +20,15 @@ import {
   sendOtp as apiSendOtp,
   verifyOtp as apiVerifyOtp,
 } from '../utils/api';
+import {
+  loginUser as secureLoginUser,
+  logoutUser as secureLogoutUser,
+  fetchUserProfile as secureFetchUserProfile,
+} from '../utils/secure-api';
+import { validateSession, invalidateSession, secureGetToken } from '../utils/security';
 import { router, useSegments } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import * as AuthSession from 'expo-auth-session';
-
-// Import conditionnel pour Device
-let Device;
-try {
-  Device = require('expo-device');
-} catch (error) {
-  console.warn('expo-device non disponible:', error.message);
-  Device = { deviceName: 'UnknownDevice' };
-}
 
 SplashScreenExpo.preventAutoHideAsync();
 
@@ -129,7 +127,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const fetchUser = useCallback(async () => {
     try {
-      const fetchedUser = await apiFetchUserProfile();
+      // Utiliser l'API sécurisée si disponible, sinon fallback
+      const fetchedUser = await (secureFetchUserProfile || apiFetchUserProfile)();
       if (fetchedUser && fetchedUser.role === 'interimaire') { 
         const interimProfile = await getInterimProfile();
         if (interimProfile) {
@@ -156,7 +155,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const refreshUserProfile = useCallback(async () => {
     try {
       console.log('Rechargement du profil utilisateur avec toutes les relations...');
-      const fetchedUser = await apiFetchUserProfile();
+      const fetchedUser = await fetchUserProfile();
       if (fetchedUser && fetchedUser.role === 'interimaire') { 
         const interimProfile = await getInterimProfile();
         if (interimProfile) {
@@ -201,7 +200,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       if (!currentPath.includes('otp_verification')) {
         router.replace({
           pathname: '/(auth)/otp_verification',
-          params: { email: emailForOtp || user?.email, deviceName: deviceNameForOtp || Device?.deviceName || 'UnknownDevice' },
+          params: { email: emailForOtp || user?.email, deviceName: deviceNameForOtp || Device.deviceName || 'UnknownDevice' },
         });
       }
       return; 
@@ -301,8 +300,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     setLoading(true);
     setError(null);
     try {
-      const actualDeviceName = deviceName || Device?.deviceName || 'UnknownDevice';
-      const response = await apiLoginUser(email, password, actualDeviceName);
+      const actualDeviceName = deviceName || Device.deviceName || 'UnknownDevice';
+      const response = await loginUser(email, password, actualDeviceName);
       
       if (response.otp_required) {
         const minimalUser: User = { 
@@ -338,8 +337,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     setLoading(true);
     setError(null);
     try {
-      const actualDeviceName = deviceName || Device?.deviceName || 'UnknownDevice';
-      const response = await apiRegisterUser(name, email, password, passwordConfirmation, role, actualDeviceName);
+      const actualDeviceName = deviceName || Device.deviceName || 'UnknownDevice';
+      const response = await registerUser(name, email, password, passwordConfirmation, role, actualDeviceName);
       
       const minimalUser: User = { 
         id: response.user?.id || 0, 
@@ -367,7 +366,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     setError(null);
     try {
       if (token) {
-        await apiLogoutUser(); 
+        await logoutUser(); 
       }
       
       await AsyncStorage.removeItem(STORAGE_KEYS.USER_TOKEN);
@@ -431,11 +430,11 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           setError(decodeURIComponent(errorFromUrl));
           console.error(`AuthProvider: Erreur OAuth depuis l'API: ${decodeURIComponent(errorFromUrl)}`);
         } else if (tokenFromUrl) {
-          const userFromApi = await apiFetchUserProfile(); // Récupérer l'utilisateur complet via le token
+          const userFromApi = await fetchUserProfile(); // Récupérer l'utilisateur complet via le token
 
           // Récupérer le profil intérimaire si nécessaire
           if (userFromApi && userFromApi.role === 'interimaire') {
-            const interimProfile = await getInterimProfile();
+            const interimProfile = await (await import('../utils/api')).getInterimProfile();
             if (interimProfile) {
               userFromApi.is_contract_active = interimProfile.is_contract_active;
             } else {

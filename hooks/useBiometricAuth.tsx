@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { Platform } from 'react-native';
 import * as LocalAuthentication from 'expo-local-authentication';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { secureStoreBiometricCredentials, secureGetBiometricCredentials } from '../utils/security';
+import * as Crypto from 'expo-crypto';
 
 interface BiometricAuthState {
   isAvailable: boolean;
@@ -11,7 +13,10 @@ interface BiometricAuthState {
 
 interface StoredCredentials {
   email: string;
-  password: string; // En production, il faudrait chiffrer ceci
+  password: string; // Mot de passe original (stocké de manière sécurisée via SecureStore)
+  passwordHash?: string; // Hash sécurisé du mot de passe (pour compatibilité)
+  timestamp: number;
+  deviceId: string;
 }
 
 const BIOMETRIC_STORAGE_KEY = '@app_biometric_enabled';
@@ -36,9 +41,18 @@ export const useBiometricAuth = () => {
       const biometricEnabled = await AsyncStorage.getItem(BIOMETRIC_STORAGE_KEY);
       const isEnabled = biometricEnabled === 'true';
 
-      // Vérifier si des credentials sont stockés
-      const storedCredentials = await AsyncStorage.getItem(CREDENTIALS_STORAGE_KEY);
-      const hasStoredCredentials = !!storedCredentials;
+      // Vérifier si des credentials sont stockés (sécurisé + legacy)
+      let hasStoredCredentials = false;
+      try {
+        const secureCredentials = await secureGetBiometricCredentials();
+        const legacyCredentials = await AsyncStorage.getItem(CREDENTIALS_STORAGE_KEY);
+        hasStoredCredentials = !!(secureCredentials || legacyCredentials);
+      } catch (error) {
+        console.warn('Erreur vérification credentials stockés:', error);
+        // Fallback - vérifier seulement AsyncStorage
+        const legacyCredentials = await AsyncStorage.getItem(CREDENTIALS_STORAGE_KEY);
+        hasStoredCredentials = !!legacyCredentials;
+      }
 
 
       setState({
@@ -67,17 +81,33 @@ export const useBiometricAuth = () => {
     try {
       const result = await LocalAuthentication.authenticateAsync({
         promptMessage: Platform.OS === 'ios' 
-          ? 'Authentifiez-vous avec Touch ID ou Face ID'
-          : 'Authentifiez-vous avec votre empreinte digitale',
+          ? '🔐 Authentifiez-vous avec Touch ID ou Face ID'
+          : '🔐 Authentifiez-vous avec votre empreinte digitale',
         fallbackLabel: 'Utiliser le mot de passe',
         cancelLabel: 'Annuler',
+        disableDeviceFallback: false,
       });
 
       if (result.success) {
-        // Récupérer les credentials stockés
-        const storedCredentials = await AsyncStorage.getItem(CREDENTIALS_STORAGE_KEY);
-        if (storedCredentials) {
-          return JSON.parse(storedCredentials) as StoredCredentials;
+        // Récupérer les credentials depuis le stockage sécurisé
+        try {
+          const secureCredentials = await secureGetBiometricCredentials();
+          if (secureCredentials) {
+            return secureCredentials;
+          }
+        } catch (error) {
+          console.warn('Erreur récupération credentials sécurisés:', error);
+        }
+        
+        // Fallback - migration depuis l'ancien stockage
+        const legacyCredentials = await AsyncStorage.getItem(CREDENTIALS_STORAGE_KEY);
+        if (legacyCredentials) {
+          const parsed = JSON.parse(legacyCredentials);
+          // Migrer vers le stockage sécurisé si possible
+          if (parsed.password) {
+            await storeCredentials(parsed.email, parsed.password);
+          }
+          return parsed;
         }
       }
 
@@ -94,24 +124,54 @@ export const useBiometricAuth = () => {
       // Vérifier d'abord si l'authentification biométrique est activée
       const biometricEnabled = await AsyncStorage.getItem(BIOMETRIC_STORAGE_KEY);
       if (biometricEnabled === 'true') {
-        const credentials: StoredCredentials = { email, password };
-        await AsyncStorage.setItem(CREDENTIALS_STORAGE_KEY, JSON.stringify(credentials));
+        // Stocker le mot de passe original (SecureStore le chiffre automatiquement)
+        // et créer un hash pour la compatibilité
+        const passwordHash = await Crypto.digestStringAsync(
+          Crypto.CryptoDigestAlgorithm.SHA256,
+          password + email.toLowerCase() // Salt avec l'email
+        );
+        
+        // Essayer le stockage sécurisé d'abord avec le mot de passe original
+        const secureStoreSuccess = await secureStoreBiometricCredentials(email, password);
+        
+        if (!secureStoreSuccess) {
+          // Fallback vers AsyncStorage si SecureStore n'est pas disponible
+          console.warn('SecureStore indisponible, utilisation du fallback AsyncStorage');
+          const credentials = {
+            email,
+            password, // Stocker le mot de passe original même en fallback (AsyncStorage)
+            passwordHash,
+            timestamp: Date.now(),
+            deviceId: 'fallback-device'
+          };
+          await AsyncStorage.setItem(CREDENTIALS_STORAGE_KEY, JSON.stringify(credentials));
+        } else {
+          // Supprimer l'ancien stockage non sécurisé si le stockage sécurisé a réussi
+          await AsyncStorage.removeItem(CREDENTIALS_STORAGE_KEY);
+        }
         
         // Mettre à jour l'état
         setState(prev => ({ ...prev, hasStoredCredentials: true }));
       }
     } catch (error) {
-      console.error('Erreur lors du stockage des credentials:', error);
+      console.error('Erreur lors du stockage sécurisé des credentials:', error);
     }
   };
 
-  // Supprimer les credentials stockés
+  // Supprimer les credentials stockés de manière sécurisée
   const clearStoredCredentials = async (): Promise<void> => {
     try {
+      // Supprimer du stockage sécurisé
+      const { secureDeleteToken } = await import('../utils/security');
+      await secureDeleteToken();
+      
+      // Supprimer les anciens credentials non sécurisés
       await AsyncStorage.removeItem(CREDENTIALS_STORAGE_KEY);
-      setState(prev => ({ ...prev, hasStoredCredentials: false }));
+      await AsyncStorage.removeItem(BIOMETRIC_STORAGE_KEY);
+      
+      setState(prev => ({ ...prev, hasStoredCredentials: false, isEnabled: false }));
     } catch (error) {
-      console.error('Erreur lors de la suppression des credentials:', error);
+      console.error('Erreur lors de la suppression sécurisée des credentials:', error);
     }
   };
 
