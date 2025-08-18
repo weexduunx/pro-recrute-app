@@ -341,6 +341,7 @@ export default function AuthenticatedJobBoardScreen() {
       <CustomHeader
         title="Offres d'emploi"
         user={user}
+        showNotificationIcon={true}
         onMenuPress={handleMenuPress}
         onAvatarPress={handleAvatarPress}
       />

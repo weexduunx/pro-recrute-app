@@ -103,6 +103,7 @@ export default function EntretiensMainScreen() {
         <CustomHeader
           title="Gestion des Entretiens"
           user={user}
+          showNotificationIcon={true}
         />
 
         <ScrollView

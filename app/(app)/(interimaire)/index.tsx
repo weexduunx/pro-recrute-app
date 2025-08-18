@@ -324,6 +324,45 @@ export default function InterimDashboardScreen() {
     );
   };
 
+  // Vérification du contrat actif
+  if (user?.is_contract_active === false) {
+    return (
+      <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
+        <StatusBar barStyle="light-content" backgroundColor="#091e60" />
+        <CustomHeader
+          title={t('Espace Intérimaire')}
+          user={user}
+          onMenuPress={handleMenuPress}
+          onAvatarPress={handleAvatarPress}
+          showNotificationIcon={true}
+        />
+        <View style={[styles.container, { backgroundColor: colors.background }]}>
+          <View style={styles.restrictedContainer}>
+            <Ionicons name="alert-circle-outline" size={64} color={colors.error} />
+            <Text style={[styles.restrictedTitle, { color: colors.textPrimary }]}>
+              {t('Accès restreint')}
+            </Text>
+            <Text style={[styles.restrictedText, { color: colors.textSecondary }]}>
+              {t('Votre contrat intérimaire est terminé ou inactif. Vous n\'avez plus accès à cet espace.')}
+            </Text>
+            <Text style={[styles.restrictedText, { color: colors.textSecondary }]}>
+              {t('Veuillez contacter l\'administration pour plus d\'informations.')}
+            </Text>
+            <TouchableOpacity 
+              style={[styles.contactButton, { backgroundColor: colors.primary }]}
+              onPress={() => router.push('/(app)/home')}
+            >
+              <Ionicons name="home-outline" size={18} color="#ffffff" />
+              <Text style={styles.contactButtonText}>
+                {t('Retour à l\'accueil')}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
       <StatusBar barStyle="light-content" backgroundColor="#091e60" />
@@ -332,6 +371,7 @@ export default function InterimDashboardScreen() {
         user={user}
         onMenuPress={handleMenuPress}
         onAvatarPress={handleAvatarPress}
+        showNotificationIcon={true}
       />
       <ScrollView
         style={[styles.container, { backgroundColor: colors.background }]}
@@ -672,5 +712,44 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 20,
     marginBottom: 8,
+  },
+
+  // Restricted Access Styles
+  restrictedContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 40,
+    gap: 16,
+  },
+  
+  restrictedTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginTop: 16,
+  },
+  
+  restrictedText: {
+    fontSize: 16,
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 8,
+  },
+  
+  contactButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 24,
+    marginTop: 20,
+    gap: 8,
+  },
+  
+  contactButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

@@ -237,6 +237,7 @@ export default function MyApplicationsScreen() {
       <CustomHeader
         title="Candidatures"
         user={user}
+        showNotificationIcon={true}
         onMenuPress={handleMenuPress}
         onAvatarPress={handleAvatarPress}
       />

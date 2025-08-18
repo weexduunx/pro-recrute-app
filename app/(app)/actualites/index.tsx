@@ -218,6 +218,7 @@ export default function ActualitesScreen() {
       <CustomHeader
         title="Actualités"
         user={user}
+        showNotificationIcon={true}
         onMenuPress={handleMenuPress}
         onAvatarPress={handleAvatarPress}
       />

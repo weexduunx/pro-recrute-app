@@ -394,3 +394,22 @@ const renderAffiliatedStructuresBackup = () => {
     }
   }, [user]);
 */
+
+import React from 'react';
+import { View, Text } from 'react-native';
+
+// Ce fichier contient les sections sauvegardées du dashboard intérimaire
+// Ces sections ont été retirées du dashboard principal mais conservées ici
+// pour une utilisation future si nécessaire
+
+const BackupSections = () => {
+  return (
+    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+      <Text style={{ textAlign: 'center', fontSize: 16 }}>
+        Sections sauvegardées - Ce fichier contient les sections retirées du dashboard principal
+      </Text>
+    </View>
+  );
+};
+
+export default BackupSections;

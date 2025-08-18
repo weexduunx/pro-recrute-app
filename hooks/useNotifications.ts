@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getUnreadNotificationCount } from '../utils/interim-notifications-api';
+import { getUnreadCandidatNotificationCount } from '../utils/candidat-notifications-api';
 import { useAuth } from '../components/AuthProvider';
 
 export interface NotificationHook {
@@ -14,15 +15,21 @@ export const useNotifications = (): NotificationHook => {
   const [loading, setLoading] = useState(false);
 
   const refreshUnreadCount = useCallback(async () => {
-    if (!user || user.role !== 'interimaire') {
+    if (!user || (user.role !== 'interimaire' && user.role !== 'user')) {
       return;
     }
 
     try {
       setLoading(true);
-      const response = await getUnreadNotificationCount();
+      let response;
       
-      if (response.success) {
+      if (user.role === 'interimaire') {
+        response = await getUnreadNotificationCount();
+      } else if (user.role === 'user') {
+        response = await getUnreadCandidatNotificationCount();
+      }
+      
+      if (response?.success) {
         setUnreadCount(response.unread_count);
       }
     } catch (error) {

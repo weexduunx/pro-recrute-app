@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,7 +11,6 @@ import {
   FlatList,
   TextInput,
   Modal,
-  Animated,
   Dimensions,
 } from 'react-native';
 import CustomHeader from '../../../components/CustomHeader';
@@ -30,7 +29,6 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { Picker } from '@react-native-picker/picker';
-import { LinearGradient } from 'expo-linear-gradient';
 
 // Interface pour un échéancier parent (Echelonnement)
 interface Loan {
@@ -41,7 +39,10 @@ interface Loan {
   duree_echelonnement?: number;
   date_debut?: string;
   date_fin?: string;
-  mois_pret: string;
+  mois_pret: number;
+  valider_par?: number;
+  valider_par_name?: string;
+  statut: number;
   details?: LoanDetail[];
 }
 
@@ -130,9 +131,6 @@ export default function IpmFileScreen() {
   const [fdsFamilleId, setFdsFamilleId] = useState<number | undefined>(undefined);
   const [submittingFds, setSubmittingFds] = useState(false);
 
-  // Animations pour les modals
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(50)).current;
 
 
   // --- Callbacks de chargement ---
@@ -197,23 +195,14 @@ export default function IpmFileScreen() {
   const openRequestModal = (type: 'prise_en_charge' | 'feuille_de_soins') => {
     setRequestType(type);
     setShowRequestModal(true);
-    Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }),
-      Animated.timing(slideAnim, { toValue: 0, duration: 300, useNativeDriver: true }),
-    ]).start();
   };
 
   const closeRequestModal = () => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 0, duration: 200, useNativeDriver: true }),
-      Animated.timing(slideAnim, { toValue: 50, duration: 200, useNativeDriver: true }),
-    ]).start(() => {
-      setShowRequestModal(false);
-      setRequestType(null);
-      // Réinitialiser les champs du formulaire
-      setPecObjet(''); setPecDate(new Date().toISOString().split('T')[0]); setPecFamilleId(undefined);
-      setFdsType(''); setFdsDateSoins(new Date().toISOString().split('T')[0]); setFdsMontantTotal(''); setFdsFamilleId(undefined);
-    });
+    setShowRequestModal(false);
+    setRequestType(null);
+    // Réinitialiser les champs du formulaire
+    setPecObjet(''); setPecDate(new Date().toISOString().split('T')[0]); setPecFamilleId(undefined);
+    setFdsType(''); setFdsDateSoins(new Date().toISOString().split('T')[0]); setFdsMontantTotal(''); setFdsFamilleId(undefined);
   };
 
   const handleSubmitPriseEnCharge = async () => {
@@ -272,12 +261,23 @@ export default function IpmFileScreen() {
   const handleAvatarPress = () => { router.push('/(app)/profile-details'); };
 
 
+  // Fonction pour convertir le mois integer en nom du mois
+  const getMonthName = (monthNumber: number): string => {
+    const months = [
+      '', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+      'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'
+    ];
+    return months[monthNumber] || `Mois ${monthNumber}`;
+  };
+
   const renderLoanItem = ({ item }: { item: Loan }) => (
     <View style={[styles.cardItem, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
       <Ionicons name="wallet-outline" size={24} color={colors.secondary} style={styles.itemIcon} />
       <View style={styles.itemContent}>
         <Text style={[styles.itemTitle, { color: colors.error }]}>{t('Retenu')} : {item.montant_retenu ?? t('Non spécifié')} FCFA</Text>
-        {/* <Text style={[styles.itemTitle, { color: colors.textPrimary }]}>{t('Prêt')} : {item.montant_echeances ?? t('Non spécifié')} FCFA</Text> */}
+        <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>
+          {t("Mois du prêt:")} {item.mois_pret ? getMonthName(item.mois_pret) : t("N/A")}
+        </Text>
         <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>
           {t("Durée échéance:")} {item.duree_echelonnement ?
             `${Math.floor(item.duree_echelonnement / 30)} ${Math.floor(item.duree_echelonnement / 30) > 1 ? 'mois' : 'mois'}`
@@ -288,6 +288,14 @@ export default function IpmFileScreen() {
         </Text>
         <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>
           {t("Fin échéance:")} {item.date_fin ? new Date(item.date_fin).toLocaleDateString() : t("N/A")}
+        </Text>
+        {item.valider_par_name && (
+          <Text style={[styles.itemSubtitle, { color: colors.success }]}>
+            {t("Validé par:")} {item.valider_par_name}
+          </Text>
+        )}
+        <Text style={[styles.itemSubtitle, { color: item.statut === 1 ? colors.success : colors.warning }]}>
+          {t("Statut:")} {item.statut === 1 ? t("Validé") : t("En attente")}
         </Text>
         {item.details && item.details.length > 0 && (
           <View style={[styles.detailsList, { borderTopColor: colors.border }]}>
@@ -364,7 +372,7 @@ export default function IpmFileScreen() {
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
-      <CustomHeader title={t("Mon Dossier IPM")} user={user} showBackButton={true} onAvatarPress={handleAvatarPress} />
+      <CustomHeader title={t("Mon Dossier IPM")} user={user} showBackButton={true} onAvatarPress={handleAvatarPress} showNotificationIcon={true} />
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
@@ -547,32 +555,62 @@ export default function IpmFileScreen() {
       </ScrollView>
 
       {/* Modal de demande de prise en charge / feuille de soins */}
-      <Modal
-        animationType="fade"
-        transparent={true}
-        visible={showRequestModal}
-        onRequestClose={closeRequestModal}
-      >
-        <Animated.View style={[styles.modalOverlay, { opacity: fadeAnim }]}>
-          <Animated.View style={[styles.modalContainer, { backgroundColor: colors.cardBackground, transform: [{ translateY: slideAnim }] }]}>
-            <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>
-              {requestType === 'prise_en_charge' ? t('Demande de Prise en Charge') : t('Demande de Feuille de Soins')}
-            </Text>
+      <Modal visible={showRequestModal} transparent animationType="slide">
+        <View style={{ flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'flex-end' }}>
+          <View style={{ 
+            backgroundColor: '#FFFFFF',
+            borderTopLeftRadius: 24,
+            borderTopRightRadius: 24,
+            maxHeight: '90%',
+            paddingBottom: 20
+          }}>
+            {/* Header - Style identique à la modale de stockage */}
+            <View style={{
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: 20,
+              paddingBottom: 10,
+              borderBottomWidth: 1,
+              borderBottomColor: '#F3F4F6'
+            }}>
+              <Text style={{ fontSize: 20, fontWeight: '700', color: '#091e60' }}>
+                {requestType === 'prise_en_charge' ? t('Demande de Prise en Charge') : t('Demande de Feuille de Soins')}
+              </Text>
+              <TouchableOpacity onPress={closeRequestModal} style={{ padding: 8 }}>
+                <Ionicons name="close" size={24} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
 
-            {/* Sélecteur de bénéficiaire */}
-            <View style={styles.inputGroup}>
-              <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Bénéficiaire')}</Text>
+            {/* Content - Style identique à la modale de stockage */}
+            <View style={{ padding: 20 }}>
+              {/* Section Bénéficiaire */}
+              <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#091e60', marginBottom: 12 }}>
+                {t('Bénéficiaire')}
+              </Text>
+              
               {loadingFamilleMembers ? (
-                <ActivityIndicator size="small" color={colors.secondary} />
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 20 }}>
+                  <ActivityIndicator size="small" color={colors.secondary} />
+                  <Text style={{ color: colors.textSecondary, marginLeft: 10 }}>
+                    {t('Chargement...')}
+                  </Text>
+                </View>
               ) : (
-                <View style={[styles.pickerContainer, { borderColor: colors.border, backgroundColor: colors.background }]}>
+                <View style={{ 
+                  borderWidth: 1, 
+                  borderColor: '#E5E7EB', 
+                  borderRadius: 8, 
+                  marginBottom: 20,
+                  backgroundColor: '#F9FAFB' 
+                }}>
                   <Picker
                     selectedValue={requestType === 'prise_en_charge' ? pecFamilleId : fdsFamilleId}
                     onValueChange={(itemValue: number | undefined) => {
                       if (requestType === 'prise_en_charge') setPecFamilleId(itemValue);
                       else setFdsFamilleId(itemValue);
                     }}
-                    style={[styles.picker, { color: colors.textPrimary }]}
+                    style={{ height: 50, paddingHorizontal: 12, color: '#091e60' }}
                   >
                     <Picker.Item label={t("Vous-même")} value={undefined} />
                     {familleMembers.map(member => (
@@ -581,97 +619,116 @@ export default function IpmFileScreen() {
                   </Picker>
                 </View>
               )}
-            </View>
 
-            {requestType === 'prise_en_charge' ? (
-              // Formulaire Prise en Charge
-              <>
-                <View style={styles.inputGroup}>
-                  <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Objet de la demande')}</Text>
+              {/* Section Détails */}
+              <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#091e60', marginTop: 10, marginBottom: 12 }}>
+                {requestType === 'prise_en_charge' ? t('Détails de la prise en charge') : t('Détails de la feuille de soins')}
+              </Text>
+
+              {requestType === 'prise_en_charge' ? (
+                <>
+                  <Text style={{ color: colors.textSecondary, marginBottom: 8 }}>
+                    {t('Objet de la demande')}
+                  </Text>
                   <TextInput
-                    style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
+                    style={{ 
+                      borderWidth: 1, 
+                      borderColor: '#E5E7EB', 
+                      borderRadius: 8, 
+                      padding: 12, 
+                      fontSize: 16, 
+                      marginBottom: 16,
+                      backgroundColor: '#F9FAFB',
+                      color: '#091e60'
+                    }}
                     placeholder={t("Ex: Consultation générale, Médicaments")}
                     placeholderTextColor={colors.textSecondary}
                     value={pecObjet}
                     onChangeText={setPecObjet}
                   />
-                </View>
-                <View style={styles.inputGroup}>
-                  <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Date de la demande')}</Text>
+
+                  <Text style={{ color: colors.textSecondary, marginBottom: 8 }}>
+                    {t('Date de la demande')}
+                  </Text>
                   <TextInput
-                    style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
+                    style={{ 
+                      borderWidth: 1, 
+                      borderColor: '#E5E7EB', 
+                      borderRadius: 8, 
+                      padding: 12, 
+                      fontSize: 16, 
+                      marginBottom: 16,
+                      backgroundColor: '#F9FAFB',
+                      color: '#091e60'
+                    }}
                     placeholder={t("AAAA-MM-JJ")}
                     placeholderTextColor={colors.textSecondary}
                     value={pecDate}
                     onChangeText={setPecDate}
                   />
-                </View>
-                {/* Ajoutez ici les champs pour medcin_id et structure_id si nécessaire */}
-                <TouchableOpacity
-                  style={[styles.modalButton, { backgroundColor: colors.secondary }]}
-                  onPress={handleSubmitPriseEnCharge}
-                  disabled={submittingPec}
-                >
-                  {submittingPec ? (
-                    <ActivityIndicator color="#FFFFFF" size="small" />
-                  ) : (
-                    <Text style={styles.modalButtonText}>{t('Soumettre la demande')}</Text>
-                  )}
-                </TouchableOpacity>
-              </>
-            ) : (
-              // Formulaire Feuille de Soins
-              <>
-                <View style={styles.inputGroup}>
-                  <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Type de soins')}</Text>
+                </>
+              ) : (
+                <>
+                  <Text style={{ color: colors.textSecondary, marginBottom: 8 }}>
+                    {t('Type de soins')}
+                  </Text>
                   <TextInput
-                    style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
+                    style={{ 
+                      borderWidth: 1, 
+                      borderColor: '#E5E7EB', 
+                      borderRadius: 8, 
+                      padding: 12, 
+                      fontSize: 16, 
+                      marginBottom: 16,
+                      backgroundColor: '#F9FAFB',
+                      color: '#091e60'
+                    }}
                     placeholder={t("Ex: Consultation, Médicaments, Examen")}
                     placeholderTextColor={colors.textSecondary}
                     value={fdsType}
                     onChangeText={setFdsType}
                   />
-                </View>
-                {/* <View style={styles.inputGroup}>
-                  <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Date des soins')}</Text>
-                  <TextInput
-                    style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
-                    placeholder={t("AAAA-MM-JJ")}
-                    placeholderTextColor={colors.textSecondary}
-                    value={fdsDateSoins}
-                    onChangeText={setFdsDateSoins}
-                  />
-                </View> */}
-                {/* <View style={styles.inputGroup}>
-                  <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Montant total (FCFA)')}</Text>
-                  <TextInput
-                    style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
-                    placeholder={t("Ex: 15000")}
-                    placeholderTextColor={colors.textSecondary}
-                    keyboardType="numeric"
-                    value={fdsMontantTotal}
-                    onChangeText={setFdsMontantTotal}
-                  />
-                </View> */}
-                <TouchableOpacity
-                  style={[styles.modalButton, { backgroundColor: colors.secondary }]}
-                  onPress={handleSubmitFeuilleDeSoins}
-                  disabled={submittingFds}
-                >
-                  {submittingFds ? (
-                    <ActivityIndicator color="#FFFFFF" size="small" />
-                  ) : (
-                    <Text style={styles.modalButtonText}>{t('Soumettre la demande')}</Text>
-                  )}
-                </TouchableOpacity>
-              </>
-            )}
+                </>
+              )}
 
-            <TouchableOpacity style={[styles.modalButton, styles.modalCancelButton, { backgroundColor: colors.error, marginTop: 10 }]} onPress={closeRequestModal}>
-              <Text style={styles.modalButtonText}>{t('Annuler')}</Text>
-            </TouchableOpacity>
-          </Animated.View>
-        </Animated.View>
+              {/* Boutons d'action - Style identique à la modale de stockage */}
+              <TouchableOpacity
+                style={{ 
+                  backgroundColor: requestType === 'prise_en_charge' ? '#091e60' : colors.secondary, 
+                  padding: 12, 
+                  borderRadius: 8, 
+                  alignItems: 'center', 
+                  marginTop: 20 
+                }}
+                onPress={requestType === 'prise_en_charge' ? handleSubmitPriseEnCharge : handleSubmitFeuilleDeSoins}
+                disabled={requestType === 'prise_en_charge' ? submittingPec : submittingFds}
+              >
+                {(requestType === 'prise_en_charge' ? submittingPec : submittingFds) ? (
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                ) : (
+                  <Text style={{ color: '#FFFFFF', fontWeight: 'bold' }}>
+                    {t('Soumettre la demande')}
+                  </Text>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={{ 
+                  backgroundColor: '#E5E7EB', 
+                  padding: 12, 
+                  borderRadius: 8, 
+                  alignItems: 'center', 
+                  marginTop: 12 
+                }}
+                onPress={closeRequestModal}
+              >
+                <Text style={{ color: '#6B7280', fontWeight: 'bold' }}>
+                  {t('Annuler')}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
       </Modal>
     </SafeAreaView>
   );
@@ -712,15 +769,6 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 20,
     fontWeight: '700',
-  },
-  loadingContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 40,
-  },
-  loadingText: {
-    marginTop: 10,
-    fontSize: 16,
   },
   errorContainer: {
     alignItems: 'center',
@@ -942,5 +990,18 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 2,
+  },
+
+  // Styles pour la compatibilité avec le reste du composant
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 20,
+    gap: 12,
+  },
+
+  loadingText: {
+    fontSize: 14,
   },
 });

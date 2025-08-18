@@ -9,7 +9,7 @@ try {
   Crypto = require('expo-crypto');
   Device = require('expo-device');
 } catch (error) {
-  console.warn('Modules de sécurité non disponibles, fallback vers AsyncStorage:', error.message);
+  console.log('Security modules fallback: using AsyncStorage for secure storage');
 }
 
 /**

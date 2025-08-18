@@ -329,6 +329,7 @@ export default function DashboardScreen() {
       <CustomHeader
         title="Tableau de bord"
         user={user}
+        showNotificationIcon={true}
         onMenuPress={handleMenuPress}
         onAvatarPress={handleAvatarPress}
       />

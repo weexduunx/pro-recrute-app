@@ -5,6 +5,7 @@ import { FontAwesome5, Ionicons } from '@expo/vector-icons';
 import { useNavigation, DrawerActions } from '@react-navigation/native';
 import { router } from 'expo-router';
 import { useAuth } from './AuthProvider';
+import { useNotifications } from '../hooks/useNotifications';
 import { StatusBar } from 'expo-status-bar';
 // @ts-ignore
 import UserAvatar from 'react-native-user-avatar';
@@ -25,12 +26,14 @@ export interface CustomHeaderProps {
   showBackButton?: boolean; // Afficher le bouton retour au lieu du menu
   onBackPress?: () => void; // Action personnalisée pour le bouton retour
   rightComponent?: React.ReactNode; // Composant personnalisé à droite
+  showNotificationIcon?: boolean; // Afficher l'icône de notification pour les intérimaires
 }
 
 
-export default function CustomHeader({ title, user: propUser, showBackButton = false, onBackPress, rightComponent }: CustomHeaderProps) {
+export default function CustomHeader({ title, user: propUser, showBackButton = false, onBackPress, rightComponent, showNotificationIcon = false }: CustomHeaderProps) {
   const navigation = useNavigation();
   const { logout, user: contextUser } = useAuth();
+  const { unreadCount } = useNotifications();
   const [isAvatarDropdownVisible, setAvatarDropdownVisible] = useState(false);
   
   // Utiliser le user passé en prop ou celui du contexte Auth
@@ -107,8 +110,33 @@ const handleDropdownLogout = () => {
           </TouchableOpacity>
         )}
 
-        {/* Titre de l'en-tête */}
-        <Text style={styles.headerTitle}>{title}</Text>
+        {/* Section titre avec icône notification optionnelle */}
+        <View style={styles.titleContainer}>
+          <Text style={styles.headerTitle}>{title}</Text>
+          
+          {/* Icône de notification pour les intérimaires et candidats */}
+          {showNotificationIcon && (user?.role === 'interimaire' || user?.role === 'user') && (
+            <TouchableOpacity 
+              style={styles.notificationButton}
+              onPress={() => {
+                if (user?.role === 'interimaire') {
+                  router.push('/(app)/(interimaire)/notifications');
+                } else if (user?.role === 'user') {
+                  router.push('/(app)/notifications');
+                }
+              }}
+            >
+              <Ionicons name="notifications-outline" size={24} color="#FFFFFF" />
+              {unreadCount > 0 && (
+                <View style={styles.notificationBadge}>
+                  <Text style={styles.notificationBadgeText}>
+                    {unreadCount > 99 ? '99+' : unreadCount.toString()}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          )}
+        </View>
 
         {/* Composant personnalisé à droite ou avatar par défaut */}
         {rightComponent ? (
@@ -187,13 +215,40 @@ const styles = StyleSheet.create({
   menuButton: {
     padding: 5,
   },
+  titleContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: 10,
+  },
   headerTitle: {
     fontSize: 20,
     fontWeight: 'bold',
     color: '#FFFFFF',
-    flex: 1,
     textAlign: 'center',
-    marginHorizontal: 10,
+  },
+  notificationButton: {
+    marginLeft: 12,
+    padding: 4,
+    position: 'relative',
+  },
+  notificationBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    backgroundColor: '#ef4444',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  notificationBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
   },
   avatarButton: {
     padding: 5,

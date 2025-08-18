@@ -568,6 +568,7 @@ export default function HomeScreen() {
       <CustomHeader
         title="Accueil"
         user={user}
+        showNotificationIcon={true}
         onMenuPress={() => Alert.alert("Menu", "Menu Accueil pressé!")}
         onAvatarPress={() => router.push('/(app)/profile-details')} // Naviguer vers la page de profil
       />

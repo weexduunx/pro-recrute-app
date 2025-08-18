@@ -5,17 +5,14 @@
 if (!global.ExpoSecureStore) {
   global.ExpoSecureStore = {
     setItemAsync: async (key, value, options = {}) => {
-      console.warn('SecureStore non disponible, fallback vers AsyncStorage');
       const AsyncStorage = require('@react-native-async-storage/async-storage').default;
       return await AsyncStorage.setItem(key, value);
     },
     getItemAsync: async (key, options = {}) => {
-      console.warn('SecureStore non disponible, fallback vers AsyncStorage');
       const AsyncStorage = require('@react-native-async-storage/async-storage').default;
       return await AsyncStorage.getItem(key);
     },
     deleteItemAsync: async (key) => {
-      console.warn('SecureStore non disponible, fallback vers AsyncStorage');
       const AsyncStorage = require('@react-native-async-storage/async-storage').default;
       return await AsyncStorage.removeItem(key);
     }
@@ -31,8 +28,7 @@ if (!global.ExpoCrypto) {
       MD5: 'MD5'
     },
     digestStringAsync: async (algorithm, data) => {
-      console.warn('Crypto non disponible, utilisation d\'un hash simple');
-      // Hash simple pour fallback
+      // Simple hash fallback
       return btoa(data).replace(/[^a-zA-Z0-9]/g, '').substring(0, 32);
     }
   };
