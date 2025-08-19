@@ -101,7 +101,7 @@ export default function EntretiensMainScreen() {
       <StatusBar barStyle="light-content" backgroundColor="#091e60" />
       <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
         <CustomHeader
-          title="Gestion des Entretiens"
+          title="Entretiens"
           user={user}
           showNotificationIcon={true}
         />

@@ -7,7 +7,9 @@ import {
   RefreshControl,
   Alert,
   StyleSheet,
-  Dimensions
+  Dimensions,
+  AppState,
+  ActivityIndicator
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -35,7 +37,20 @@ export default function NotificationsScreen() {
 
   useEffect(() => {
     fetchNotifications();
-  }, [filter]);
+    
+    // Rafraîchir quand l'app revient au premier plan
+    const handleAppStateChange = (nextAppState: string) => {
+      if (nextAppState === 'active') {
+        fetchNotifications();
+      }
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    
+    return () => {
+      subscription?.remove();
+    };
+  }, [filter, fetchNotifications]);
 
   const fetchNotifications = useCallback(async () => {
     try {
@@ -62,14 +77,16 @@ export default function NotificationsScreen() {
 
   const handleNotificationPress = async (notification) => {
     try {
-      // Marquer comme lue si pas encore lue
+      // Marquer comme lue localement d'abord pour une UI plus réactive
       if (!notification.read_at) {
-        await markNotificationAsRead(notification.id);
         setNotifications(prev => prev.map(n => 
           n.id === notification.id 
             ? { ...n, read_at: new Date().toISOString() }
             : n
         ));
+        
+        // Puis marquer sur le serveur
+        await markNotificationAsRead(notification.id);
       }
 
       // Naviguer vers l'action correspondante
@@ -78,20 +95,37 @@ export default function NotificationsScreen() {
       }
     } catch (error) {
       console.error('Erreur lors de la gestion du clic:', error);
+      // Revenir en arrière en cas d'erreur
+      if (!notification.read_at) {
+        setNotifications(prev => prev.map(n => 
+          n.id === notification.id 
+            ? { ...n, read_at: null }
+            : n
+        ));
+      }
     }
   };
 
   const handleMarkAllAsRead = async () => {
+    const unreadNotifications = notifications.filter(n => !n.read_at);
+    if (unreadNotifications.length === 0) return;
+
+    // Marquer localement d'abord
+    setNotifications(prev => prev.map(n => ({ 
+      ...n, 
+      read_at: n.read_at || new Date().toISOString() 
+    })));
+
     try {
       await markAllNotificationsAsRead();
-      setNotifications(prev => prev.map(n => ({ 
-        ...n, 
-        read_at: n.read_at || new Date().toISOString() 
-      })));
-      
-      Alert.alert('Succès', 'Toutes les notifications ont été marquées comme lues');
+      // Succès silencieux pour une meilleure UX
     } catch (error) {
       console.error('Erreur lors du marquage:', error);
+      // Revenir en arrière
+      setNotifications(prev => prev.map(n => {
+        const wasUnread = unreadNotifications.find(un => un.id === n.id);
+        return wasUnread ? { ...n, read_at: null } : n;
+      }));
       Alert.alert('Erreur', 'Impossible de marquer les notifications comme lues');
     }
   };
@@ -107,13 +141,14 @@ export default function NotificationsScreen() {
         style={[
           styles.notificationItem,
           {
-            backgroundColor: colors.background,
-            borderLeftColor: isUnread ? iconColor : 'transparent',
-            borderLeftWidth: isUnread ? 4 : 0,
-            opacity: isUnread ? 1 : 0.8,
+            backgroundColor: isUnread ? colors.background : '#fafbfc',
+            borderColor: isUnread ? iconColor : colors.border,
+            borderWidth: isUnread ? 2 : 1,
+            opacity: 1,
             shadowColor: colors.shadow,
           }
         ]}
+        activeOpacity={0.7}
         onPress={() => handleNotificationPress(item)}
       >
         <View style={styles.notificationContent}>
@@ -256,21 +291,28 @@ export default function NotificationsScreen() {
 
       {renderFilterTabs()}
 
-      <FlatList
-        data={notifications}
-        keyExtractor={(item) => item.id.toString()}
-        renderItem={renderNotificationItem}
-        refreshControl={
-          <RefreshControl 
-            refreshing={refreshing} 
-            onRefresh={onRefresh}
-            colors={[colors.secondary]}
-          />
-        }
-        ListEmptyComponent={renderEmptyState}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={notifications.length === 0 ? styles.emptyListContainer : styles.listContainer}
-      />
+      {loading && notifications.length === 0 ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.secondary} />
+          <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Chargement...</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={notifications}
+          keyExtractor={(item) => item.id.toString()}
+          renderItem={renderNotificationItem}
+          refreshControl={
+            <RefreshControl 
+              refreshing={refreshing} 
+              onRefresh={onRefresh}
+              colors={[colors.secondary]}
+            />
+          }
+          ListEmptyComponent={renderEmptyState}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={notifications.length === 0 ? styles.emptyListContainer : styles.listContainer}
+        />
+      )}
     </View>
   );
 }
@@ -322,15 +364,26 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
 
+  // Loading
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+  },
+
   // Notification item
   notificationItem: {
     marginHorizontal: 16,
     marginVertical: 6,
-    borderRadius: 12,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    borderRadius: 16,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
   },
   notificationContent: {
     padding: 16,
@@ -341,49 +394,57 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   iconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    marginRight: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
   },
   titleContainer: {
     flex: 1,
   },
   title: {
     fontSize: 16,
-    marginBottom: 2,
+    marginBottom: 4,
+    lineHeight: 22,
   },
   date: {
     fontSize: 12,
+    fontWeight: '400',
   },
   message: {
     fontSize: 14,
-    lineHeight: 20,
+    lineHeight: 22,
     marginBottom: 8,
   },
   unreadDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginLeft: 8,
-    marginTop: 4,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginLeft: 12,
+    marginTop: 6,
+    borderWidth: 2,
+    borderColor: '#ffffff',
   },
   priorityBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginTop: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 16,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
   },
   priorityText: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '700',
-    marginLeft: 4,
-    letterSpacing: 0.5,
+    marginLeft: 6,
+    letterSpacing: 0.8,
   },
 
   // Empty state

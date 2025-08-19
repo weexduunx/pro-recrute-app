@@ -239,7 +239,7 @@ export default function MyApplicationsScreen() {
         user={user}
         showNotificationIcon={true}
         onMenuPress={handleMenuPress}
-        onAvatarPress={handleAvatarPress}
+        onAvatarPress={handleAvatarPress}  
       />
 
       {loading ? renderLoadingState() : 

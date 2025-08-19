@@ -7,13 +7,15 @@ import {
   TouchableOpacity,
   RefreshControl,
   Alert,
-  ActivityIndicator
+  ActivityIndicator,
+  AppState
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import CustomHeader from '../../components/CustomHeader';
 import { useAuth } from '../../components/AuthProvider';
+import { useNotifications } from '../../hooks/useNotifications';
 import {
   getCandidatNotifications,
   markCandidatNotificationAsRead,
@@ -35,6 +37,7 @@ interface CandidatNotification {
 
 export default function NotificationsScreen() {
   const { user } = useAuth();
+  const { refreshUnreadCount } = useNotifications();
   const [notifications, setNotifications] = useState<CandidatNotification[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -74,8 +77,22 @@ export default function NotificationsScreen() {
     }
   }, []);
 
+  // Charger les notifications au montage et rafraîchir automatiquement
   useEffect(() => {
     loadNotifications();
+    
+    // Rafraîchir quand l'app revient au premier plan
+    const handleAppStateChange = (nextAppState: string) => {
+      if (nextAppState === 'active') {
+        loadNotifications(1, true);
+      }
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    
+    return () => {
+      subscription?.remove();
+    };
   }, [loadNotifications]);
 
   const handleRefresh = useCallback(() => {
@@ -92,29 +109,45 @@ export default function NotificationsScreen() {
   const handleMarkAsRead = async (notification: CandidatNotification) => {
     if (notification.read_at) return;
 
+    // Marquer localement d'abord pour une UI plus réactive
+    setNotifications(prev => prev.map(n => 
+      n.id === notification.id ? { ...n, read_at: new Date().toISOString() } : n
+    ));
+    refreshUnreadCount();
+
     try {
-      const response = await markCandidatNotificationAsRead(notification.id);
-      
-      if (response.success) {
-        setNotifications(prev => prev.map(n => 
-          n.id === notification.id ? { ...n, read_at: new Date().toISOString() } : n
-        ));
-      }
+      await markCandidatNotificationAsRead(notification.id);
     } catch (error) {
       console.error('Erreur marquage notification:', error);
+      // Revenir en arrière en cas d'erreur
+      setNotifications(prev => prev.map(n => 
+        n.id === notification.id ? { ...n, read_at: null } : n
+      ));
+      refreshUnreadCount();
     }
   };
 
   const handleMarkAllAsRead = async () => {
+    const unreadNotifications = notifications.filter(n => !n.read_at);
+    if (unreadNotifications.length === 0) return;
+
+    // Marquer localement d'abord
+    setNotifications(prev => prev.map(n => ({ ...n, read_at: new Date().toISOString() })));
+    refreshUnreadCount();
+
     try {
       const response = await markAllCandidatNotificationsAsRead();
-      
       if (response.success) {
-        setNotifications(prev => prev.map(n => ({ ...n, read_at: new Date().toISOString() })));
-        Alert.alert('Succès', 'Toutes les notifications ont été marquées comme lues');
+        // Succès silencieux pour une meilleure UX
       }
     } catch (error) {
       console.error('Erreur marquage toutes notifications:', error);
+      // Revenir en arrière
+      setNotifications(prev => prev.map(n => {
+        const wasUnread = unreadNotifications.find(un => un.id === n.id);
+        return wasUnread ? { ...n, read_at: null } : n;
+      }));
+      refreshUnreadCount();
       Alert.alert('Erreur', 'Impossible de marquer les notifications comme lues');
     }
   };
@@ -134,6 +167,8 @@ export default function NotificationsScreen() {
               
               if (response.success) {
                 setNotifications(prev => prev.filter(n => n.id !== notificationId));
+                // Rafraîchir le compteur de notifications globales
+                refreshUnreadCount();
               }
             } catch (error) {
               console.error('Erreur suppression notification:', error);
@@ -219,34 +254,47 @@ export default function NotificationsScreen() {
     
     return (
       <TouchableOpacity
-        style={[styles.notificationItem, isUnread && styles.unreadItem]}
+        style={[styles.notificationItem, isUnread ? styles.unreadItem : styles.readItem]}
         onPress={() => handleNotificationPress(item)}
+        activeOpacity={0.7}
       >
         <View style={styles.notificationContent}>
-          <View style={styles.iconContainer}>
+          <View style={[styles.iconContainer, isUnread && styles.unreadIconContainer]}>
             {getNotificationIcon(item.type, item.priority)}
           </View>
           
           <View style={styles.textContainer}>
-            <Text style={[styles.title, isUnread && styles.unreadTitle]}>
-              {item.title}
-            </Text>
-            <Text style={styles.message} numberOfLines={2}>
+            <View style={styles.titleRow}>
+              <Text style={[styles.title, isUnread && styles.unreadTitle]} numberOfLines={1}>
+                {item.title}
+              </Text>
+              {isUnread && <View style={styles.unreadDot} />}
+            </View>
+            <Text style={[styles.message, isUnread && styles.unreadMessage]} numberOfLines={2}>
               {item.message}
             </Text>
-            <Text style={styles.time}>
-              {formatDate(item.created_at)}
-            </Text>
+            <View style={styles.metaRow}>
+              <Text style={styles.time}>
+                {formatDate(item.created_at)}
+              </Text>
+              {item.priority === 'high' || item.priority === 'urgent' ? (
+                <View style={styles.priorityBadge}>
+                  <Text style={styles.priorityText}>Urgent</Text>
+                </View>
+              ) : null}
+            </View>
           </View>
-
-          {isUnread && <View style={styles.unreadDot} />}
         </View>
         
         <TouchableOpacity
           style={styles.deleteButton}
-          onPress={() => handleDeleteNotification(item.id)}
+          onPress={(e) => {
+            e.stopPropagation();
+            handleDeleteNotification(item.id);
+          }}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <Ionicons name="trash-outline" size={20} color="#9ca3af" />
+          <Ionicons name="trash-outline" size={18} color={isUnread ? "#9ca3af" : "#d1d5db"} />
         </TouchableOpacity>
       </TouchableOpacity>
     );
@@ -360,23 +408,28 @@ const styles = StyleSheet.create({
     color: '#6b7280',
   },
   notificationItem: {
-    backgroundColor: '#fff',
     marginHorizontal: 16,
     marginVertical: 4,
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 16,
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
   },
   unreadItem: {
-    backgroundColor: '#f0f9ff',
-    borderLeftWidth: 4,
-    borderLeftColor: '#0ea5e9',
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#3b82f6',
+    shadowOpacity: 0.12,
+  },
+  readItem: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
   },
   notificationContent: {
     flex: 1,
@@ -384,39 +437,86 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   iconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#f8fafc',
+    justifyContent: 'center',
+    alignItems: 'center',
     marginRight: 12,
+  },
+  unreadIconContainer: {
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#dbeafe',
   },
   textContainer: {
     flex: 1,
+    paddingTop: 2,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 8,
   },
   title: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '500',
-    color: '#1f2937',
-    marginBottom: 4,
+    color: '#374151',
+    flex: 1,
+    marginRight: 8,
   },
   unreadTitle: {
     fontWeight: '600',
+    color: '#1f2937',
   },
   message: {
     fontSize: 14,
     color: '#6b7280',
-    lineHeight: 18,
-    marginBottom: 4,
+    lineHeight: 20,
+  },
+  unreadMessage: {
+    color: '#4b5563',
   },
   time: {
     fontSize: 12,
     color: '#9ca3af',
+    fontWeight: '400',
   },
   unreadDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#0ea5e9',
-    marginLeft: 8,
+    backgroundColor: '#3b82f6',
+  },
+  priorityBadge: {
+    backgroundColor: '#fef2f2',
+    borderColor: '#fecaca',
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  priorityText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#dc2626',
+    textTransform: 'uppercase',
   },
   deleteButton: {
-    padding: 8,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#f8fafc',
+    justifyContent: 'center',
+    alignItems: 'center',
     marginLeft: 8,
   },
   loadingFooter: {

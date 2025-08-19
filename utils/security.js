@@ -4,12 +4,16 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Imports conditionels pour éviter les erreurs si les modules ne sont pas disponibles
 let SecureStore, Crypto, Device;
+let hasLoggedSecureStoreFallback = false;
 try {
   SecureStore = require('expo-secure-store');
   Crypto = require('expo-crypto');
   Device = require('expo-device');
 } catch (error) {
-  console.log('Security modules fallback: using AsyncStorage for secure storage');
+  if (!hasLoggedSecureStoreFallback) {
+    console.log('Security modules fallback: using AsyncStorage for secure storage');
+    hasLoggedSecureStoreFallback = true;
+  }
 }
 
 /**
@@ -190,13 +194,19 @@ export const secureDeleteToken = async () => {
   }
 };
 
+// Variable pour éviter les warnings répétés
+let hasLoggedBiometricWarning = false;
+
 /**
  * Stockage sécurisé des credentials biométriques
  */
 export const secureStoreBiometricCredentials = async (email, password) => {
   try {
     if (!SecureStore) {
-      console.warn('SecureStore non disponible, stockage des credentials biométriques désactivé');
+      if (!hasLoggedBiometricWarning) {
+        console.warn('SecureStore non disponible, stockage des credentials biométriques désactivé');
+        hasLoggedBiometricWarning = true;
+      }
       return false;
     }
     
@@ -228,7 +238,10 @@ export const secureStoreBiometricCredentials = async (email, password) => {
 export const secureGetBiometricCredentials = async () => {
   try {
     if (!SecureStore) {
-      console.warn('SecureStore non disponible, credentials biométriques indisponibles');
+      if (!hasLoggedBiometricWarning) {
+        console.warn('SecureStore non disponible, credentials biométriques indisponibles');
+        hasLoggedBiometricWarning = true;
+      }
       return null;
     }
     

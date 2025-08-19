@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import {
   View,
   Text,
@@ -6,50 +6,69 @@ import {
   ScrollView,
   TouchableOpacity,
   SafeAreaView,
-  Platform,
   FlatList,
   Dimensions,
   ActivityIndicator,
   Alert,
   Animated,
   StatusBar,
+  RefreshControl,
 } from "react-native";
 import { useAuth } from "../../components/AuthProvider";
 import CustomHeader from "../../components/CustomHeader";
-import { getOffres, getRecommendedOffres, getActualites } from "../../utils/api";
+import { useTheme } from '../../components/ThemeContext';
+import { getOffres, getRecommendedOffres, getActualites, getUserApplications, getCandidatEntretiens } from "../../utils/api";
 import { getAIJobRecommendations } from "../../utils/ai-api";
 import { getCandidatProfile } from "../../utils/api";
 import { router } from "expo-router";
 import { LinearGradient } from 'expo-linear-gradient';
-import EvilIcons from '@expo/vector-icons/EvilIcons';
-import { FontAwesome5 , Feather } from '@expo/vector-icons';
+import { Ionicons, FontAwesome5, MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { format } from "date-fns";
-
 import { decode } from 'html-entities';
 
 const { width } = Dimensions.get("window");
 
+// Interface pour les actions rapides
+interface QuickAction {
+  id: string;
+  title: string;
+  icon: string;
+  color: string;
+  route: string;
+  description: string;
+}
+
+// Interface pour les statistiques de candidature
+interface CandidateStats {
+  applications: number;
+  interviews: number;
+  responses: number;
+  profileCompletion: number;
+}
+
 /**
- * Composant de slider automatique réutilisable
+ * Composant de slider avec auto-scroll
  */
 type AutoSliderProps<T> = {
   data: T[];
-  renderItem: (item: T, index: number, onPress: (id: string) => void) => React.ReactNode;
-  onPress: (id: string) => void;
+  renderItem: (item: T, index: number) => React.ReactNode;
+  height?: number;
+  showPagination?: boolean;
   autoScrollInterval?: number;
 };
 
 const AutoSlider = <T extends { id?: string | number }>({
   data,
   renderItem,
-  onPress,
+  height = 200,
+  showPagination = true,
   autoScrollInterval = 4000,
 }: AutoSliderProps<T>) => {
   const flatListRef = useRef<FlatList<any>>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const scrollX = useRef(new Animated.Value(0)).current;
 
+  // Auto-scroll effect
   useEffect(() => {
     if (data.length <= 1) return;
 
@@ -79,7 +98,7 @@ const AutoSlider = <T extends { id?: string | number }>({
   }).current;
 
   return (
-    <View style={styles.sliderContainer}>
+    <View style={[styles.sliderContainer, { height }]}>
       <FlatList
         ref={flatListRef}
         horizontal
@@ -87,1182 +106,892 @@ const AutoSlider = <T extends { id?: string | number }>({
         showsHorizontalScrollIndicator={false}
         data={data}
         keyExtractor={(item, index) => item.id?.toString() || index.toString()}
-        renderItem={({ item, index }) => {
-          const element = renderItem(item, index, onPress);
-          // Only return if it's a valid React element, otherwise null
-          return React.isValidElement(element) ? element : null;
-        }}
-        onScroll={Animated.event(
-          [{ nativeEvent: { contentOffset: { x: scrollX } } }],
-          { useNativeDriver: false }
-        )}
+        renderItem={({ item, index }) => renderItem(item, index)}
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={viewabilityConfig}
-        snapToInterval={width * 0.9 + 20}
+        snapToInterval={width - 32}
         decelerationRate="fast"
-        bounces={false}
+        contentContainerStyle={styles.sliderContent}
       />
 
-      {/* Indicateurs de pagination */}
-      <View style={styles.paginationContainer}>
-        {data.map((_: any, index: number) => {
-          const opacity = scrollX.interpolate({
-            inputRange: [
-              (index - 1) * (width * 0.9 + 20),
-              index * (width * 0.9 + 20),
-              (index + 1) * (width * 0.9 + 20),
-            ],
-            outputRange: [0.3, 1, 0.3],
-            extrapolate: 'clamp',
-          });
-
-          return (
-            <Animated.View
+      {showPagination && data.length > 1 && (
+        <View style={styles.paginationContainer}>
+          {data.map((_, index) => (
+            <View
               key={index}
-              style={[styles.paginationDot, { opacity }]}
+              style={[
+                styles.paginationDot,
+                { opacity: index === currentIndex ? 1 : 0.3 }
+              ]}
             />
-          );
-        })}
-      </View>
+          ))}
+        </View>
+      )}
     </View>
   );
 };
 
-
-/**
- * Écran d'accueil principal amélioré
- */
 export default function HomeScreen() {
   const { user } = useAuth();
-  const [jobOffers, setJobOffers] = useState([]);
-  const [loadingJobs, setLoadingJobs] = useState(true);
-  const [errorJobs, setErrorJobs] = useState<string | null>(null);
-  const [newsData, setNewsData] = useState<any[]>([]); // NOUVEAU: Pour les actualités réelles
-  const [loadingNews, setLoadingNews] = useState(true); // NOUVEAU: État de chargement des actualités
-  const [errorNews, setErrorNews] = useState<string | null>(null); // NOUVEAU: Erreur de chargement des actualités
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(50)).current;
-
-  // États pour les recommandations
+  const { colors } = useTheme();
+  // États
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [recommendedOffres, setRecommendedOffres] = useState<any[]>([]);
-  const [loadingRecommendations, setLoadingRecommendations] = useState(true);
-  const [errorRecommendations, setErrorRecommendations] = useState<string | null>(null);
+  const [featuredOffres, setFeaturedOffres] = useState<any[]>([]);
+  const [newsData, setNewsData] = useState<any[]>([]);
+  const [candidateStats, setCandidateStats] = useState<CandidateStats>({
+    applications: 0,
+    interviews: 0,
+    responses: 0,
+    profileCompletion: 0,
+  });
 
-  //  Animation pour l'entrée de l'écran
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 800,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 600,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, []);
+  // Animation
+  const fadeAnim = useRef(new Animated.Value(0)).current;
 
-  // LOGIQUE D'ASTUCES POUR LA RECHERCHE D'EMPLOI
-  const tipsItems = [
+  // Actions rapides
+  const quickActions: QuickAction[] = [
     {
-      id: "tip1",
-      title: "Préparez votre entretien",
-      content: "Faites des recherches approfondies sur l'entreprise et le poste.",
-      icon: "🎯",
-      color: "#F59E0B"
+      id: 'profile',
+      title: 'Mon profil',
+      icon: 'person',
+      color: '#F59E0B',
+      route: '/(app)/profile-details',
+      description: 'Gérer mon profil'
     },
     {
-      id: "tip2",
-      title: "Développez votre réseau",
-      content: "Activez votre réseau professionnel pour découvrir des opportunités cachées.",
-      icon: "🤝",
-      color: "#8B5CF6"
+      id: 'actualites',
+      title: 'Actualités',
+      icon: 'article',
+      color: '#8B5CF6',
+      route: '/(app)/actualites',
+      description: 'Conseils emploi'
     },
     {
-      id: "tip3",
-      title: "CV Clair et Concis",
-      content: "Assurez-vous que votre CV est facile à lire et met en avant vos compétences clés.",
-      icon: "📄",
-      color: "#EF4444"
+      id: 'job_board',
+      title: 'Offres d\'emploi',
+      icon: 'work-outline',
+      color: '#3B82F6',
+      route: '/(app)/job_board',
+      description: 'Parcourir les offres'
     },
     {
-      id: "tip4",
-      title: "Suivi post-candidature",
-      content: "Un simple e-mail de remerciement peut faire la différence après un entretien.",
-      icon: "📧",
-      color: "#06B6D4"
+      id: 'candidatures',
+      title: 'Mes candidatures',
+      icon: 'description',
+      color: '#10B981',
+      route: '/(app)/candidature',
+      description: 'Suivre mes candidatures'
     },
+
   ];
 
-  // LOGIQUE DE RÉCUPÉRATION DES OFFRES D'EMPLOI
+  // Animation d'entrée
   useEffect(() => {
-    async function fetchOffersForSlider() {
-      try {
-        setLoadingJobs(true);
-        const fetchedOffres = await getOffres();
-        setJobOffers(fetchedOffres.slice(0, 6)); // Limiter à 6 offres pour le slider
-      } catch (err: any) {
-        console.error("Échec de la récupération des offres pour le slider:", err);
-        setErrorJobs("Impossible de charger les offres.");
-      } finally {
-        setLoadingJobs(false);
-      }
-    }
-    fetchOffersForSlider();
-  }, []); 
-
-  // MODIFIÉ : LOGIQUE DE RÉCUPÉRATION DES ACTUALITÉS (filtrées)
-  useEffect(() => {
-    async function fetchNewsForSlider() {
-      console.log('HomeScreen: Début fetchNewsForSlider'); // LOG
-      try {
-        setLoadingNews(true);
-        const fetchedNews = await getActualites({ type: 'Conseil RH' }); 
-        setNewsData(fetchedNews.slice(0, 4));
-        console.log('HomeScreen: Actualités récupérées (NewsData):', fetchedNews); // LOG LES DONNÉES COMPLÈTES ICI
-      } catch (err: any) {
-        console.error("HomeScreen: Échec de la récupération des actualités pour le slider:", err);
-        setErrorNews("Impossible de charger les actualités.");
-      } finally {
-        setLoadingNews(false);
-      }
-    }
-    fetchNewsForSlider();
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 600,
+      useNativeDriver: true,
+    }).start();
   }, []);
 
-  // LOGIQUE DE RÉCUPÉRATION DES RECOMMANDATIONS
-  useEffect(() => {
-    async function fetchRecommendations() {
-      console.log('HomeScreen: Début fetchRecommendations. User:', user); // Log de débogage
-      if (!user) { // Si pas d'utilisateur, pas de recommandations personnalisées
-        console.log('HomeScreen: Pas d\'utilisateur, pas de recommandations.');
-        setRecommendedOffres([]);
-        setLoadingRecommendations(false);
-        return;
+  // Chargement des données
+  const loadData = useCallback(async () => {
+    // Éviter les appels API si l'utilisateur n'est pas connecté
+    if (!user) {
+      console.log('Utilisateur non connecté, pas de chargement de données');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      const [
+        recommendedResponse,
+        featuredResponse,
+        newsResponse,
+        statsResponse
+      ] = await Promise.allSettled([
+        fetchRecommendations(),
+        getOffres().then(offres => offres.slice(0, 5)),
+        getActualites({ type: 'Conseil RH' }).then(news => news.slice(0, 3)),
+        loadCandidateStats()
+      ]);
+
+      if (featuredResponse.status === 'fulfilled') {
+        setFeaturedOffres(featuredResponse.value);
       }
 
-      try {
-        setLoadingRecommendations(true);
-        
-        // Récupérer le profil candidat pour obtenir les compétences
-        console.log('HomeScreen: Récupération du profil candidat...');
-        const candidatData = await getCandidatProfile();
-        
-        // Récupérer les IDs des compétences depuis le profil candidat
-        const userCompetenceIds = candidatData?.competences?.map(comp => comp.id) || [];
-        
-        console.log('HomeScreen: Compétences trouvées:', {
-          competencesCount: userCompetenceIds.length,
-          competenceIds: userCompetenceIds,
-          competenceNames: candidatData?.competences?.map(c => c.libelle_competence) || []
-        });
-        
-        // Si l'utilisateur n'a pas de compétences, afficher un message approprié
-        if (userCompetenceIds.length === 0) {
-          console.log('HomeScreen: Aucune compétence trouvée, pas de recommandations personnalisées');
-          setErrorRecommendations("Ajoutez des compétences à votre profil pour recevoir des recommandations personnalisées.");
-          setLoadingRecommendations(false);
-          return;
-        }
-        
-        // Utiliser les recommandations IA avec les compétences de l'utilisateur
-        const aiResponse = await getAIJobRecommendations({ 
-          limit: 5,
-          // Envoyer explicitement les IDs des compétences depuis candidat_has_competences
-          competence_ids: userCompetenceIds,
-          // S'assurer que le backend utilise les compétences relationnelles
-          source: 'candidat_competences'
-        });
-        
-        // Transformer les recommandations IA pour correspondre au format attendu
-        const transformedRecommendations = aiResponse.data.recommendations.map((rec: any) => ({
-          id: rec.offre?.id || Math.random().toString(),
-          poste: {
-            titre_poste: rec.offre?.titre || 'Titre non disponible'
-          },
-          entreprise: {
-            libelleE: rec.offre?.entreprise || 'Entreprise non spécifiée'
-          },
-          lieux: rec.offre?.lieu_travail || 'Lieu non spécifié',
-          typeContrat: {
-            libelle_type_contrat: rec.offre?.type_contrat || 'CDI'
-          },
-          salaire_minimum: rec.offre?.salaire_propose?.split(' - ')[0] || '0',
-          salaire_maximum: rec.offre?.salaire_propose?.split(' - ')[1] || '0',
-          match_score: rec.match_percentage || 0,
-          match_reasons: rec.reasons || [],
-          created_at: rec.offre?.created_at || new Date().toISOString()
-        }));
-        
-        console.log('HomeScreen: DEBUG - Réponse API brute:', aiResponse.data);
-        console.log('HomeScreen: DEBUG - Recommandations transformées:', transformedRecommendations);
-        
-        setRecommendedOffres(transformedRecommendations);
-        console.log('HomeScreen: Recommandations IA récupérées:', {
-          count: transformedRecommendations.length,
-          averageScore: transformedRecommendations.length > 0 
-            ? transformedRecommendations.reduce((sum: number, rec: any) => sum + (rec.match_score || 0), 0) / transformedRecommendations.length 
-            : 0,
-          titles: transformedRecommendations.map((rec: any) => rec.poste.titre_poste).slice(0, 3),
-          userCompetences: candidatData?.competences?.map(c => c.libelle_competence) || []
-        });
-      } catch (err: any) {
-        console.log('Erreur recommandations IA, fallback vers recommandations classiques:', err.message);
-        
-        // Fallback vers les recommandations classiques en cas d'erreur
-        try {
-          const fetchedRecommendations = await getRecommendedOffres();
-          setRecommendedOffres(fetchedRecommendations.slice(0, 5));
-          console.log('HomeScreen: Recommandations classiques récupérées:', fetchedRecommendations.length);
-        } catch (fallbackErr: any) {
-          setErrorRecommendations("Complétez votre profil (compétences, expériences) pour recevoir des recommandations personnalisées.");
-        }
-      } finally {
-        setLoadingRecommendations(false);
+      if (newsResponse.status === 'fulfilled') {
+        setNewsData(newsResponse.value);
       }
+
+      if (statsResponse.status === 'fulfilled') {
+        setCandidateStats(statsResponse.value);
+      }
+
+    } catch (error) {
+      console.error('Erreur chargement données:', error);
+    } finally {
+      setLoading(false);
     }
-    fetchRecommendations();
-  }, [user]); // Recharger si l'objet utilisateur change
+  }, [user]);
+
+  const loadCandidateStats = async (): Promise<CandidateStats> => {
+    // Vérifier si l'utilisateur est connecté avant de faire des appels API
+    if (!user) {
+      console.log('Utilisateur non connecté, statistiques par défaut');
+      return {
+        applications: 0,
+        interviews: 0,
+        responses: 0,
+        profileCompletion: 0
+      };
+    }
+
+    try {
+      // Chargement séquentiel pour éviter les erreurs qui pourraient affecter les autres
+      let applications = 0;
+      let interviews = 0;
+      let responses = 0;
+      let profileCompletion = 0;
+
+      // Statistiques des candidatures
+      try {
+        const userApplications = await getUserApplications();
+        console.log('Données candidatures brutes:', userApplications);
+        if (userApplications && Array.isArray(userApplications)) {
+          applications = userApplications.length;
+          // Une réponse = toute candidature qui a reçu une réponse (refusée, acceptée, etc.)
+          responses = userApplications.filter((app: any) => {
+            const statut = app.statut || app.status;
+            console.log('Candidature statut:', statut);
+            // Considérer comme réponse: refusé, accepté, entretien programmé, etc.
+            // Ne pas considérer: En attente, pending, null, undefined
+            return statut &&
+              statut !== 'En attente' &&
+              statut !== 'en_attente' &&
+              statut !== 'pending' &&
+              statut !== 'En cours' &&
+              statut !== 'en_cours';
+          }).length;
+        }
+        console.log('Statistiques candidatures calculées:', { applications, responses });
+      } catch (error) {
+        console.warn('Erreur chargement candidatures:', error);
+      }
+
+      // Statistiques des entretiens - essayer l'API puis fallback
+      try {
+        const entretiensList = await getCandidatEntretiens();
+        console.log('Données entretiens brutes:', entretiensList);
+        if (entretiensList && Array.isArray(entretiensList)) {
+          interviews = entretiensList.length;
+        } else {
+          throw new Error('Format de réponse incorrect');
+        }
+        console.log('Statistiques entretiens depuis API:', interviews);
+      } catch (error) {
+        console.warn('API entretiens indisponible, utilisation de fallback:', error);
+        // Fallback simple: au moins 1 entretien si on a des réponses
+        interviews = responses > 0 ? 1 : 0;
+        console.log('Statistiques entretiens fallback:', interviews);
+      }
+
+      // Calcul du pourcentage de complétude du profil
+      try {
+        const profile = await getCandidatProfile();
+        console.log('Données profil brutes:', profile);
+        console.log('Photo profil check:', {
+          photo_profil: profile.photo_profil,
+          profile_photo_path: profile.profile_photo_path,
+          profile_photo: profile.profile_photo,
+          user_from_parsed_cv: profile.parsed_cv?.full_name,
+          user_profile_photo: user?.profile_photo,
+          user_photo_profil: user?.photo_profil
+        });
+        if (profile) {
+          let completedFields = 0;
+          const totalFields = 10; // Nombre total de champs importants
+
+          // Vérification des champs essentiels du profil basé sur les vraies propriétés
+          const checks = [
+            { field: 'titreProfil', value: profile.titreProfil },
+            { field: 'telephone', value: profile.telephone },
+            { field: 'date_naissance', value: profile.date_naissance },
+            { field: 'genre', value: profile.genre },
+            { field: 'disponibilite', value: profile.disponibilite },
+            { field: 'competences', value: profile.competences && profile.competences.length > 0 },
+            { field: 'experiences', value: profile.experiences && profile.experiences.length > 0 },
+            { field: 'formations', value: profile.formations && profile.formations.length > 0 },
+            { field: 'parsed_cv', value: profile.parsed_cv && (profile.parsed_cv.full_name || profile.parsed_cv.summary) },
+            { field: 'photo_profil', value: profile.photo_profil || profile.profile_photo_path || profile.profile_photo || user?.profile_photo || user?.photo_profil }
+          ];
+
+          checks.forEach(check => {
+            if (check.value) {
+              completedFields++;
+              console.log(`✓ ${check.field}: présent`);
+            } else {
+              console.log(`✗ ${check.field}: manquant`);
+            }
+          });
+
+          profileCompletion = Math.round((completedFields / totalFields) * 100);
+          console.log(`Complétude profil: ${completedFields}/${totalFields} = ${profileCompletion}%`);
+        }
+      } catch (error) {
+        console.warn('Erreur chargement profil:', error);
+        // Fallback: estimation basée sur l'utilisateur connecté
+        profileCompletion = user ? 40 : 0; // 40% si utilisateur connecté
+      }
+
+      console.log('Statistiques calculées:', { applications, interviews, responses, profileCompletion });
+
+      return {
+        applications,
+        interviews,
+        responses,
+        profileCompletion
+      };
+    } catch (error) {
+      console.error('Erreur générale chargement statistiques:', error);
+      return {
+        applications: 0,
+        interviews: 0,
+        responses: 0,
+        profileCompletion: 0
+      };
+    }
+  };
+
+  const fetchRecommendations = async () => {
+    if (!user) return;
+
+    try {
+      const candidatData = await getCandidatProfile();
+      const userCompetenceIds = candidatData?.competences?.map(comp => comp.id) || [];
+
+      if (userCompetenceIds.length === 0) return;
+
+      const aiResponse = await getAIJobRecommendations({
+        limit: 3,
+        competence_ids: userCompetenceIds,
+        source: 'candidat_competences'
+      });
+
+      const transformedRecommendations = aiResponse.data.recommendations.map((rec: any) => ({
+        id: rec.offre?.id || Math.random().toString(),
+        poste: {
+          titre_poste: rec.offre?.titre || 'Titre non disponible'
+        },
+        entreprise: {
+          libelleE: rec.offre?.entreprise || 'Entreprise non spécifiée'
+        },
+        lieux: rec.offre?.lieu_travail || 'Lieu non spécifié',
+        match_score: rec.match_percentage || 0,
+        created_at: rec.offre?.created_at || new Date().toISOString()
+      }));
+
+      setRecommendedOffres(transformedRecommendations);
+    } catch (error) {
+      console.error('Erreur recommandations:', error);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadData();
+    setRefreshing(false);
+  }, [loadData]);
 
   const handlePressOffre = (offreId: string) => {
     router.push(`/(app)/job_board/job_details?id=${offreId}`);
   };
 
-  // Navigation vers la page de liste des actualités
   const handlePressNews = (newsId: string) => {
-    router.push(`/(app)/actualites/actualites_details?id=${newsId}`); 
-  };
-  
-
-  const handlePressTip = (tipId: string) => {
-    Alert.alert("Astuce", `Détails de l'astuce ${tipId}`);
+    router.push(`/(app)/actualites/actualites_details?id=${newsId}`);
   };
 
-  const [isBookmarked, setIsBookmarked] = useState(false);
-  const [isImageLoaded, setIsImageLoaded] = useState(false);
-  const [imageError, setImageError] = useState(false);
-
-  const handleBookmark = () => {
-    setIsBookmarked(!isBookmarked);
+  const handleQuickAction = (route: string) => {
+    router.push(route as any);
   };
 
-  const handleShare = () => {
-    Alert.alert("Partage", "Fonction de partage déclenchée");
-  };
+  // Composants de rendu
+  const renderStatsCard = () => (
+    <View style={styles.statsCard}>
+      <Text style={styles.statsTitle}>Vos statistiques</Text>
+      <View style={styles.statsGrid}>
+        <View style={styles.statItem}>
+          <Text style={styles.statNumber}>{candidateStats.applications}</Text>
+          <Text style={styles.statLabel}>Candidatures</Text>
+        </View>
+        <View style={styles.statItem}>
+          <Text style={styles.statNumber}>{candidateStats.interviews}</Text>
+          <Text style={styles.statLabel}>Entretiens</Text>
+        </View>
+        <View style={styles.statItem}>
+          <Text style={styles.statNumber}>{candidateStats.responses}</Text>
+          <Text style={styles.statLabel}>Réponses</Text>
+        </View>
+        <View style={styles.statItem}>
+          <Text style={styles.statNumber}>{candidateStats.profileCompletion}%</Text>
+          <Text style={styles.statLabel}>Profil</Text>
+        </View>
+      </View>
+    </View>
+  );
 
-  const formatDate = (date: Date) => {
-    const options: Intl.DateTimeFormatOptions = { year: 'numeric', month: 'short', day: 'numeric' };
-    return date.toLocaleDateString('fr-FR', options);
-  };
+  const renderQuickActions = () => (
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle}>Actions rapides</Text>
+      <View style={styles.quickActionsGrid}>
+        {quickActions.map((action) => (
+          <TouchableOpacity
+            key={action.id}
+            style={styles.quickActionCard}
+            onPress={() => handleQuickAction(action.route)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.quickActionContent}>
+              <View style={[styles.quickActionIcon, { backgroundColor: action.color + '20' }]}>
+                <MaterialIcons name={action.icon as any} size={20} color={action.color} />
+              </View>
+              <View style={styles.quickActionTextContainer}>
+                <Text style={styles.quickActionTitle}>{action.title}</Text>
+                <Text style={styles.quickActionDescription}>{action.description}</Text>
+              </View>
+            </View>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
+  );
 
-  // Rendu pour les offres d'emploi (carte de slider)
-  const renderJobOffer = (item: any, index: number, onPress: (id: string) => void) => (
+  const renderOffreCard = (item: any, index: number) => (
     <TouchableOpacity
-      key={item.id?.toString() || index.toString()}
-      style={styles.jobCard}
-      onPress={() => onPress(item.id)}
+      key={item.id}
+      style={styles.offreCard}
+      onPress={() => handlePressOffre(item.id)}
       activeOpacity={0.8}
     >
-      <LinearGradient
-        colors={['#effcf4', '#F8FAFC']}
-        style={styles.cardGradient}
-      >
-        <View style={styles.jobCardHeader}>
-          <View style={styles.jobIconContainer}>
-            <FontAwesome5 name="briefcase" size={20} color="#16A34A" style={styles.jobIcon} />
+      <View style={styles.offreHeader}>
+        <View style={styles.offreIconContainer}>
+          <FontAwesome5 name="briefcase" size={20} color="#3B82F6" />
+        </View>
+        {item.match_score && (
+          <View style={styles.matchBadge}>
+            <Text style={styles.matchText}>{item.match_score}%</Text>
           </View>
-        </View>
+        )}
+      </View>
 
-        <Text style={styles.jobTitle} numberOfLines={2}>
-          {item.poste?.titre_poste || "Offre non spécifiée"}
+      <Text style={styles.offreTitle} numberOfLines={2}>
+        {item.poste?.titre_poste || "Poste non spécifié"}
+      </Text>
+
+      <Text style={styles.offreCompany} numberOfLines={1}>
+        {item.entreprise?.libelleE || item.demande?.entreprise?.libelleE || "Entreprise"}
+      </Text>
+
+      <View style={styles.offreLocation}>
+        <Ionicons name="location-outline" size={16} color="#6B7280" />
+        <Text style={styles.offreLocationText} numberOfLines={1}>
+          {item.lieux || "Lieu non spécifié"}
         </Text>
-
-        <Text style={styles.jobCompany} numberOfLines={1}>
-          {item.demande?.entreprise?.libelleE || "Entreprise"}
-        </Text>
-
-        <View style={styles.jobLocationContainer}>
-
-          <EvilIcons name="location" size={24} style={styles.locationIcon} color="black" />
-          <Text style={styles.jobLocation} numberOfLines={1}>
-            {item.lieux}
-          </Text>
-        </View>
-
-        <View style={styles.jobFooter}>
-          <View style={styles.contractTypeContainer}>
-            <Text style={styles.contractType}>
-              {item.type_contrat?.libelle_type_contrat || "Type"}
-            </Text>
-          </View>
-          <Text style={styles.jobSalary}>
-            {item.salaire_minimum && item.salaire_maximum
-              ? `${item.salaire_minimum}-${item.salaire_maximum} FCFA`
-              : "Salaire N/A"}
-          </Text>
-        </View>
-      </LinearGradient>
+      </View>
     </TouchableOpacity>
   );
 
-  // Rendu pour les actualités (utilisant les données réelles de l'API)
-  const renderNews = (item: any, index: number, onPress: (id: string) => void) => (
+  const renderNewsCard = (item: any, index: number) => (
     <TouchableOpacity
-      key={item.id?.toString() || index.toString()}
-      style={styles.card}
-      onPress={() => {
-        onPress(item.id);
-
-      }}
-      activeOpacity={0.9}
+      key={item.id}
+      style={styles.newsCard}
+      onPress={() => handlePressNews(item.id)}
+      activeOpacity={0.8}
     >
-      <View style={styles.imageContainer}>
-        {!isImageLoaded && (
-          <View style={styles.imagePlaceholder}>
-            <ActivityIndicator color="#999" size="small" />
-          </View>
-        )}
+      <View style={styles.newsImageContainer}>
         <Image
-           source={{ uri:   'https://globalbusiness-gbg.com/storage/images-actualite/' + item.fr_image }}
-          style={[
-            styles.image,
-            { opacity: isImageLoaded ? 1 : 0 }]}
-          onLoad={() => setIsImageLoaded(true)}
-          onError={() => {
-            setImageError(true);
-            setIsImageLoaded(false);
-          }}
-          onLoadEnd={() => setIsImageLoaded(true)}
+          source={{ uri: `https://globalbusiness-gbg.com/storage/images-actualite/${item.fr_image}` }}
+          style={styles.newsImage}
           contentFit="cover"
-          cachePolicy="memory"
-          transition={1000}
+          transition={200}
         />
         {item.type_mag?.fr_libelle && (
-        <View style={styles.categoryTag}>
-          <Text style={styles.categoryText}>{item.type_mag.fr_libelle}</Text>
-        </View>
+          <View style={styles.newsCategoryTag}>
+            <Text style={styles.newsCategoryText}>{item.type_mag.fr_libelle}</Text>
+          </View>
         )}
       </View>
 
-      <View style={styles.content}>
-        <Text style={styles.headline} numberOfLines={2}>{item.fr_titre_mag || item.en_titre_mag || 'Titre actualité'}</Text>
-        <Text style={styles.description} numberOfLines={3}>
-          {decode((item.apercu || item.fr_description || 'Contenu actualité...').replace(/<[^>]+>/g, ''))}
+      <View style={styles.newsContent}>
+        <Text style={styles.newsTitle} numberOfLines={2}>
+          {item.fr_titre_mag || item.en_titre_mag || 'Titre actualité'}
         </Text>
-        <View style={styles.footer}>
-          {/* Colonne gauche */}
-          <View style={styles.footerLeft}>
-            <View style={styles.meta}>
-              <Text style={styles.author}>GBG</Text>
-              <Text style={styles.dot}>·</Text>
-              <Text>{formatDate(new Date(item.created_at))}</Text>
-            </View>
-            <View style={styles.readTime}>
-              <Feather name="clock" size={14} style={{ marginRight: 4 }} />
-              <Text>5mn</Text>
-            </View>
-          </View>
-
-          {/* Colonne droite */}
-          <View style={styles.footerRight}>
-            <TouchableOpacity onPress={handleShare} style={styles.iconButton}>
-              <Feather name="share-2" size={18} />
-            </TouchableOpacity>
-
-            <TouchableOpacity onPress={handleBookmark} style={styles.iconButton}>
-              <Feather
-                name="bookmark"
-                size={18}
-                color={isBookmarked ? "#2563eb" : "#000"}
-              />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-      </View>
-
-    </TouchableOpacity>
-  );
-
-  
-  // Rendu pour les astuces (carte de slider)
-  const renderTip = (item: any, index: number, onPress: (id: string) => void) => (
-    <TouchableOpacity
-      key={item.id?.toString() || index.toString()}
-      style={styles.tipCard}
-      onPress={() => onPress(item.id)}
-      activeOpacity={0.8}
-    >
-      <View style={[styles.tipIconContainer, { backgroundColor: item.color }]}>
-        <Text style={styles.tipIconLarge}>{item.icon}</Text>
-      </View>
-
-      <Text style={styles.tipTitle} numberOfLines={2}>
-        {item.title}
-      </Text>
-
-      <Text style={styles.tipContent} numberOfLines={4}>
-        {item.content}
-      </Text>
-
-      <View style={styles.tipFooter}>
-        <Text style={[styles.tipAction, { color: item.color }]}>
-          Découvrir →
+        <Text style={styles.newsDescription} numberOfLines={3}>
+          {decode((item.apercu || item.fr_description || '').replace(/<[^>]+>/g, ''))}
         </Text>
-      </View>
-    </TouchableOpacity>
-  );
-
-  // Rendu pour les recommandations
-  const renderRecommendation = (item: any, index: number, onPress: (id: string) => void) => (
-    <TouchableOpacity
-      key={item.id?.toString() || index.toString()}
-      style={styles.recommendationCard}
-      onPress={() => onPress(item.id)}
-      activeOpacity={0.8}
-    >
-      <LinearGradient
-        colors={['#FEF7ED', '#FFFFFF']}
-        style={styles.recommendationGradient}
-      >
-        <View style={styles.recommendationHeader}>
-          <View style={styles.recommendationIconContainer}>
-            <FontAwesome5 name="lightbulb" size={24} color="#F59E0B" />
-          </View>
-          <View style={styles.matchScoreContainer}>
-            <Text style={styles.matchScoreText}>
-              {item.match_score ? `${item.match_score}% Match` : 'N/A Match'}
-            </Text>
-          </View>
-        </View>
-
-        <Text style={styles.recommendationTitle} numberOfLines={2}>
-          {item.poste?.titre_poste || "Poste non spécifié"}
-        </Text>
-
-        <Text style={styles.recommendationCompany} numberOfLines={1}>
-          {item.entreprise?.libelleE || "Entreprise non spécifiée"}
-        </Text>
-
-        <View style={styles.recommendationLocationContainer}>
-          <EvilIcons name="location" size={20} color="#6B7280" />
-          <Text style={styles.recommendationLocation} numberOfLines={1}>
-            {item.lieux || "Lieu non spécifié"}
+        <View style={styles.newsFooter}>
+          <Text style={styles.newsDate}>
+            {format(new Date(item.created_at), 'dd MMM yyyy')}
           </Text>
+          <Text style={styles.newsReadTime}>5 min</Text>
         </View>
-
-        <View style={styles.recommendationFooter}>
-          <Text style={styles.recommendedText}>Recommandé pour vous</Text>
-          <FontAwesome5 name="arrow-right" size={14} color="#F59E0B" />
-        </View>
-      </LinearGradient>
+      </View>
     </TouchableOpacity>
   );
 
   return (
     <>
     <StatusBar barStyle="light-content" backgroundColor="#091e60" />
-    <SafeAreaView style={styles.safeArea}>
-      <CustomHeader
-        title="Accueil"
-        user={user}
-        showNotificationIcon={true}
-        onMenuPress={() => Alert.alert("Menu", "Menu Accueil pressé!")}
-        onAvatarPress={() => router.push('/(app)/profile-details')} // Naviguer vers la page de profil
-      />
+      <SafeAreaView style={styles.container}>
+        <CustomHeader
+          title="Accueil"
+          user={user}
+          showNotificationIcon={true}
+          onAvatarPress={() => router.push('/(app)/profile-details')}
+        />
 
-      <ScrollView
-        contentContainerStyle={styles.scrollContainer}
-        showsVerticalScrollIndicator={false}
-      >
-        <Animated.View
-          style={[
-            styles.animatedContainer,
-            {
-              opacity: fadeAnim,
-              transform: [{ translateY: slideAnim }],
-            },
-          ]}
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={['#0f8e35']}
+              tintColor="#0f8e35" />
+          }
         >
-          {/* Message de bienvenue personnalisé */}
-          <View style={styles.welcomeContainer}>
-            <LinearGradient
-              colors={['#091e60', '#3B82F6']}
-              style={styles.welcomeGradient}
-            >
-              <Text style={styles.welcomeText}>
-                Bonjour {user?.name || 'Utilisateur'} ! 👋 
-              </Text>
-              <Text style={styles.welcomeSubtext}>
-                Bienvenue sur l'app Pro Recrute de <Text style={{ fontWeight: "bold" }}>GBG</Text>, Là où le talent rencontre les opportunités
-              </Text>
-            </LinearGradient>
-          </View>
+          <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
 
-            {/* Section Offres Recommandées (Nouveau) */}
-            <View style={styles.sectionContainer}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Offres Recommandées</Text>
-                <TouchableOpacity style={styles.viewAllButton} onPress={() => router.push('/(app)/job_board')}>
-                  <Text style={styles.viewAllText}>Voir tout</Text>
-                </TouchableOpacity>
-              </View>
-
-              {loadingRecommendations ? (
-                <View style={styles.loadingContainer}>
-                  <ActivityIndicator size="large" color="#0f8e35" />
-                  <Text style={styles.loadingText}>Chargement des recommandations...</Text>
-                </View>
-              ) : errorRecommendations ? (
-                <View style={styles.errorContainer}>
-                  <Text style={styles.errorIcon}>⚠️</Text>
-                  <Text style={styles.errorText}>{errorRecommendations}</Text>
-                </View>
-              ) : recommendedOffres.length > 0 ? (
-                <AutoSlider
-                  data={recommendedOffres}
-                  renderItem={renderRecommendation}
-                  onPress={handlePressOffre} // Utilise la même fonction de presse que pour les offres
-                  autoScrollInterval={5000}
-                />
-              ) : (
-                <View style={styles.emptyStateContainer}>
-                  <Text style={styles.emptyStateIcon}>💡</Text>
-                  <Text style={styles.emptyStateText}>
-                    Pas de recommandations pour le moment. Complétez votre profil (compétences, expériences) pour en obtenir !
-                  </Text>
-                </View>
-              )}
-            </View>
-
-              {/* Section Offres d'emploi en vedette */}
-            <View style={styles.sectionContainer}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}> Offres en Vedette</Text>
-                <TouchableOpacity style={styles.viewAllButton} onPress={() => router.push('/(app)/job_board')}>
-                  <Text style={styles.viewAllText}>Voir tout</Text>
-                </TouchableOpacity>
-              </View>
-
-              {loadingJobs ? (
-                <View style={styles.loadingContainer}>
-                  <ActivityIndicator size="large" color="#0f8e35" />
-                  <Text style={styles.loadingText}>Chargement des offres...</Text>
-                </View>
-              ) : errorJobs ? (
-                <View style={styles.errorContainer}>
-                  <Text style={styles.errorIcon}>⚠️</Text>
-                  <Text style={styles.errorText}>{errorJobs}</Text>
-                </View>
-              ) : jobOffers.length > 0 ? (
-                <AutoSlider
-                  data={jobOffers}
-                  renderItem={renderJobOffer}
-                  onPress={handlePressOffre}
-                  autoScrollInterval={5000}
-                />
-              ) : (
-                <View style={styles.emptyStateContainer}>
-                  <Text style={styles.emptyStateIcon}>📭</Text>
-                  <Text style={styles.emptyStateText}>
-                    Aucune offre en vedette pour le moment.
-                  </Text>
-                </View>
-              )}
-            </View>
-
-
-          {/* Section Dernières Actualités */}
-          <View style={styles.sectionContainer}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Dernières Actualités</Text>
-              <TouchableOpacity style={styles.viewAllButton} onPress={() => router.push('/(app)/actualites')}>
-                <Text style={styles.viewAllText}>Voir tout</Text>
-              </TouchableOpacity>
-            </View>
-            
-            {loadingNews ? ( // NOUVEAU: Ajout de l'état de chargement pour les actualités
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#0f8e35" />
-                <Text style={styles.loadingText}>Chargement des actualités...</Text>
-              </View>
-            ) : errorNews ? ( // NOUVEAU: Ajout de l'état d'erreur pour les actualités
-              <View style={styles.errorContainer}>
-                <Text style={styles.errorIcon}>⚠️</Text>
-                <Text style={styles.errorText}>{errorNews}</Text>
-              </View>
-            ) : newsData.length > 0 ? ( // NOUVEAU: Utilisation de newsData
-              <AutoSlider
-                data={newsData}
-                renderItem={renderNews}
-                onPress={handlePressNews}
-                autoScrollInterval={6000}
-              />
-            ) : (
-              <View style={styles.emptyStateContainer}>
-                <Text style={styles.emptyStateIcon}>📰</Text>
-                <Text style={styles.emptyStateText}>
-                  Aucune actualité disponible pour le moment.
+            {/* Message de bienvenue */}
+            <View style={styles.welcomeContainer}>
+              <View style={styles.welcomeContent}>
+                <Text style={[styles.welcomeTitle, { color: colors.primary }]}>
+                  Bienvenue {user?.name?.split(' ')[0] || 'Candidat'} !
+                </Text>
+                <Text style={[styles.welcomeSubtitle, { color: colors.textSecondary }]}>
+                  Prêt à décrocher votre prochain emploi ? Explorez les offres qui vous correspondent.
                 </Text>
               </View>
-            )}
-          </View>
-
-              {/* Section Astuces Carrière */}
-            <View style={styles.sectionContainer}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Astuces Carrière</Text>
-                <TouchableOpacity style={styles.viewAllButton}>
-                  <Text style={styles.viewAllText}>Voir tout</Text>
-                </TouchableOpacity>
+              <View style={[styles.welcomeIcon, { backgroundColor: colors.primary + '15' }]}>
+                <Ionicons name="hand-right-outline" size={24} color={colors.primary} />
               </View>
-
-              <AutoSlider
-                data={tipsItems}
-                renderItem={renderTip}
-                onPress={handlePressTip}
-                autoScrollInterval={7000}
-              />
-      
             </View>
-          {/* Espacement pour le bas de l'écran */}
-          <View style={{ height: 60 }} />
-        </Animated.View>
-      </ScrollView>
-    </SafeAreaView>
-    </>
 
+            {/* Statistiques */}
+            {renderStatsCard()}
+
+            {/* Actions rapides */}
+            {renderQuickActions()}
+
+            {/* Offres recommandées */}
+            {recommendedOffres.length > 0 && (
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Recommandé pour vous</Text>
+                  <TouchableOpacity onPress={() => router.push('/(app)/job_board')}>
+                    <Text style={styles.viewAllText}>Voir tout</Text>
+                  </TouchableOpacity>
+                </View>
+                <AutoSlider
+                  data={recommendedOffres}
+                  renderItem={renderOffreCard}
+                  height={200}
+                  autoScrollInterval={5000}
+                />
+              </View>
+            )}
+
+            {/* Offres en vedette */}
+            {featuredOffres.length > 0 && (
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Offres en vedette</Text>
+                  <TouchableOpacity onPress={() => router.push('/(app)/job_board')}>
+                    <Text style={styles.viewAllText}>Voir tout</Text>
+                  </TouchableOpacity>
+                </View>
+                <AutoSlider
+                  data={featuredOffres}
+                  renderItem={renderOffreCard}
+                  height={200}
+                  autoScrollInterval={4500}
+                />
+              </View>
+            )}
+
+            {/* Actualités */}
+            {newsData.length > 0 && (
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Conseils emploi</Text>
+                  <TouchableOpacity onPress={() => router.push('/(app)/actualites')}>
+                    <Text style={styles.viewAllText}>Voir tout</Text>
+                  </TouchableOpacity>
+                </View>
+                <AutoSlider
+                  data={newsData}
+                  renderItem={renderNewsCard}
+                  height={320}
+                  autoScrollInterval={6000}
+                />
+              </View>
+            )}
+
+            {/* État de chargement */}
+            {loading && (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#0f8e35" />
+                <Text style={styles.loadingText}>Chargement...</Text>
+              </View>
+            )}
+
+            <View style={{ height: 40 }} />
+          </Animated.View>
+        </ScrollView>
+      </SafeAreaView>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
+  container: {
     flex: 1,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: '#F8FAFC',
   },
-  scrollContainer: {
-    paddingBottom: 20,
-  },
-  animatedContainer: {
+  scrollView: {
     flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+  },
+  content: {
+    padding: 16,
   },
 
-  // Conteneur de bienvenue
+  // Message de bienvenue
   welcomeContainer: {
-    marginHorizontal: 20,
-    marginTop: 10,
-    marginBottom: 20,
+    backgroundColor: '#f8fafc',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
-  welcomeGradient: {
+  welcomeContent: {
+    flex: 1,
+  },
+  welcomeTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#091e60',
+    marginBottom: 4,
+  },
+  welcomeSubtitle: {
+    fontSize: 14,
+    color: '#6B7280',
+    lineHeight: 20,
+  },
+  welcomeIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#EFF6FF',
+  },
+
+  // Statistiques
+  statsCard: {
+    backgroundColor: '#FFFFFF',
     padding: 20,
     borderRadius: 16,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
-  welcomeText: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#FFFFFF",
-    marginBottom: 5,
+  statsTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#091e60',
+    marginBottom: 16,
   },
-  welcomeSubtext: {
-    fontSize: 16,
-    color: "#E5E7EB",
-    opacity: 0.9,
+  statsGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  statItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  statNumber: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#0f8e35',
+    marginBottom: 4,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: '#6B7280',
+    textAlign: 'center',
   },
 
   // Sections
-  sectionContainer: {
-    marginTop: 8,
-    paddingHorizontal: 8,
-    paddingBottom: 8,
+  section: {
     marginBottom: 20,
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    marginBottom: 15,
+    marginBottom: 16,
   },
   sectionTitle: {
     fontSize: 20,
-    fontWeight: "bold",
-    color: "#1F2937",
-  },
-  viewAllButton: {
-    paddingHorizontal: 16, // Augmenté de 12 à 16
-    paddingVertical: 8, // Augmenté de 6 à 8
-    backgroundColor: "#F1F5FF", // Plus subtil
-    borderRadius: 16, // Augmenté de 12 à 16
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
+    fontWeight: '700',
+    color: '#091e60',
   },
   viewAllText: {
-    fontSize: 13, // Réduit de 14 à 13
-    color: "#091e60",
-    fontWeight: "600",
+    fontSize: 14,
+    color: '#0f8e35',
+    fontWeight: '600',
   },
 
-  // === SLIDER ===
+  // Actions rapides
+  quickActionsGrid: {
+    paddingTop: 10,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 6,
+  },
+
+  quickActionCard: {
+    width: (width - 48) / 2,
+    backgroundColor: '#FFFFFF',
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  quickActionContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  quickActionIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  quickActionTextContainer: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  quickActionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 2,
+    lineHeight: 18,
+  },
+  quickActionDescription: {
+    fontSize: 11,
+    color: '#6B7280',
+    lineHeight: 14,
+  },
+
+  // Slider
   sliderContainer: {
-    marginBottom: 16, // Augmenté de 10 à 16
+    marginBottom: 8,
   },
-
-  // === PAGINATION - Plus moderne ===
+  sliderContent: {
+    paddingRight: 16,
+  },
   paginationContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 20, // Augmenté de 15 à 20
+    marginTop: 12,
   },
   paginationDot: {
-    width: 6, // Réduit de 8 à 6
-    height: 6, // Réduit de 8 à 6
-    borderRadius: 3, // Ajusté
+    width: 6,
+    height: 6,
+    borderRadius: 3,
     backgroundColor: '#091e60',
-    marginHorizontal: 3, // Réduit de 4 à 3
+    marginHorizontal: 3,
   },
 
-  // Cartes d'offres d'emploi
- jobCard: {
-    width: width * 0.85,
-    height: 240, // Augmenté de 230 à 240
-    marginLeft: 16, // Réduit de 20 à 16
-    marginBottom: 20,
-    borderRadius: 20, // Augmenté de 16 à 20
+  // Cards d'offres
+  offreCard: {
+    width: width - 32,
+    height: 160,
     backgroundColor: '#FFFFFF',
+    padding: 16,
+    borderRadius: 12,
+    marginRight: 16,
     borderWidth: 1,
     borderColor: '#F1F5F9',
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 }, // Plus subtil
-    shadowOpacity: 0.08, // Réduit de 0.12 à 0.08
-    shadowRadius: 16, // Augmenté
-    elevation: 4, // Réduit de 8 à 4
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
-  cardGradient: {
-    flex: 1,
-    padding: 20,
-    borderRadius: 16,
-    justifyContent: 'space-between',
-  },
-  jobCardHeader: {
+  offreHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 12,
   },
-  jobIconContainer: {
+  offreIconContainer: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#DCFCE7',
+    backgroundColor: '#EFF6FF',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  jobIcon: {
-    fontSize: 20,
-  },
-  jobBadge: {
+  matchBadge: {
     backgroundColor: '#FEF3C7',
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 8,
+    borderRadius: 12,
   },
-  jobBadgeText: {
-    fontSize: 10,
-    fontWeight: 'bold',
+  matchText: {
+    fontSize: 12,
+    fontWeight: '600',
     color: '#D97706',
   },
-  jobTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#1F2937",
-    marginBottom: 8,
-  },
-  jobCompany: {
+  offreTitle: {
     fontSize: 16,
-    color: "#6B7280",
-    marginBottom: 10,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 8,
+    lineHeight: 22,
   },
-  jobLocationContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 15,
-  },
-  locationIcon: {
-    marginRight: 5,
-  },
-  jobLocation: {
+  offreCompany: {
     fontSize: 14,
-    color: "#9CA3AF",
-    fontStyle: "italic",
-  },
-  jobFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  contractTypeContainer: {
-    backgroundColor: '#DCFCE7',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-  },
-  contractType: {
-    fontSize: 12,
-    color: '#16A34A',
-    fontWeight: "600",
-  },
-  jobSalary: {
-    fontSize: 14,
-    color: "#1F2937",
-    fontWeight: "bold",
-  },
-
-  // Cartes d'actualités
-  newsCard: {
-    width: width * 0.9,
-    height: 300,
-    marginLeft: 20,
-    borderRadius: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  newsGradient: {
-    flex: 1,
-    padding: 20,
-    borderRadius: 16,
-    justifyContent: 'space-between',
-    overflow: 'hidden',
-    backgroundColor: '#fff', // fallback au cas où
-  },
-  newsHeader: {
-    alignItems: 'flex-end',
-  },
-  newsIconLarge: {
-    fontSize: 32,
-  },
-  newsContent: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  newsTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#FFFFFF",
+    color: '#6B7280',
     marginBottom: 8,
   },
-  newsDescription: {
-    fontSize: 14,
-    color: "#F3F4F6",
-    opacity: 0.9,
+  offreLocation: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-  newsFooter: {
-    alignItems: 'flex-end',
-  },
-  readMoreText: {
+  offreLocationText: {
     fontSize: 14,
-    color: "#FFFFFF",
-    fontWeight: "600",
+    color: '#6B7280',
+    marginLeft: 4,
+    flex: 1,
   },
 
-  newsImage: {
-    width: '100%',
-    height: '60%', // Image prend 60% de la hauteur de la carte
-  },
-  newsContentOverlay: { // NOUVEAU: Overlay pour le texte
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: 'rgba(0,0,0,0.6)', // Fond semi-transparent pour le texte
-    padding: 10,
-    borderBottomLeftRadius: 16, // Coins arrondis pour l'overlay
-    borderBottomRightRadius: 16,
-  },
-
-  // Cartes d'astuces
-  tipCard: {
-    width: width * 0.9,
-    height: 220, // Augmenté de 200 à 220
-    marginLeft: 16,
-    marginBottom: 20,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    padding: 24,
+  // Cards d'actualités
+  newsCard: {
+    width: width - 32,
+    height: 280,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    marginRight: 16,
+    overflow: 'hidden',
     borderWidth: 1,
     borderColor: '#F1F5F9',
-    shadowColor: "#000",
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
-    elevation: 4,
-    justifyContent: 'space-between',
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
-  tipIconContainer: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 15,
+  newsImageContainer: {
+    height: 120,
+    position: 'relative',
   },
-  tipIconLarge: {
-    fontSize: 24,
+  newsImage: {
+    width: '100%',
+    height: '100%',
   },
-  tipTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#1F2937",
-    marginBottom: 10,
-  },
-  tipContent: {
-    fontSize: 14,
-    color: "#6B7280",
-    lineHeight: 20,
-    flex: 1,
-  },
-  tipFooter: {
-    alignItems: 'flex-end',
-  },
-  tipAction: {
-    fontSize: 14,
-    fontWeight: "600",
-  },
-
-  // Cartes de recommandations (Nouveau)
-  recommendationCard: {
-    width: width * 0.85,
-    height: 230,
-    marginLeft: 20,
-    marginBottom: 20,
-    borderRadius: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.12,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  recommendationGradient: {
-    flex: 1,
-    padding: 20,
-    borderRadius: 16,
-    justifyContent: 'space-between',
-  },
-  recommendationHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  recommendationIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#FFEDD5',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  matchScoreContainer: {
-    backgroundColor: '#FDE68A',
+  newsCategoryTag: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    backgroundColor: '#DCFCE7',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 8,
   },
-  matchScoreText: {
+  newsCategoryText: {
     fontSize: 10,
-    fontWeight: 'bold',
-    color: '#B45309',
+    fontWeight: '600',
+    color: '#16A34A',
   },
-  recommendationTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#1F2937",
-    marginBottom: 8,
+  newsContent: {
+    padding: 16,
+    flex: 1,
+    justifyContent: 'space-between',
   },
-  recommendationCompany: {
+  newsTitle: {
     fontSize: 16,
-    color: "#6B7280",
-    marginBottom: 10,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 8,
+    lineHeight: 22,
   },
-  recommendationLocationContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 15,
-  },
-  recommendationLocation: {
+  newsDescription: {
     fontSize: 14,
-    color: "#9CA3AF",
-    fontStyle: "italic",
+    color: '#6B7280',
+    lineHeight: 20,
+    marginBottom: 12,
   },
-  recommendationFooter: {
+  newsFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  recommendedText: {
+  newsDate: {
     fontSize: 12,
-    color: '#F59E0B',
-    fontWeight: "600",
+    color: '#9CA3AF',
+  },
+  newsReadTime: {
+    fontSize: 12,
+    color: '#9CA3AF',
   },
 
-  // États de chargement et d'erreur
+  // État de chargement
   loadingContainer: {
     alignItems: 'center',
     paddingVertical: 40,
   },
   loadingText: {
     fontSize: 16,
-    color: "#6B7280",
-    marginTop: 10,
+    color: '#6B7280',
+    marginTop: 12,
   },
-  errorContainer: {
-    alignItems: 'center',
-    paddingVertical: 40,
-  },
-  errorIcon: {
-    fontSize: 32,
-    marginBottom: 10,
-  },
-  errorText: {
-    color: "#EF4444",
-    textAlign: "center",
-    fontSize: 16,
-  },
-  emptyStateContainer: {
-    alignItems: 'center',
-    paddingVertical: 40,
-  },
-  emptyStateIcon: {
-    fontSize: 48,
-    marginBottom: 15,
-  },
-  emptyStateText: {
-    fontSize: 16,
-    color: "#6B7280",
-    textAlign: "center",
-  },
-
-  card: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 20, // Augmenté de 16 à 20
-    overflow: "hidden",
-    margin: 16,
-    width: width * 0.9,
-    height: 420, // Augmenté de 400 à 420
-    marginLeft: 16, // Réduit de 20 à 16
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
-    elevation: 4,
-  },
-  imageContainer: {
-    position: "relative",
-    width: "100%",
-    height: 200,
-    overflow: "hidden",
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    backgroundColor: "#e5e7eb", // fallback loading
-  },
-  image: {
-    ...StyleSheet.absoluteFillObject,
-    flex: 1,
-    width: "100%",
-    height: "100%",
-    position: "absolute",
-    top: 0,
-    left: 0,
-  },
-  imagePlaceholder: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  categoryTag: {
-    position: "absolute",
-    top: 10,
-    left: 10,
-    backgroundColor: "#dbffe5",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  categoryText: {
-    color: "#1c6003",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  content: {
-    padding: 16,
-  },
-  headline: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#111827",
-    marginBottom: 8,
-  },
-  description: {
-    fontSize: 14,
-    color: "#4b5563",
-    marginBottom: 12,
-  },
-  footer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-end",
-    marginTop: 8,
-    flexWrap: 'wrap',
-  },
-
-  footerLeft: {
-    flex: 1,
-    paddingRight: 10,
-  },
-
-  meta: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 4,
-    flexWrap: "wrap",
-  },
-
-  author: {
-    fontWeight: "600",
-    fontSize: 14,
-    color: "#1F2937",
-  },
-
-  dot: {
-    marginHorizontal: 4,
-    fontSize: 14,
-    color: "#6B7280",
-  },
-
-  readTime: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 2,
-    fontSize: 13,
-    color: "#6B7280",
-  },
-
-  footerRight: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-
-  iconButton: {
-    padding: 6,
-    borderRadius: 20,
-    marginLeft: 8,
-  },
-
 });

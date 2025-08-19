@@ -235,6 +235,18 @@ export default function ProfileDetailsScreen() {
   const [newFormCompetenceText, setNewFormCompetenceText] = useState(''); // Pour compétences liées à la formation
 
   const [showPersonalInfo, setShowPersonalInfo] = useState(true);
+  const [showCvInfo, setShowCvInfo] = useState(true);
+  const [showMissionPreferences, setShowMissionPreferences] = useState(true);
+  
+  // États pour les préférences de mission
+  const [missionPreferences, setMissionPreferences] = useState({
+    sectors: [], // Secteurs d'activité préférés
+    contractTypes: [], // Types de contrats préférés
+    missionDuration: '', // Durée de mission préférée
+    salaryExpectation: '', // Prétentions salariales
+    workEnvironment: [], // Environnements de travail préférés
+  });
+  const [editingMissionPrefs, setEditingMissionPrefs] = useState(false);
 
   // Options pour le Picker du type de contrat
   const contractTypeOptions = [
@@ -1599,48 +1611,74 @@ export default function ProfileDetailsScreen() {
         </>
 
       )}
-      <View style={[styles.section, { backgroundColor: colors.cardBackground }]}>
-        {/* En-tête CV avec upload */}
-        <View style={styles.sectionHeader}>
-          <View style={styles.headerLeft}>
-            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{t('Mon CV')}</Text>
+        {/* Collapse Mon CV */}
+        <TouchableOpacity
+          style={[additionalStyles.dropdownButton, { backgroundColor: colors.cardBackground }]}
+          onPress={() => setShowCvInfo(!showCvInfo)}
+          activeOpacity={0.7}
+        >
+          <View style={additionalStyles.dropdownContent}>
+            <Ionicons
+              name="document-text-outline"
+              size={20}
+              color={colors.secondary}
+              style={additionalStyles.dropdownIcon}
+            />
+            <Text style={[additionalStyles.dropdownTitle, { color: colors.secondary }]}>
+              {t('Mon CV')}
+            </Text>
           </View>
-          <View style={styles.headerActions}>
-            <TouchableOpacity
-              style={[styles.actionButton, styles.uploadButton, { backgroundColor: colors.primary + '15' }]}
-              onPress={pickDocument}
-              disabled={uploadingCv}
-            >
-              {uploadingCv ? (
-                <ActivityIndicator size="small" color={colors.primary} />
-              ) : (
-                <Ionicons name="cloud-upload-outline" size={18} color={colors.primary} />
-              )}
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.actionButton, cvEditMode && styles.actionButtonActive, { backgroundColor: cvEditMode ? colors.secondary : colors.settingIconBg }]}
-              onPress={() => cvEditMode ? handleCvSave() : setCvEditMode(true)}
-            >
-              <Ionicons
-                name={cvEditMode ? "checkmark" : "pencil"}
-                size={18}
-                color={cvEditMode ? "#ffffff" : colors.secondary}
-              />
-            </TouchableOpacity>
-            {cvEditMode && (
-              <TouchableOpacity
-                style={[styles.actionButton, styles.actionButtonCancel, { backgroundColor: colors.error }]}
-                onPress={() => {
-                  setCvEditMode(false);
-                  loadCandidatProfile();
-                  setCvUpdateError(null);
-                }}
-              >
-                <Ionicons name="close" size={18} color="#ffffff" />
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
+          <Ionicons
+            name={showCvInfo ? "chevron-up" : "chevron-down"}
+            size={20}
+            color={colors.secondary}
+            style={additionalStyles.dropdownArrow}
+          />
+        </TouchableOpacity>
+        <View>
+          {showCvInfo && (
+            <View style={[styles.section, { backgroundColor: colors.cardBackground }]}>
+              {/* En-tête CV avec upload */}
+              <View style={styles.sectionHeader}>
+                <View style={styles.headerLeft}>
+                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{t('Gestion CV')}</Text>
+                </View>
+                <View style={styles.headerActions}>
+                  <TouchableOpacity
+                    style={[styles.actionButton, styles.uploadButton, { backgroundColor: colors.primary + '15' }]}
+                    onPress={pickDocument}
+                    disabled={uploadingCv}
+                  >
+                    {uploadingCv ? (
+                      <ActivityIndicator size="small" color={colors.primary} />
+                    ) : (
+                      <Ionicons name="cloud-upload-outline" size={18} color={colors.primary} />
+                    )}
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.actionButton, cvEditMode && styles.actionButtonActive, { backgroundColor: cvEditMode ? colors.secondary : colors.settingIconBg }]}
+                    onPress={() => cvEditMode ? handleCvSave() : setCvEditMode(true)}
+                  >
+                    <Ionicons
+                      name={cvEditMode ? "checkmark" : "pencil"}
+                      size={18}
+                      color={cvEditMode ? "#ffffff" : colors.secondary}
+                    />
+                  </TouchableOpacity>
+                  {cvEditMode && (
+                    <TouchableOpacity
+                      style={[styles.actionButton, styles.actionButtonCancel, { backgroundColor: colors.error }]}
+                      onPress={() => {
+                        setCvEditMode(false);
+                        loadCandidatProfile();
+                        setCvUpdateError(null);
+                      }}
+                    >
+                      <Ionicons name="close" size={18} color="#ffffff" />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
 
         {/* {cvFileName && (
           <View style={[styles.fileInfo, { backgroundColor: colors.success + '10' }]}>
@@ -1672,8 +1710,228 @@ export default function ProfileDetailsScreen() {
             <Text style={[styles.emptyText, { color: colors.textSecondary }]}>{t('Saisissez manuellement vos informations ou téléchargez un CV.')}</Text>
           </View>
         )}
-      </View>
+            </View>
+          )}
+        </View>
+
+        {/* Collapse Mes Préférences de Mission */}
+        <TouchableOpacity
+          style={[additionalStyles.dropdownButton, { backgroundColor: colors.cardBackground }]}
+          onPress={() => setShowMissionPreferences(!showMissionPreferences)}
+          activeOpacity={0.7}
+        >
+          <View style={additionalStyles.dropdownContent}>
+            <Ionicons
+              name="briefcase-outline"
+              size={20}
+              color={colors.secondary}
+              style={additionalStyles.dropdownIcon}
+            />
+            <Text style={[additionalStyles.dropdownTitle, { color: colors.secondary }]}>
+              {t('Mes Préférences de Mission')}
+            </Text>
+          </View>
+          <Ionicons
+            name={showMissionPreferences ? "chevron-up" : "chevron-down"}
+            size={20}
+            color={colors.secondary}
+            style={additionalStyles.dropdownArrow}
+          />
+        </TouchableOpacity>
+        <View>
+          {showMissionPreferences && renderMissionPreferences()}
+        </View>
     </>
+  );
+
+  const renderMissionPreferences = () => (
+    <View style={[styles.section, { backgroundColor: colors.cardBackground }]}>
+      <View style={styles.sectionHeader}>
+        <View style={styles.headerLeft}>
+          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
+            {t('Préférences de Mission')}
+          </Text>
+        </View>
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            style={[
+              styles.actionButton,
+              editingMissionPrefs && styles.actionButtonActive,
+              { backgroundColor: editingMissionPrefs ? colors.secondary : colors.settingIconBg }
+            ]}
+            onPress={() => setEditingMissionPrefs(!editingMissionPrefs)}
+          >
+            <Ionicons
+              name={editingMissionPrefs ? "checkmark" : "pencil"}
+              size={18}
+              color={editingMissionPrefs ? "#ffffff" : colors.secondary}
+            />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {editingMissionPrefs ? (
+        <View style={styles.editContainer}>
+          {/* Secteurs d'activité préférés */}
+          <View style={styles.formSection}>
+            <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
+              {t('Secteurs d\'activité préférés')}
+            </Text>
+            <View style={styles.chipContainer}>
+              {['IT/Informatique', 'Commerce', 'Industrie', 'Santé', 'Éducation', 'Finance'].map((sector) => (
+                <TouchableOpacity
+                  key={sector}
+                  style={[
+                    styles.chip,
+                    missionPreferences.sectors.includes(sector) && styles.chipSelected,
+                    {
+                      backgroundColor: missionPreferences.sectors.includes(sector) 
+                        ? colors.secondary + '20' 
+                        : colors.background,
+                      borderColor: missionPreferences.sectors.includes(sector) 
+                        ? colors.secondary 
+                        : colors.border
+                    }
+                  ]}
+                  onPress={() => {
+                    const updatedSectors = missionPreferences.sectors.includes(sector)
+                      ? missionPreferences.sectors.filter(s => s !== sector)
+                      : [...missionPreferences.sectors, sector];
+                    setMissionPreferences(prev => ({ ...prev, sectors: updatedSectors }));
+                  }}
+                >
+                  <Text style={[
+                    styles.chipText,
+                    { color: missionPreferences.sectors.includes(sector) ? colors.secondary : colors.textSecondary }
+                  ]}>
+                    {t(sector)}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          {/* Types de contrats préférés */}
+          <View style={styles.formSection}>
+            <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
+              {t('Types de contrats préférés')}
+            </Text>
+            <View style={styles.chipContainer}>
+              {['Intérim', 'CDD', 'CDI', 'Freelance', 'Saisonnier'].map((contractType) => (
+                <TouchableOpacity
+                  key={contractType}
+                  style={[
+                    styles.chip,
+                    missionPreferences.contractTypes.includes(contractType) && styles.chipSelected,
+                    {
+                      backgroundColor: missionPreferences.contractTypes.includes(contractType) 
+                        ? colors.secondary + '20' 
+                        : colors.background,
+                      borderColor: missionPreferences.contractTypes.includes(contractType) 
+                        ? colors.secondary 
+                        : colors.border
+                    }
+                  ]}
+                  onPress={() => {
+                    const updatedTypes = missionPreferences.contractTypes.includes(contractType)
+                      ? missionPreferences.contractTypes.filter(t => t !== contractType)
+                      : [...missionPreferences.contractTypes, contractType];
+                    setMissionPreferences(prev => ({ ...prev, contractTypes: updatedTypes }));
+                  }}
+                >
+                  <Text style={[
+                    styles.chipText,
+                    { color: missionPreferences.contractTypes.includes(contractType) ? colors.secondary : colors.textSecondary }
+                  ]}>
+                    {t(contractType)}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          {/* Durée de mission préférée */}
+          <View style={styles.inputGroup}>
+            <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
+              {t('Durée de mission préférée')}
+            </Text>
+            <View style={[styles.input, { borderColor: colors.border, backgroundColor: colors.background }]}>
+              <Picker
+                selectedValue={missionPreferences.missionDuration}
+                onValueChange={(value) => setMissionPreferences(prev => ({ ...prev, missionDuration: value }))}
+                style={{ color: colors.textPrimary }}
+              >
+                <Picker.Item label={t('Sélectionner')} value="" />
+                <Picker.Item label={t('1-3 mois')} value="1-3 mois" />
+                <Picker.Item label={t('3-6 mois')} value="3-6 mois" />
+                <Picker.Item label={t('6-12 mois')} value="6-12 mois" />
+                <Picker.Item label={t('Plus de 12 mois')} value="+12 mois" />
+                <Picker.Item label={t('Flexible')} value="flexible" />
+              </Picker>
+            </View>
+          </View>
+
+          {/* Prétentions salariales */}
+          <View style={styles.inputGroup}>
+            <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
+              {t('Prétentions salariales (€/jour)')}
+            </Text>
+            <TextInput
+              style={[styles.input, { borderColor: colors.border, backgroundColor: colors.background, color: colors.textPrimary }]}
+              value={missionPreferences.salaryExpectation}
+              onChangeText={(text) => setMissionPreferences(prev => ({ ...prev, salaryExpectation: text }))}
+              placeholder={t('Ex: 350')}
+              placeholderTextColor={colors.textSecondary}
+              keyboardType="numeric"
+            />
+          </View>
+        </View>
+      ) : (
+        <View style={styles.displayContainer}>
+          {/* Affichage des préférences */}
+          <View style={styles.infoContainer}>
+            <View style={styles.infoRow}>
+              <Text style={[styles.labelText, { color: colors.textSecondary }]}>
+                {t('Secteurs préférés')}:
+              </Text>
+              <Text style={[styles.valueText, { color: colors.textPrimary }]}>
+                {missionPreferences.sectors.length > 0 
+                  ? missionPreferences.sectors.join(', ') 
+                  : t('Non renseigné')}
+              </Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Text style={[styles.labelText, { color: colors.textSecondary }]}>
+                {t('Types de contrats')}:
+              </Text>
+              <Text style={[styles.valueText, { color: colors.textPrimary }]}>
+                {missionPreferences.contractTypes.length > 0 
+                  ? missionPreferences.contractTypes.join(', ') 
+                  : t('Non renseigné')}
+              </Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Text style={[styles.labelText, { color: colors.textSecondary }]}>
+                {t('Durée préférée')}:
+              </Text>
+              <Text style={[styles.valueText, { color: colors.textPrimary }]}>
+                {missionPreferences.missionDuration || t('Non renseigné')}
+              </Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Text style={[styles.labelText, { color: colors.textSecondary }]}>
+                {t('Prétentions salariales')}:
+              </Text>
+              <Text style={[styles.valueText, { color: colors.textPrimary }]}>
+                {missionPreferences.salaryExpectation 
+                  ? `${missionPreferences.salaryExpectation}€/jour` 
+                  : t('Non renseigné')}
+              </Text>
+            </View>
+          </View>
+        </View>
+      )}
+    </View>
   );
 
   const renderCvEditForm = () => (
@@ -2953,6 +3211,127 @@ export default function ProfileDetailsScreen() {
     return null;
   };
 
+  // Calculer la progression du profil
+  const calculateProfileCompletion = () => {
+    // Pour les candidats
+    if (candidatProfile) {
+      let completed = 0;
+      const total = 6; // Nombre total de sections importantes
+      
+      // Vérifier les champs essentiels
+      if (candidatProfile.telephone && candidatProfile.date_naissance) completed++;
+      if (candidatProfile.titreProfil) completed++;
+      if (candidatProfile.competences && candidatProfile.competences.length > 0) completed++;
+      if (candidatProfile.experiences && candidatProfile.experiences.length > 0) completed++;
+      if (candidatProfile.formations && candidatProfile.formations.length > 0) completed++;
+      if (parsedCv?.full_name || candidatProfile.cv_file) completed++;
+      
+      const percentage = Math.round((completed / total) * 100);
+      return { percentage, completed, total };
+    }
+    
+    // Pour les intérimaires
+    if (interimProfile) {
+      let completed = 0;
+      const total = 4; // Nombre total de sections importantes pour intérimaires
+      
+      // Vérifier les champs essentiels pour intérimaires
+      if (interimProfile.telephone && interimProfile.date_naissance) completed++;
+      if (interimProfile.disponibilite) completed++;
+      if (interimProfile.status) completed++;
+      if (user?.name) completed++; // Informations de base
+      
+      const percentage = Math.round((completed / total) * 100);
+      return { percentage, completed, total };
+    }
+    
+    return { percentage: 0, completed: 0, total: 6 };
+  };
+
+  // Rendu de l'indicateur de progression
+  const renderProfileProgress = () => {
+    const { percentage, completed, total } = calculateProfileCompletion();
+    console.log('Progression profil:', { percentage, completed, total });
+    
+    const getProgressColor = (perc: number): string => {
+      if (perc >= 80) return '#10B981'; // Vert
+      if (perc >= 50) return '#F59E0B'; // Orange  
+      return '#EF4444'; // Rouge
+    };
+
+    const progressColor = getProgressColor(percentage);
+
+    return (
+      <View style={{
+        backgroundColor: '#FFFFFF',
+        marginHorizontal: 16,
+        marginVertical: 8,
+        padding: 16,
+        borderRadius: 12,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        // shadowRadius: 12,
+        // elevation: 6,
+      }}>
+        <View style={{
+          flexDirection: 'row',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: 12,
+        }}>
+          <Text style={{
+            fontSize: 16,
+            fontWeight: '600',
+            color: '#1F2937',
+          }}>Complétude du profil</Text>
+          <Text style={{
+            fontSize: 18,
+            fontWeight: 'bold',
+            color: progressColor,
+          }}>
+            {percentage}%
+          </Text>
+        </View>
+        
+        <View style={{ marginBottom: 8 }}>
+          <View style={{
+            height: 6,
+            backgroundColor: '#E5E7EB',
+            borderRadius: 3,
+            marginBottom: 6,
+          }}>
+            <View style={{
+              height: '100%',
+              borderRadius: 3,
+              width: `${percentage}%`,
+              backgroundColor: progressColor,
+            }} />
+          </View>
+          <Text style={{
+            fontSize: 12,
+            color: '#6B7280',
+            textAlign: 'right',
+          }}>
+            {completed}/{total} sections complètes
+          </Text>
+        </View>
+        
+        <Text style={{
+          fontSize: 13,
+          color: '#6B7280',
+          textAlign: 'center',
+          lineHeight: 18,
+        }}>
+          {percentage === 100 
+            ? 'Profil complet ! Vous maximisez vos chances'
+            : `Complétez ${total - completed} section${total - completed > 1 ? 's' : ''} pour optimiser votre profil`
+          }
+        </Text>
+      </View>
+    );
+  };
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar barStyle="light-content" backgroundColor="#091e60" />
@@ -2963,6 +3342,7 @@ export default function ProfileDetailsScreen() {
         onAvatarPress={handleAvatarPress}
       />
       {renderTabBar()}
+      {renderProfileProgress()}
       <ScrollView
         style={[styles.scrollView, { backgroundColor: colors.background }]}
         contentContainerStyle={styles.scrollContent}
@@ -3076,30 +3456,30 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
   },
 
-  // Tab Bar Styles
+  // Tab Bar Styles - Modernisés
   tabBarContainer: {
     paddingHorizontal: 16,
     paddingTop: 8,
   },
   tabBar: {
     flexDirection: 'row',
-    borderRadius: 12,
+    borderRadius: 14,
     padding: 4,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 5,
   },
   tab: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    gap: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 18,
+    borderRadius: 10,
+    gap: 6,
   },
   activeTab: {
     // backgroundColor est géré par le style inline
@@ -3124,10 +3504,10 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 20,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 5,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -3818,6 +4198,44 @@ const additionalStyles = StyleSheet.create({
     fontWeight: '600',
   },
 
+  // Styles pour les chips (préférences de mission)
+  chipContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 8,
+  },
+  chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    margin: 2,
+  },
+  chipSelected: {
+    // Styles appliqués dynamiquement via backgroundColor et borderColor
+  },
+  chipText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  
+  // Styles pour l'affichage des informations
+  displayContainer: {
+    padding: 16,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    marginBottom: 12,
+    alignItems: 'flex-start',
+  },
+  valueText: {
+    fontSize: 14,
+    flex: 1,
+    marginLeft: 8,
+    lineHeight: 20,
+  },
+
   // Container pour les éléments avec icônes
   cvViewItem: {
     flexDirection: 'row',
@@ -4026,5 +4444,58 @@ const cvStyles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#ffffff',
+  },
+
+  // Styles pour l'indicateur de progression
+  progressContainer: {
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: 16,
+    marginVertical: 8,
+    padding: 16,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  progressHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  progressTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
+  },
+  progressPercentage: {
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  progressBarContainer: {
+    marginBottom: 8,
+  },
+  progressBar: {
+    height: 6,
+    backgroundColor: '#E5E7EB',
+    borderRadius: 3,
+    marginBottom: 6,
+  },
+  progressBarFill: {
+    height: '100%',
+    borderRadius: 3,
+  },
+  progressText: {
+    fontSize: 12,
+    color: '#6B7280',
+    textAlign: 'right',
+  },
+  progressDescription: {
+    fontSize: 13,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 18,
   },
 });

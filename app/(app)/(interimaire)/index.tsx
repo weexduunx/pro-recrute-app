@@ -377,12 +377,12 @@ export default function InterimDashboardScreen() {
         style={[styles.container, { backgroundColor: colors.background }]}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={[colors.primary]}
-            tintColor={colors.primary}
-          />
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                colors={['#0f8e35']}
+                tintColor="#0f8e35"
+              />
         }
       >
         <View style={styles.content}>

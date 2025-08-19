@@ -28,9 +28,13 @@ export const useBiometricAuth = () => {
     isEnabled: false,
     hasStoredCredentials: false,
   });
+  const [isChecking, setIsChecking] = useState(false);
 
   // Vérifier la disponibilité et les paramètres de l'authentification biométrique
   const checkBiometricStatus = async () => {
+    if (isChecking) return state; // Éviter les appels multiples simultanés
+    setIsChecking(true);
+    
     try {
       // Vérifier si le matériel biométrique est disponible
       const compatible = await LocalAuthentication.hasHardwareAsync();
@@ -73,6 +77,8 @@ export const useBiometricAuth = () => {
         isEnabled: false,
         hasStoredCredentials: false,
       };
+    } finally {
+      setIsChecking(false);
     }
   };
 

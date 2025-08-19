@@ -45,13 +45,29 @@ export const useNotifications = (): NotificationHook => {
     refreshUnreadCount();
   }, [refreshUnreadCount]);
 
-  // Actualiser périodiquement (toutes les 5 minutes)
+  // Actualiser plus fréquemment (toutes les 30 secondes)
   useEffect(() => {
     const interval = setInterval(() => {
       refreshUnreadCount();
-    }, 5 * 60 * 1000); // 5 minutes
+    }, 30 * 1000); // 30 secondes
 
     return () => clearInterval(interval);
+  }, [refreshUnreadCount]);
+
+  // Actualiser quand l'app revient au premier plan
+  useEffect(() => {
+    const handleAppStateChange = (nextAppState: string) => {
+      if (nextAppState === 'active') {
+        refreshUnreadCount();
+      }
+    };
+
+    const { AppState } = require('react-native');
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+
+    return () => {
+      subscription?.remove();
+    };
   }, [refreshUnreadCount]);
 
   return {

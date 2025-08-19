@@ -73,7 +73,7 @@ export default function CustomHeader({ title, user: propUser, showBackButton = f
     setAvatarDropdownVisible(false);
   };
 
-  const handleDropdownProfile = () => {
+  const handleDropdownProfile = () => { 
     closeAvatarDropdown();
     router.push('/(app)/profile-details'); // Naviguer vers l'écran du tableau de bord
   };
@@ -144,7 +144,7 @@ const handleDropdownLogout = () => {
         ) : (
           <TouchableOpacity onPress={handleAvatarPress} >
             <UserAvatar
-              size={50}
+              size={38}
               name={user?.name || ''}
               src={user?.photo_profil ? 
                 (user.photo_profil.startsWith('http') 
@@ -154,9 +154,9 @@ const handleDropdownLogout = () => {
               bgColor="#0f8e35"
               bgColors={['#0f8e35', '#0f8e35', '#0f8e35']}
               initials={user?.name ? user.name.split(' ').map((n: string) => n[0]).join('') : ''}
-              style={{ borderWidth: 2, borderColor: '#FFFFFF' }}
+              style={{ borderWidth: 1.5, borderColor: '#FFFFFF' }}
               textColor="#FFFFFF"
-              borderRadius={30}
+              borderRadius={19}
             />
           </TouchableOpacity>
         )}
@@ -203,8 +203,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     backgroundColor: '#091e60',
-    paddingHorizontal: 15,
-    paddingVertical: 15,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
     width: '100%',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
