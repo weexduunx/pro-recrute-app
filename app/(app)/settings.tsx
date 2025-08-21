@@ -760,7 +760,7 @@ const useActiveSessions = () => {
       const response = await getActiveSessions(deviceHeaders);
       console.log('Réponse getActiveSessions:', response);
       
-      if (response.success && response.data) {
+      if (response.success && response.data && Array.isArray(response.data)) {
         console.log('✅ Sessions reçues:', response.data);
         
         // Transformer les données pour correspondre à l'interface ActiveSession
@@ -2250,7 +2250,7 @@ export default function ParametresScreen() {
       );
 
       // Vérifier avec le backend s'il y a des mises à jour disponibles
-      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.144:8000/api'}/check-app-version`, {
+      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.11:8000/api'}/check-app-version`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

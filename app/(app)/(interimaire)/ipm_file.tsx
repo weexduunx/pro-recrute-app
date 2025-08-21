@@ -332,7 +332,7 @@ export default function IpmFileScreen() {
         </Text>
       </View>
       {item.statut === 1 && ( // Bouton de téléchargement si accordée
-        <TouchableOpacity onPress={() => handleDownloadPdf(item.id.toString(), 'prise_en_charge')}>
+        <TouchableOpacity onPress={() => handleDownloadPdf(item.id?.toString() || '', 'prise_en_charge')}>
           <Ionicons name="download-outline" size={24} color={colors.secondary} />
         </TouchableOpacity>
       )}
@@ -362,7 +362,7 @@ export default function IpmFileScreen() {
         </Text>
       </View>
       {item.statut === 1 && ( // Bouton de téléchargement si validée
-        <TouchableOpacity onPress={() => handleDownloadPdf(item.encrypted_id.toString(), 'feuille_de_soins')}>
+        <TouchableOpacity onPress={() => handleDownloadPdf(item.encrypted_id?.toString() || '', 'feuille_de_soins')}>
           <Ionicons name="download-outline" size={24} color={colors.secondary} />
         </TouchableOpacity>
 
@@ -440,9 +440,9 @@ export default function IpmFileScreen() {
             </View>
           ) : (
             <FlatList
-              data={loans}
+              data={loans || []}
               renderItem={renderLoanItem}
-              keyExtractor={item => item.id.toString()}
+              keyExtractor={item => item.id?.toString() || Math.random().toString()}
               scrollEnabled={false}
               contentContainerStyle={styles.listContainer}
             />
@@ -494,9 +494,9 @@ export default function IpmFileScreen() {
             </View>
           ) : (
             <FlatList
-              data={prisesEnChargeHistory}
+              data={prisesEnChargeHistory || []}
               renderItem={renderPriseEnChargeItem}
-              keyExtractor={item => item.id.toString()}
+              keyExtractor={item => item.id?.toString() || Math.random().toString()}
               scrollEnabled={false}
               contentContainerStyle={styles.listContainer}
             />
@@ -544,9 +544,9 @@ export default function IpmFileScreen() {
             </View>
           ) : (
             <FlatList
-              data={feuillesDeSoinsHistory}
+              data={feuillesDeSoinsHistory || []}
               renderItem={renderFeuilleDeSoinsItem}
-              keyExtractor={item => item.id.toString()}
+              keyExtractor={item => item.id?.toString() || Math.random().toString()}
               scrollEnabled={false}
               contentContainerStyle={styles.listContainer}
             />

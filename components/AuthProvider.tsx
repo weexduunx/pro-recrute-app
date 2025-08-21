@@ -413,7 +413,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
     // L'URL de redirection vers votre API Laravel pour initier le flux OAuth
     // Assurez-vous que l'URL de votre API Laravel est correcte
-    const LARAVEL_SOCIAL_REDIRECT_URL = `http://192.168.1.144:8000/api/auth/${provider}/redirect`; // Utiliser l'IP locale pour le dev
+    const LARAVEL_SOCIAL_REDIRECT_URL = `http://192.168.1.11:8000/api/auth/${provider}/redirect`; // Utiliser l'IP locale pour le dev
 
     try {
       const result = await WebBrowser.openAuthSessionAsync(

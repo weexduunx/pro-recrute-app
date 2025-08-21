@@ -54,19 +54,49 @@ export default function MyApplicationsScreen() {
           icon: 'time',
           text: 'En attente',
         };
+      case 'Préselectionné':
+        return {
+          color: '#6366F1',
+          backgroundColor: '#E0E7FF',
+          icon: 'star',
+          text: 'Préselectionné',
+        };
+      // Nouveaux statuts après tri
+      case 'Retenu':
+        return {
+          color: '#10B981',
+          backgroundColor: '#D1FAE5',
+          icon: 'checkmark-circle-outline',
+          text: 'Retenu',
+        };
+      case 'Non retenu':
+        return {
+          color: '#EF4444',
+          backgroundColor: '#FEE2E2',
+          icon: 'close-circle-outline',
+          text: 'Non retenu',
+        };
+      case 'Stand By':
+        return {
+          color: '#8B5CF6',
+          backgroundColor: '#EDE9FE',
+          icon: 'pause-circle-outline',
+          text: 'Stand By',
+        };
+      // Anciens statuts (pour compatibilité)
       case 'Acceptée':
         return {
           color: '#10B981',
           backgroundColor: '#D1FAE5',
           icon: 'checkmark-circle-outline',
-          text: 'Acceptée',
+          text: 'Retenu',
         };
       case 'Refusée':
         return {
           color: '#EF4444',
           backgroundColor: '#FEE2E2',
           icon: 'close-circle-outline',
-          text: 'Refusée',
+          text: 'Non retenu',
         };
       default:
         return {
@@ -263,7 +293,7 @@ export default function MyApplicationsScreen() {
           <FlatList
             data={applications}
             renderItem={renderApplicationCard}
-            keyExtractor={(item) => item.id.toString()}
+            keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
             contentContainerStyle={styles.listContainer}
             refreshControl={
               <RefreshControl

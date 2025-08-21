@@ -488,8 +488,8 @@ export default function StructuresScreen() {
       <CustomHeader title="Structures de soins" showBackButton={true} />
 
       <FlatList
-        data={structures}
-        keyExtractor={(item) => item.id.toString()}
+        data={structures || []}
+        keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
         renderItem={renderStructureItem}
         refreshControl={
           <RefreshControl

@@ -9,6 +9,12 @@ import { router, useRouter  } from 'expo-router';
 import CustomHeader from '../../components/CustomHeader';
 import { useTheme } from '../../components/ThemeContext'; 
 
+// Fonction helper pour s'assurer qu'on a toujours un tableau
+const ensureArray = (data: any): any[] => {
+  if (Array.isArray(data)) return data;
+  return [];
+};
+
 /**
  * Écran du Tableau de bord de l'utilisateur :
  * Interface minimaliste et intuitive avec une UX améliorée.
@@ -104,13 +110,14 @@ export default function DashboardScreen() {
       setLoadingApplications(true);
       try {
         const fetchedApplications = await getUserApplications();
-        setApplications(fetchedApplications);
+        const safeApplications = ensureArray(fetchedApplications);
+        setApplications(safeApplications);
         
         // Calculer les stats d'activité hebdomadaire
         const oneWeekAgo = new Date();
         oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
         
-        const newApplicationsThisWeek = fetchedApplications.filter((app: any) => 
+        const newApplicationsThisWeek = safeApplications.filter((app: any) => 
           new Date(app.created_at) >= oneWeekAgo
         ).length;
         
@@ -194,7 +201,7 @@ export default function DashboardScreen() {
         console.log('Entretiens récupérés:', fetchedEntretiens);
         console.log('Type des entretiens:', typeof fetchedEntretiens);
         console.log('Length des entretiens:', fetchedEntretiens?.length);
-        setEntretiens(fetchedEntretiens);
+        setEntretiens(fetchedEntretiens || []);
       } catch (error: any) {
         console.error("Erreur de chargement des entretiens:", error);
         console.error("Error details:", error.response?.data);
@@ -503,7 +510,7 @@ export default function DashboardScreen() {
               <ActivityIndicator size="small" color="#0f8e35" />
               <Text style={styles.loadingText}>Chargement des entretiens...</Text>
             </View>
-          ) : entretiens.length > 0 ? (
+          ) : entretiens && entretiens.length > 0 ? (
             <View style={styles.calendarContainer}>
               {entretiens.slice(0, 3).map((entretien: any, index: number) => (
                 <TouchableOpacity 
@@ -569,7 +576,7 @@ export default function DashboardScreen() {
               <ActivityIndicator size="small" color="#0f8e35" />
               <Text style={styles.loadingText}>Chargement...</Text>
             </View>
-          ) : applications.length > 0 ? (
+          ) : applications && applications.length > 0 ? (
             <View style={styles.listContainer} >
               {applications.slice(0, 3).map(app => (
                 <TouchableOpacity key={app.id} style={styles.listItem} onPress={() => handleApplicationPress(app.id)} activeOpacity={0.7}>
@@ -614,7 +621,7 @@ export default function DashboardScreen() {
               <ActivityIndicator size="small" color="#0f8e35" />
               <Text style={styles.loadingText}>Chargement des recommandations IA...</Text>
             </View>
-          ) : aiRecommendations.length > 0 ? (
+          ) : aiRecommendations && aiRecommendations.length > 0 ? (
             <View style={styles.listContainer}>
               {aiRecommendations.slice(0, 3).map((recommendation: any, index: number) => (
                 <TouchableOpacity 

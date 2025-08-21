@@ -11,7 +11,9 @@ import {
   RefreshControl,
   Dimensions,
   FlatList,
-  StatusBar
+  StatusBar,
+  TextInput,
+  Modal
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../../components/AuthProvider';
@@ -35,9 +37,50 @@ export default function AuthenticatedJobBoardScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [errorOffres, setErrorOffres] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  
+  // États pour la recherche et les filtres
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedFilters, setSelectedFilters] = useState({
+    type_contrat: '',
+    lieu_travail: '',
+    secteur: ''
+  });
+  const [showFilterModal, setShowFilterModal] = useState(false);
+  const [filteredOffres, setFilteredOffres] = useState([]);
 
-  // Calculs de pagination
-  const totalPages = Math.ceil(allOffres.length / ITEMS_PER_PAGE);
+  // Fonction de filtrage et recherche
+  const applyFiltersAndSearch = (offres, query, filters) => {
+    let result = offres;
+
+    // Filtrer par recherche
+    if (query.trim()) {
+      result = result.filter(offre => 
+        offre.poste?.titre_poste?.toLowerCase().includes(query.toLowerCase()) ||
+        offre.entreprise?.libelleE?.toLowerCase().includes(query.toLowerCase()) ||
+        offre.lieux?.toLowerCase().includes(query.toLowerCase())
+      );
+    }
+
+    // Filtrer par type de contrat
+    if (filters.type_contrat) {
+      result = result.filter(offre => 
+        offre.poste?.type_contrat === filters.type_contrat
+      );
+    }
+
+    // Filtrer par lieu
+    if (filters.lieu_travail) {
+      result = result.filter(offre => 
+        offre.lieux?.toLowerCase().includes(filters.lieu_travail.toLowerCase())
+      );
+    }
+
+    return result;
+  };
+
+  // Calculs de pagination basés sur les offres filtrées
+  const workingOffres = filteredOffres.length > 0 ? filteredOffres : allOffres;
+  const totalPages = Math.ceil(workingOffres.length / ITEMS_PER_PAGE);
   const hasMoreData = currentPage < totalPages;
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
   const endIndex = startIndex + ITEMS_PER_PAGE;
@@ -49,8 +92,12 @@ export default function AuthenticatedJobBoardScreen() {
       const fetchedOffres = await getOffres();
       setAllOffres(fetchedOffres);
       
+      // Appliquer les filtres et recherche
+      const filtered = applyFiltersAndSearch(fetchedOffres, searchQuery, selectedFilters);
+      setFilteredOffres(filtered);
+      
       // Charger la première page
-      const firstPageOffres = fetchedOffres.slice(0, ITEMS_PER_PAGE);
+      const firstPageOffres = filtered.slice(0, ITEMS_PER_PAGE);
       setDisplayedOffres(firstPageOffres);
       setCurrentPage(1);
     } catch (err: any) {
@@ -71,7 +118,7 @@ export default function AuthenticatedJobBoardScreen() {
       const nextPage = currentPage + 1;
       const newStartIndex = (nextPage - 1) * ITEMS_PER_PAGE;
       const newEndIndex = newStartIndex + ITEMS_PER_PAGE;
-      const newOffres = allOffres.slice(newStartIndex, newEndIndex);
+      const newOffres = workingOffres.slice(newStartIndex, newEndIndex);
       
       setDisplayedOffres(prev => [...prev, ...newOffres]);
       setCurrentPage(nextPage);
@@ -99,6 +146,44 @@ export default function AuthenticatedJobBoardScreen() {
   useEffect(() => {
     fetchOffres();
   }, []);
+
+  // Fonction pour appliquer la recherche
+  const handleSearch = (query: string) => {
+    setSearchQuery(query);
+    const filtered = applyFiltersAndSearch(allOffres, query, selectedFilters);
+    setFilteredOffres(filtered);
+    
+    // Réinitialiser la pagination
+    setCurrentPage(1);
+    const firstPage = filtered.slice(0, ITEMS_PER_PAGE);
+    setDisplayedOffres(firstPage);
+  };
+
+  // Fonction pour appliquer les filtres
+  const applyFilters = (filters) => {
+    setSelectedFilters(filters);
+    const filtered = applyFiltersAndSearch(allOffres, searchQuery, filters);
+    setFilteredOffres(filtered);
+    
+    // Réinitialiser la pagination
+    setCurrentPage(1);
+    const firstPage = filtered.slice(0, ITEMS_PER_PAGE);
+    setDisplayedOffres(firstPage);
+    setShowFilterModal(false);
+  };
+
+  // Fonction pour réinitialiser les filtres
+  const resetFilters = () => {
+    setSearchQuery('');
+    setSelectedFilters({ type_contrat: '', lieu_travail: '', secteur: '' });
+    setFilteredOffres([]);
+    
+    // Réinitialiser avec toutes les offres
+    setCurrentPage(1);
+    const firstPage = allOffres.slice(0, ITEMS_PER_PAGE);
+    setDisplayedOffres(firstPage);
+    setShowFilterModal(false);
+  };
 
   const handleOffrePress = (offreId: string) => {
     router.push(`/job_board/job_details?id=${offreId}`);
@@ -335,6 +420,133 @@ export default function AuthenticatedJobBoardScreen() {
     </View>
   );
 
+  // Compte des filtres actifs
+  const activeFiltersCount = Object.values(selectedFilters).filter(value => value !== '').length;
+
+  const renderSearchAndFilters = () => (
+    <View style={styles.searchAndFiltersContainer}>
+      {/* Barre de recherche */}
+      <View style={styles.searchContainer}>
+        <View style={styles.searchInputContainer}>
+          <Ionicons name="search" size={20} color="#6B7280" style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Rechercher des offres..."
+            placeholderTextColor="#9CA3AF"
+            value={searchQuery}
+            onChangeText={handleSearch}
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => handleSearch('')} style={styles.clearButton}>
+              <Ionicons name="close-circle" size={20} color="#6B7280" />
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+
+      {/* Section des filtres */}
+      <View style={styles.filtersSection}>
+        <TouchableOpacity 
+          style={[styles.filterButton, activeFiltersCount > 0 && styles.activeFilterButton]} 
+          onPress={() => setShowFilterModal(true)}
+        >
+          <Ionicons name="filter" size={16} color={activeFiltersCount > 0 ? "#FFFFFF" : "#6B7280"} />
+          <Text style={[styles.filterButtonText, activeFiltersCount > 0 && styles.activeFilterButtonText]}>
+            Filtrer
+          </Text>
+          {activeFiltersCount > 0 && (
+            <View style={styles.filterCountBadge}>
+              <Text style={styles.filterCountText}>{activeFiltersCount}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+
+        {(activeFiltersCount > 0 || searchQuery.length > 0) && (
+          <TouchableOpacity style={styles.resetButton} onPress={resetFilters}>
+            <Ionicons name="refresh" size={16} color="#EF4444" />
+            <Text style={styles.resetButtonText}>Reset</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    </View>
+  );
+
+  const renderFilterModal = () => (
+    <Modal
+      visible={showFilterModal}
+      animationType="slide"
+      transparent={true}
+      onRequestClose={() => setShowFilterModal(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Filtres de recherche</Text>
+            <TouchableOpacity onPress={() => setShowFilterModal(false)}>
+              <Ionicons name="close" size={24} color="#6B7280" />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={styles.modalContent}>
+            {/* Filtre Type de contrat */}
+            <View style={styles.filterGroup}>
+              <Text style={styles.filterLabel}>Type de contrat</Text>
+              <View style={styles.contractTypeOptions}>
+                {['', 'CDI', 'CDD', 'Stage', 'Freelance', 'Alternance'].map((type) => (
+                  <TouchableOpacity
+                    key={type}
+                    style={[
+                      styles.contractOption,
+                      selectedFilters.type_contrat === type && styles.selectedContractOption
+                    ]}
+                    onPress={() => setSelectedFilters(prev => ({ ...prev, type_contrat: type }))}
+                  >
+                    <Text style={[
+                      styles.contractOptionText,
+                      selectedFilters.type_contrat === type && styles.selectedContractOptionText
+                    ]}>
+                      {type || 'Tous'}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* Filtre Lieu de travail */}
+            <View style={styles.filterGroup}>
+              <Text style={styles.filterLabel}>Lieu de travail</Text>
+              <View style={styles.locationInputContainer}>
+                <Ionicons name="location" size={20} color="#6B7280" style={styles.locationIcon} />
+                <TextInput
+                  style={styles.locationInput}
+                  placeholder="Ville, région..."
+                  placeholderTextColor="#9CA3AF"
+                  value={selectedFilters.lieu_travail}
+                  onChangeText={(text) => setSelectedFilters(prev => ({ ...prev, lieu_travail: text }))}
+                />
+              </View>
+            </View>
+          </ScrollView>
+
+          <View style={styles.modalActions}>
+            <TouchableOpacity 
+              style={styles.cancelButton} 
+              onPress={() => setShowFilterModal(false)}
+            >
+              <Text style={styles.cancelButtonText}>Annuler</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.applyButton} 
+              onPress={() => applyFilters(selectedFilters)}
+            >
+              <Text style={styles.applyButtonText}>Appliquer</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#091e60" />
@@ -355,7 +567,7 @@ export default function AuthenticatedJobBoardScreen() {
             <View style={styles.titleSection}>
               <Text style={styles.sectionTitle}>Offres disponibles</Text>
               <View style={styles.countBadge}>
-                <Text style={styles.countText}>{allOffres.length}</Text>
+                <Text style={styles.countText}>{workingOffres.length}</Text>
               </View>
             </View>
             <Text style={styles.sectionSubtitle}>
@@ -363,11 +575,17 @@ export default function AuthenticatedJobBoardScreen() {
             </Text>
           </View>
 
+          {/* Barre de recherche et filtres */}
+          {renderSearchAndFilters()}
+
+          {/* Modal de filtrage */}
+          {renderFilterModal()}
+
           {/* Liste des offres avec FlatList pour de meilleures performances */}
           <FlatList
-            data={displayedOffres}
+            data={displayedOffres || []}
             renderItem={renderOffreCard}
-            keyExtractor={(item) => item.id.toString()}
+            keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
             contentContainerStyle={styles.listContainer}
             refreshControl={
               <RefreshControl
@@ -744,6 +962,214 @@ const styles = StyleSheet.create({
   loadMoreText: {
     color: '#0f8e35',
     fontSize: 16,
+    fontWeight: '600',
+  },
+  // Styles pour la recherche et les filtres
+  searchAndFiltersContainer: {
+    paddingHorizontal: 24,
+    paddingBottom: 16,
+    backgroundColor: '#F8FAFC',
+  },
+  searchContainer: {
+    marginBottom: 16,
+  },
+  searchInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  searchIcon: {
+    marginRight: 12,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: '#374151',
+    padding: 0,
+  },
+  clearButton: {
+    marginLeft: 8,
+    padding: 4,
+  },
+  filtersSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  filterButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    gap: 6,
+  },
+  activeFilterButton: {
+    backgroundColor: '#0f8e35',
+    borderColor: '#0f8e35',
+  },
+  filterButtonText: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  activeFilterButtonText: {
+    color: '#FFFFFF',
+  },
+  filterCountBadge: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    marginLeft: 4,
+  },
+  filterCountText: {
+    fontSize: 12,
+    color: '#0f8e35',
+    fontWeight: '600',
+  },
+  resetButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#FEE2E2',
+    gap: 4,
+  },
+  resetButtonText: {
+    fontSize: 14,
+    color: '#EF4444',
+    fontWeight: '500',
+  },
+  // Styles pour le modal de filtres
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContainer: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#091e60',
+  },
+  modalContent: {
+    paddingHorizontal: 24,
+    paddingVertical: 16,
+  },
+  filterGroup: {
+    marginBottom: 24,
+  },
+  filterLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 12,
+  },
+  contractTypeOptions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  contractOption: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  selectedContractOption: {
+    backgroundColor: '#091e60',
+    borderColor: '#091e60',
+  },
+  contractOptionText: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  selectedContractOptionText: {
+    color: '#FFFFFF',
+  },
+  locationInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  locationIcon: {
+    marginRight: 8,
+  },
+  locationInput: {
+    flex: 1,
+    fontSize: 16,
+    color: '#374151',
+    padding: 0,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 12,
+    paddingHorizontal: 24,
+    paddingVertical: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  cancelButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    color: '#6B7280',
+    fontWeight: '600',
+  },
+  applyButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: '#0f8e35',
+    alignItems: 'center',
+  },
+  applyButtonText: {
+    fontSize: 16,
+    color: '#FFFFFF',
     fontWeight: '600',
   },
 });

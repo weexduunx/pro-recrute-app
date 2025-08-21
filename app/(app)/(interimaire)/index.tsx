@@ -22,8 +22,10 @@ import { useNotifications } from '../../../hooks/useNotifications';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { getDashboardStats } from "../../../utils/analytics-api";
+import { getIPMCardData } from "../../../utils/api";
 import { Ionicons, FontAwesome5, FontAwesome6 } from '@expo/vector-icons';
 import { format } from "date-fns";
+import QRCode from 'react-native-qrcode-svg';
 
 const { width } = Dimensions.get("window");
 
@@ -56,6 +58,7 @@ export default function InterimDashboardScreen() {
 
   // États pour les données du dashboard
   const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
+  const [ipmData, setIpmData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -135,6 +138,7 @@ export default function InterimDashboardScreen() {
   const loadDashboardData = useCallback(async () => {
     if (!user) {
       setDashboardStats(null);
+      setIpmData(null);
       setLoading(false);
       return;
     }
@@ -143,12 +147,19 @@ export default function InterimDashboardScreen() {
     setError(null);
 
     try {
-      const response = await getDashboardStats('month');
-      if (response.success && response.data) {
-        setDashboardStats(response.data);
+      // Charger les statistiques du dashboard
+      const statsResponse = await getDashboardStats('month');
+      if (statsResponse.success && statsResponse.data) {
+        setDashboardStats(statsResponse.data);
+      }
+
+      // Charger les données IPM complètes
+      const ipmResponse = await getIPMCardData();
+      if (ipmResponse) {
+        setIpmData(ipmResponse);
       }
     } catch (err: any) {
-      console.error("Erreur chargement dashboard:", err);
+      console.error("Erreur chargement données:", err);
       setError(err.message || t("Impossible de charger les données"));
     } finally {
       setLoading(false);
@@ -186,75 +197,216 @@ export default function InterimDashboardScreen() {
 
   // --- Fonctions de rendu des nouvelles sections ---
 
-  // Section header de bienvenue
-  const renderWelcomeHeader = () => {
-    const userName = user?.name || 'Utilisateur';
-    const firstName = userName.split(' ')[0]; // Prendre le prénom
+  // Carte IPM avec QR code
+  const renderIPMCard = () => {
+    if (!ipmData || !ipmData.qr_data) {
+      return (
+        <View style={styles.ipmCardContainer}>
+          <View style={styles.loadingCard}>
+            <ActivityIndicator size="large" color="#0f8e35" />
+            <Text style={styles.loadingText}>Chargement de la carte IPM...</Text>
+          </View>
+        </View>
+      );
+    }
+
+    const profile = ipmData.profile;
+    const contractStatus = ipmData.contract_status || 'Inactif';
+    const contractEndDate = ipmData.contract_end_date;
+    const entrepriseUtilisatrice = ipmData.entreprise_utilisatrice;
+    const ayantsDroit = ipmData.ayants_droit || [];
+    const feuillesSoinsStats = ipmData.feuilles_soins_stats || {};
+    
+    // Version optimisée pour le QR code avec données essentielles uniquement
+    const qrDataOptimized = {
+      id: profile?.id,
+      nom: profile?.name,
+      matricule: profile?.matricule,
+      email: profile?.email,
+      phone: profile?.phone,
+      contrat_statut: contractStatus,
+      contrat_fin: contractEndDate,
+      entreprise: entrepriseUtilisatrice?.designation,
+      ayants_droit: ayantsDroit.map(ayant => {
+        // Conversion du code numérique en libellé
+        const getLienLabel = (lienCode) => {
+          const code = parseInt(lienCode);
+          switch (code) {
+            case 1: return 'Enfant';
+            case 2: return 'Conjoint';
+            case 3: return 'Père';
+            case 4: return 'Mère';
+            case 5: return 'Autre';
+            case 6: return 'Personne Ressource';
+            default: return ayant.lien || 'Non spécifié';
+          }
+        };
+        
+        return {
+          nom: ayant.nom,
+          prenom: ayant.prenom,
+          lien: getLienLabel(ayant.lien)
+        };
+      }),
+      feuilles_soins: `${feuillesSoinsStats.validees || 0}/${feuillesSoinsStats.total || 0}`,
+      type: 'ipm',
+      version: '1.0',
+      generated: new Date().toISOString().split('T')[0] // Date uniquement
+    };
+    
+    const qrData = JSON.stringify(qrDataOptimized);
+    
+    // Debug : Afficher la taille des données du QR code
+    console.log('QR Code data length:', qrData.length);
+    console.log('QR Code data:', qrData);
     
     return (
       <Animated.View
         style={[
-          styles.welcomeContainer,
+          styles.ipmCardContainer,
           {
             opacity: fadeAnim,
             transform: [{ translateY: slideAnim }]
           }
         ]}
       >
-        <View style={styles.welcomeContent}>
-          <Text style={[styles.welcomeTitle, { color: colors.secondary }]}>
-            {t('Bienvenue')} {firstName}
-          </Text>
-          <Text style={[styles.welcomeSubtitle, { color: colors.textSecondary }]}>
-            {t('Dans votre espace intérimaire, vous pouvez accéder à vos documents, vos notifications, et plus encore.')}
+        <LinearGradient
+          colors={['#091e60', '#0f8e35']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.ipmCard}
+        >
+          {/* En-tête de la carte */}
+          <View style={styles.ipmCardHeader}>
+            <View style={styles.ipmCardTitle}>
+              <FontAwesome5 name="id-card" size={24} color="#FFFFFF" />
+              <Text style={styles.ipmCardTitleText}>Carte IPM</Text>
+              
+            </View>
+              {entrepriseUtilisatrice && (
+                <View style={styles.ipmEntrepriseInfo}>
+                  <Text style={styles.ipmEntrepriseText}>
+                    {entrepriseUtilisatrice.designation}
+                  </Text>
+                </View>
+              )}
+          </View>
 
-          </Text>
-        </View>
-        <View style={[styles.welcomeIcon, { backgroundColor: colors.secondary + '15' }]}>
-          <Ionicons name="hand-right-outline" size={24} color={colors.secondary} />
-        </View>
+          {/* Contenu principal */}
+          <View style={styles.ipmCardContent}>
+            {/* Informations utilisateur */}
+            <View style={styles.ipmUserInfo}>
+              <Text style={styles.ipmUserName}>{profile?.name || 'Nom non disponible'}</Text>
+              <Text style={styles.ipmUserEmail}>{profile?.email || 'Email non disponible'}</Text>
+              {profile?.matricule && (
+                <Text style={styles.ipmMatricule}>Matricule: {profile.matricule}</Text>
+              )}
+              <View style={styles.ipmContractInfo}>
+                <Text style={styles.ipmContractText}>
+                  {contractEndDate ? 
+                  `Valide jusqu'au ${format(new Date(contractEndDate), 'dd/MM/yyyy')}` : 
+                  'Date de fin non disponible'}
+                </Text>
+              </View>
+
+            </View>
+
+            {/* QR Code */}
+            <TouchableOpacity 
+              style={styles.qrCodeContainer}
+              onPress={() => {
+                Alert.alert(
+                  'Données du QR Code',
+                  `Taille: ${qrData.length} caractères\n\nContenu:\n${qrData}`,
+                  [{ text: 'OK' }]
+                );
+              }}
+            >
+              <QRCode
+                value={qrData}
+                size={130}
+                backgroundColor="white"
+                color="black"
+                ecl="M"
+                getRef={(c) => console.log('QR Code generated successfully')}
+                onError={(error) => console.error('QR Code error:', error)}
+              />
+            </TouchableOpacity>
+          </View>
+
+          {/* Informations supplémentaires */}
+          {/* <View style={styles.ipmCardInfo}>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Ayants droit:</Text>
+              <Text style={styles.infoValue}>{ayantsDroit.length}</Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Feuilles de soins:</Text>
+              <Text style={styles.infoValue}>
+                {feuillesSoinsStats.validees || 0}/{feuillesSoinsStats.total || 0}
+              </Text>
+            </View>
+          </View> */}
+
+          {/* Pied de carte */}
+          <View style={styles.ipmCardFooter}>
+            <View style={styles.ipmCardId}>
+              <Text style={styles.ipmCardIdText}>
+                ID: {profile?.id || 'N/A'}
+              </Text>
+            </View>
+            <View style={styles.ipmCardStatus}>
+              <View style={[styles.statusDot, { 
+                backgroundColor: contractStatus === 'Actif' ? '#10B981' : 
+                               contractStatus === 'À venir' ? '#F59E0B' : 
+                               '#EF4444' 
+              }]} />
+              <Text style={styles.statusText}>{contractStatus}</Text>
+            </View>
+          </View>
+        </LinearGradient>
       </Animated.View>
     );
   };
 
   // Section de statut actuel
-  const renderCurrentStatus = () => {
-    return (
-      <Animated.View
-        style={[
-          styles.statusContainer,
-          { backgroundColor: colors.background || colors.background },
-          {
-            opacity: fadeAnim,
-            transform: [{ translateY: slideAnim }]
-          }
-        ]}
-      >
-        <View style={styles.statusHeader}>
-          <View style={[styles.statusIcon, { backgroundColor: colors.success + '15' }]}>
-            <Ionicons name="checkmark-circle-outline" size={24} color={colors.success} />
-          </View>
-          <View style={styles.statusInfo}>
-            <Text style={[styles.statusTitle, { color: colors.primary }]}>
-              {t('Statut actuel')}
-            </Text>
-            <Text style={[styles.statusText, { color: colors.success }]}>
-              {user?.is_contract_active ? t('Contrat actif') : t('Contrat inactif')}
-            </Text>
-          </View>
-        </View>
+  // const renderCurrentStatus = () => {
+  //   return (
+  //     <Animated.View
+  //       style={[
+  //         styles.statusContainer,
+  //         { backgroundColor: colors.background || colors.background },
+  //         {
+  //           opacity: fadeAnim,
+  //           transform: [{ translateY: slideAnim }]
+  //         }
+  //       ]}
+  //     >
+  //       <View style={styles.statusHeader}>
+  //         <View style={[styles.statusIcon, { backgroundColor: colors.success + '15' }]}>
+  //           <Ionicons name="checkmark-circle-outline" size={24} color={colors.success} />
+  //         </View>
+  //         <View style={styles.statusInfo}>
+  //           <Text style={[styles.statusTitle, { color: colors.primary }]}>
+  //             {t('Statut actuel')}
+  //           </Text>
+  //           <Text style={[styles.statusText, { color: colors.success }]}>
+  //             {user?.is_contract_active ? t('Contrat actif') : t('Contrat inactif')}
+  //           </Text>
+  //         </View>
+  //       </View>
         
-        {dashboardStats?.current_society && (
-          <View style={styles.currentSociety}>
-            <Ionicons name="business-outline" size={16} color={colors.textSecondary} />
-            <Text style={[styles.currentSocietyText, { color: colors.textSecondary }]}>
-              {dashboardStats.current_society}
-            </Text>
-          </View>
-        )}
-      </Animated.View>
-    );
-  };
+  //       {dashboardStats?.current_society && (
+  //         <View style={styles.currentSociety}>
+  //           <Ionicons name="business-outline" size={16} color={colors.textSecondary} />
+  //           <Text style={[styles.currentSocietyText, { color: colors.textSecondary }]}>
+  //             {dashboardStats.current_society}
+  //           </Text>
+  //         </View>
+  //       )}
+  //     </Animated.View>
+  //   );
+  // };
 
   // Section actions rapides améliorée
   const renderQuickActions = () => {
@@ -386,8 +538,8 @@ export default function InterimDashboardScreen() {
         }
       >
         <View style={styles.content}>
-          {renderWelcomeHeader()}
-          {renderCurrentStatus()}
+          {renderIPMCard()}
+          {/* {renderCurrentStatus()} */}
           {renderQuickActions()}
         </View>
       </ScrollView>
@@ -445,6 +597,108 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+
+  // Styles pour la carte IPM
+  ipmCardContainer: {
+    marginBottom: 20,
+  },
+  ipmCard: {
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  ipmCardHeader: {
+    marginBottom: 16,
+  },
+  ipmCardTitle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  ipmCardTitleText: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    marginLeft: 8,
+  },
+  ipmCardSubtitle: {
+    fontSize: 12,
+    color: '#FFFFFF',
+    opacity: 0.8,
+    marginTop: 2,
+  },
+  ipmCardContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  ipmUserInfo: {
+    flex: 1,
+  },
+  ipmUserName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    marginBottom: 4,
+  },
+  ipmUserEmail: {
+    fontSize: 14,
+    color: '#FFFFFF',
+    opacity: 0.8,
+    marginBottom: 8,
+  },
+  ipmContractInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  ipmContractText: {
+    fontSize: 12,
+    color: '#FFFFFF',
+    // marginLeft: 6,
+    opacity: 0.9,
+  },
+  qrCodeContainer: {
+    padding: 8,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+  },
+  ipmCardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.2)',
+    paddingTop: 12,
+  },
+  ipmCardId: {
+    flex: 1,
+  },
+  ipmCardIdText: {
+    fontSize: 12,
+    color: '#FFFFFF',
+    opacity: 0.8,
+  },
+  ipmCardStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#00FF88',
+    marginRight: 6,
+  },
+  statusText: {
+    fontSize: 12,
+    color: '#FFFFFF',
+    fontWeight: '500',
   },
   
   // Quick Metrics Styles (supprimés)
@@ -570,10 +824,10 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   
-  statusText: {
-    fontSize: 14,
-    opacity: 0.7,
-  },
+  // statusText: {
+  //   fontSize: 14,
+  //   opacity: 0.7,
+  // },
   
   // Actions Container Styles
   actionsContainer: {
@@ -750,6 +1004,66 @@ const styles = StyleSheet.create({
   contactButtonText: {
     color: '#ffffff',
     fontSize: 16,
+    fontWeight: '600',
+  },
+  
+  // Nouveaux styles pour la carte IPM améliorée
+  loadingCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  
+  ipmMatricule: {
+    fontSize: 12,
+    color: '#FFFFFF',
+    opacity: 0.9,
+    marginTop: 2,
+  },
+  
+  ipmEntrepriseInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  
+  ipmEntrepriseText: {
+    fontSize: 11,
+    color: '#FFFFFF',
+    opacity: 0.8,
+    // marginLeft: 4,
+    flex: 1,
+  },
+  
+  ipmCardInfo: {
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.2)',
+  },
+  
+  infoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 2,
+  },
+  
+  infoLabel: {
+    fontSize: 11,
+    color: '#FFFFFF',
+    opacity: 0.8,
+  },
+  
+  infoValue: {
+    fontSize: 11,
+    color: '#FFFFFF',
     fontWeight: '600',
   },
 });

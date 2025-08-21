@@ -96,7 +96,7 @@ export default function ApplicationDetailsScreen() {
     setError(null);
     try {
       const allApplications = await getUserApplications();
-      const detail = allApplications.find((app: ApplicationDetail) => app.id.toString() === id.toString());
+      const detail = allApplications.find((app: ApplicationDetail) => app.id?.toString() === id?.toString());
 
       if (detail) {
         setApplicationDetail(detail);

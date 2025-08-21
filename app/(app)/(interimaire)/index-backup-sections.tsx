@@ -106,7 +106,7 @@ const renderIpmRecapBackup = () => {
 
           {/* Liste des récaps par mois */}
           <FlatList
-            data={ipmRecap}
+            data={ipmRecap || []}
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.recapList}
@@ -220,11 +220,11 @@ const renderAffiliatedStructuresBackup = () => {
       ) : (
         <View style={styles.structuresContent}>
           <FlatList
-            data={affiliatedStructures}
+            data={affiliatedStructures || []}
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.structuresList}
-            keyExtractor={(item) => item.id.toString()}
+            keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
             renderItem={({ item }) => (
               <View style={[styles.structureCard, { backgroundColor: colors.background + '30' }]}>
                 <View style={styles.structureCardHeader}>

@@ -299,7 +299,7 @@ export default function NotificationsScreen() {
       ) : (
         <FlatList
           data={notifications}
-          keyExtractor={(item) => item.id.toString()}
+          keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
           renderItem={renderNotificationItem}
           refreshControl={
             <RefreshControl 

@@ -18,6 +18,16 @@ export default function EntretiensListeScreen() {
   const [showEntretienModal, setShowEntretienModal] = useState(false);
   const [filter, setFilter] = useState<'tous' | 'futurs' | 'passes' | 'en_attente'>('tous');
 
+  const getStatusColor = (statut: string) => {
+    switch (statut) {
+      case 'Retenu': return '#10B981';
+      case 'Non retenu': return '#EF4444';
+      case 'Stand By': return '#8B5CF6';
+      case 'Préselectionné': return '#6366F1';
+      default: return '#6B7280';
+    }
+  };
+
   const loadEntretiens = useCallback(async () => {
     if (user) {
       setLoading(true);
@@ -230,25 +240,36 @@ export default function EntretiensListeScreen() {
             </View>
           </View>
 
-          {/* Actions rapides */}
-          <View style={styles.actionsQuickContainer}>
-            {entretien.lien && !isExpired && (
+          {/* Actions rapides - Affichées seulement si en attente */}
+          {entretien.candidature_statut === 'En attente' && (
+            <View style={styles.actionsQuickContainer}>
+              {entretien.lien && !isExpired && (
+                <TouchableOpacity
+                  style={styles.actionQuickButton}
+                  onPress={() => handleLinkPress(entretien.lien)}
+                >
+                  <FontAwesome5 name="video" size={14} color="#0f8e35" />
+                  <Text style={styles.actionQuickText}>Rejoindre</Text>
+                </TouchableOpacity>
+              )}
               <TouchableOpacity
                 style={styles.actionQuickButton}
-                onPress={() => handleLinkPress(entretien.lien)}
+                onPress={() => router.push('/(app)/entretiens/preparation')}
               >
-                <FontAwesome5 name="video" size={14} color="#0f8e35" />
-                <Text style={styles.actionQuickText}>Rejoindre</Text>
+                <FontAwesome5 name="book-open" size={14} color="#8B5CF6" />
+                <Text style={styles.actionQuickText}>Préparer</Text>
               </TouchableOpacity>
-            )}
-            <TouchableOpacity
-              style={styles.actionQuickButton}
-              onPress={() => router.push('/(app)/entretiens/preparation')}
-            >
-              <FontAwesome5 name="book-open" size={14} color="#8B5CF6" />
-              <Text style={styles.actionQuickText}>Préparer</Text>
-            </TouchableOpacity>
-          </View>
+            </View>
+          )}
+          
+          {/* Afficher le statut si ce n'est pas "en attente" */}
+          {entretien.candidature_statut && entretien.candidature_statut !== 'En attente' && (
+            <View style={styles.statusContainer}>
+              <Text style={[styles.statusText, { color: getStatusColor(entretien.candidature_statut) }]}>
+                {entretien.candidature_statut}
+              </Text>
+            </View>
+          )}
         </View>
 
         <View style={styles.chevronContainer}>
@@ -576,6 +597,20 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     color: '#FFFFFF',
+  },
+
+  // Statut
+  statusContainer: {
+    marginTop: 8,
+    alignItems: 'flex-start',
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: '600',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: 'rgba(0,0,0,0.05)',
   },
 
   // Actions rapides

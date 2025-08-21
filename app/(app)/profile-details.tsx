@@ -178,7 +178,8 @@ export default function ProfileDetailsScreen() {
     if (user?.photo_profil && !currentPhotoUrl) {
       const photoUrl = user.photo_profil.startsWith('http') 
         ? user.photo_profil 
-        : `http://192.168.1.144:8000/storage/${user.photo_profil}`;
+        : `http://192.168.1.11:8000/storage/${user.photo_profil}`;
+
       console.log('=== PHOTO URL SYNCHRONISATION ===');
       console.log('user.photo_profil:', user.photo_profil);
       console.log('photoUrl construite:', photoUrl);

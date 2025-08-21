@@ -44,7 +44,7 @@ export default function FavorisScreen() {
       setLoading(true);
       const response = await getFavoris();
       if (response.success) {
-        setFavoris(response.data);
+        setFavoris(response.data || []);
       }
     } catch (error: any) {
       console.error('Erreur lors du chargement des favoris:', error);
@@ -187,7 +187,7 @@ export default function FavorisScreen() {
       
       <FlatList
         data={favoris}
-        keyExtractor={(item) => item.id.toString()}
+        keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
         renderItem={renderFavoriItem}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />

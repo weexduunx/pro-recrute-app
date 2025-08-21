@@ -114,6 +114,23 @@ export default function HrFileScreen() {
     }
   }, [user, t]);
 
+  const handleRequestAttestation = () => {
+    Alert.alert(
+      t('Demande d\'attestation'),
+      t('Votre demande d\'attestation sera envoyée pour approbation. Vous recevrez une notification une fois qu\'elle sera approuvée.'),
+      [
+        { text: t('Annuler'), style: 'cancel' },
+        { 
+          text: t('Envoyer la demande'), 
+          onPress: () => {
+            // Ici vous pouvez ajouter l'appel API pour envoyer la demande
+            Alert.alert(t('Succès'), t('Votre demande a été envoyée avec succès.'));
+          }
+        }
+      ]
+    );
+  };
+
   const loadCertificats = useCallback(async () => {
     if (!user) {
       setCertificat(null);
@@ -577,8 +594,17 @@ export default function HrFileScreen() {
         {/* Section Attestations */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Ionicons name="documents-outline" size={22} color={colors.primary} style={styles.sectionIcon} />
-            <Text style={[simpleStyles.headerTitle, { color: colors.textPrimary }]}>{t('Mes Attestations')}</Text>
+            <View style={styles.sectionTitleContainer}>
+              <Ionicons name="documents-outline" size={22} color={colors.primary} style={styles.sectionIcon} />
+              <Text style={[simpleStyles.headerTitle, { color: colors.textPrimary }]}>{t('Mes Attestations')}</Text>
+            </View>
+            <TouchableOpacity
+              style={[styles.requestButton, { backgroundColor: colors.secondary }]}
+              onPress={handleRequestAttestation}
+            >
+              <Ionicons name="add" size={16} color="#FFFFFF" />
+              <Text style={styles.requestButtonText}>{t('Demander')}</Text>
+            </TouchableOpacity>
           </View>
 
           {loading ? (
@@ -614,7 +640,7 @@ export default function HrFileScreen() {
             </View>
           ) : (
             <FlatList
-              data={attestations}
+              data={attestations || []}
               renderItem={renderCertificateItem}
               keyExtractor={item => item?.attestation_id?.toString() ?? `item-${Math.random()}`}
               scrollEnabled={false}
@@ -868,7 +894,26 @@ const styles = StyleSheet.create({
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 15,
+  },
+  sectionTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  requestButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  requestButtonText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 4,
   },
   sectionIcon: {
     marginRight: 10,
