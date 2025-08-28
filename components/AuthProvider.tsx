@@ -6,7 +6,7 @@ import React, {
   ReactNode,
   useCallback,
 } from 'react';
-import {Platform,Alert} from 'react-native';
+import {Platform, Alert} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SplashScreenExpo from 'expo-splash-screen';
 import { 
@@ -201,7 +201,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       if (!currentPath.includes('otp_verification')) {
         router.replace({
           pathname: '/(auth)/otp_verification',
-          params: { email: emailForOtp || user?.email, deviceName: deviceNameForOtp || Device?.deviceName || 'UnknownDevice' },
+          params: { email: emailForOtp || user?.email, deviceName: deviceNameForOtp || (Platform.OS === 'web' ? 'WebBrowser' : 'UnknownDevice') },
         });
       }
       return; 
@@ -301,7 +301,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     setLoading(true);
     setError(null);
     try {
-      const actualDeviceName = deviceName || Device?.deviceName || 'UnknownDevice';
+      const actualDeviceName = deviceName || (Platform.OS === 'web' ? 'WebBrowser' : 'UnknownDevice');
       const response = await apiLoginUser(email, password, actualDeviceName);
       
       if (response.otp_required) {
@@ -338,7 +338,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     setLoading(true);
     setError(null);
     try {
-      const actualDeviceName = deviceName || Device?.deviceName || 'UnknownDevice';
+      const actualDeviceName = deviceName || (Platform.OS === 'web' ? 'WebBrowser' : 'UnknownDevice');
       const response = await apiRegisterUser(name, email, password, passwordConfirmation, role, actualDeviceName);
       
       const minimalUser: User = { 

@@ -49,6 +49,17 @@ export const getUnreadNotificationCount = async () => {
   }
 };
 
+// Supprimer toutes les notifications lues
+export const deleteReadNotifications = async () => {
+  try {
+    const response = await api.delete('/interim/notifications/read');
+    return response.data;
+  } catch (error) {
+    console.error("Échec de l'appel API deleteReadNotifications:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
 // Créer une actualité IPM (pour les admins)
 export const createIpmNews = async (newsData) => {
   try {

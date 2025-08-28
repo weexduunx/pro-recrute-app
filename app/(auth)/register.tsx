@@ -6,7 +6,6 @@ import { useAuth } from '../../components/AuthProvider';
 import { Picker } from '@react-native-picker/picker';
 import { Ionicons , Feather } from '@expo/vector-icons';
 
-import * as Device from 'expo-device';
 
 export default function RegisterScreen() {
   const [name, setName] = useState('');
@@ -83,7 +82,7 @@ export default function RegisterScreen() {
     }
 
     try {
-      const deviceName = Device.deviceName || 'UnknownDevice';
+      const deviceName = Platform.OS === 'web' ? 'WebBrowser' : 'UnknownDevice';
       await register(name, email, password, passwordConfirmation, selectedRole, deviceName);
       setSuccess('Inscription réussie ! Un code de vérification a été envoyé.');
     } catch (err: any) {

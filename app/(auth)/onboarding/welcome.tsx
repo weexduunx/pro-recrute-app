@@ -4,7 +4,8 @@ import { useRouter } from 'expo-router';
 import { useTheme } from '../../../components/ThemeContext';
 import { useLanguage } from '../../../components/LanguageContext';
 import { Ionicons } from '@expo/vector-icons';
-import Svg, { SvgProps, Path, Ellipse, Rect } from "react-native-svg"
+import Svg, { SvgProps, Path, Ellipse, Rect } from "react-native-svg";
+import { createShadow } from '../../../utils/shadow-utils';
 
 const { width } = Dimensions.get('window');
 // SVG pour l'illustration de bienvenue
@@ -95,11 +96,13 @@ const styles = StyleSheet.create({
         paddingVertical: 15,
         paddingHorizontal: 30,
         borderRadius: 12,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-        elevation: 5,
+        ...createShadow({
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.1,
+            shadowRadius: 8,
+            elevation: 5,
+        }),
     },
     buttonText: {
         color: '#FFFFFF',

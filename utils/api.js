@@ -1230,6 +1230,21 @@ export const demandReportEntretien = async (entretienId, raison, nouvelleDate = 
 };
 
 /**
+ * Envoie une demande d'attestation par email
+ * @param {object} data - Les données de la demande (contractId, message, etc.)
+ * @returns {Promise<object>} La réponse du serveur
+ */
+export const sendAttestationRequest = async (data) => {
+  try {
+    const response = await api.post('/interim/request-attestation', data);
+    return response.data;
+  } catch (error) {
+    console.error("Échec de l'appel API sendAttestationRequest:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+/**
  * Confirme la présence à un entretien
  */
 export const confirmPresenceEntretien = async (entretienId) => {
@@ -1459,6 +1474,17 @@ export const shareToSocialMedia = async (platform, offreData) => {
   } catch (error) {
     console.error(`Erreur lors du partage sur ${platform}:`, error);
     throw error;
+  }
+};
+
+// Fonction pour vérifier l'anniversaire de l'utilisateur
+export const checkBirthday = async () => {
+  try {
+    const response = await api.get('/interim/check-birthday');
+    return response.data;
+  } catch (error) {
+    console.error('Erreur lors de la vérification d\'anniversaire:', error);
+    return { success: false, is_birthday: false };
   }
 };
 

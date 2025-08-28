@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useAuth } from '../../components/AuthProvider';
 import { FontAwesome5, Feather, MaterialIcons } from '@expo/vector-icons';
-import * as Device from 'expo-device';
+import { Platform } from 'react-native';
 import { useBiometricAuth } from '../../hooks/useBiometricAuth';
 
 export default function LoginScreen() {
@@ -62,7 +62,7 @@ export default function LoginScreen() {
     }
 
     try {
-      const deviceName = Device.deviceName || 'UnknownDevice';
+      const deviceName = Platform.OS === 'web' ? 'WebBrowser' : 'UnknownDevice';
       // La fonction login dans AuthProvider gère maintenant la redirection OTP
       await login(email, password, deviceName); 
       
@@ -83,7 +83,7 @@ export default function LoginScreen() {
       const credentials = await authenticateWithBiometrics();
       
       if (credentials) {
-        const deviceName = Device.deviceName || 'UnknownDevice';
+        const deviceName = Platform.OS === 'web' ? 'WebBrowser' : 'UnknownDevice';
         await login(credentials.email, credentials.password, deviceName);
       } else {
         setError('Authentification biométrique échouée.');

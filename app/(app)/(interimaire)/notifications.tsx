@@ -9,7 +9,8 @@ import {
   StyleSheet,
   Dimensions,
   AppState,
-  ActivityIndicator
+  ActivityIndicator,
+  ScrollView
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,11 +20,13 @@ import {
   getNotifications,
   markNotificationAsRead,
   markAllNotificationsAsRead,
+  deleteReadNotifications,
   formatNotificationDate,
   getNotificationIcon,
   getNotificationColor
 } from '../../../utils/interim-notifications-api';
 import CustomHeader from '../../../components/CustomHeader';
+import { createShadow } from '../../../utils/shadow-utils';
 
 const { width } = Dimensions.get('window');
 
@@ -34,23 +37,6 @@ export default function NotificationsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState('all'); // 'all', 'unread'
-
-  useEffect(() => {
-    fetchNotifications();
-    
-    // Rafraîchir quand l'app revient au premier plan
-    const handleAppStateChange = (nextAppState: string) => {
-      if (nextAppState === 'active') {
-        fetchNotifications();
-      }
-    };
-
-    const subscription = AppState.addEventListener('change', handleAppStateChange);
-    
-    return () => {
-      subscription?.remove();
-    };
-  }, [filter, fetchNotifications]);
 
   const fetchNotifications = useCallback(async () => {
     try {
@@ -68,6 +54,23 @@ export default function NotificationsScreen() {
       setLoading(false);
     }
   }, [filter]);
+
+  useEffect(() => {
+    fetchNotifications();
+    
+    // Rafraîchir quand l'app revient au premier plan
+    const handleAppStateChange = (nextAppState: string) => {
+      if (nextAppState === 'active') {
+        fetchNotifications();
+      }
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    
+    return () => {
+      subscription?.remove();
+    };
+  }, [fetchNotifications]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -128,6 +131,42 @@ export default function NotificationsScreen() {
       }));
       Alert.alert('Erreur', 'Impossible de marquer les notifications comme lues');
     }
+  };
+
+  const handleDeleteReadNotifications = async () => {
+    const readNotifications = notifications.filter(n => n.read_at);
+    if (readNotifications.length === 0) {
+      Alert.alert('Information', 'Aucune notification lue à supprimer');
+      return;
+    }
+
+    Alert.alert(
+      'Supprimer les notifications lues',
+      `Voulez-vous supprimer les ${readNotifications.length} notification(s) lue(s) ?`,
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Supprimer',
+          style: 'destructive',
+          onPress: async () => {
+            // Supprimer localement d'abord pour une UI réactive
+            const originalNotifications = notifications;
+            setNotifications(prev => prev.filter(n => !n.read_at));
+
+            try {
+              const response = await deleteReadNotifications();
+              // Succès silencieux pour une meilleure UX
+              console.log(`${response.deleted_count} notifications supprimées`);
+            } catch (error) {
+              console.error('Erreur lors de la suppression:', error);
+              // Restaurer en cas d'erreur
+              setNotifications(originalNotifications);
+              Alert.alert('Erreur', 'Impossible de supprimer les notifications lues');
+            }
+          }
+        }
+      ]
+    );
   };
 
   const renderNotificationItem = ({ item }) => {
@@ -208,57 +247,75 @@ export default function NotificationsScreen() {
 
   const renderFilterTabs = () => (
     <View style={[styles.filterContainer, { backgroundColor: colors.background }]}>
-      <TouchableOpacity
-        style={[
-          styles.filterTab,
-          {
-            backgroundColor: filter === 'all' ? colors.secondary : 'transparent',
-            borderColor: colors.border,
-          }
-        ]}
-        onPress={() => setFilter('all')}
+      <ScrollView 
+        horizontal 
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContainer}
       >
-        <Text
-          style={[
-            styles.filterTabText,
-            { color: filter === 'all' ? colors.textTertiary : colors.textSecondary }
-          ]}
-        >
-          Toutes
-        </Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={[
-          styles.filterTab,
-          {
-            backgroundColor: filter === 'unread' ? colors.secondary : 'transparent',
-            borderColor: colors.border,
-          }
-        ]}
-        onPress={() => setFilter('unread')}
-      >
-        <Text
-          style={[
-            styles.filterTabText,
-            { color: filter === 'unread' ? colors.textTertiary : colors.textSecondary }
-          ]}
-        >
-          Non lues
-        </Text>
-      </TouchableOpacity>
-
-      {notifications.some(n => !n.read_at) && (
         <TouchableOpacity
-          style={[styles.markAllButton, { backgroundColor: colors.primary }]}
-          onPress={handleMarkAllAsRead}
+          style={[
+            styles.uniformButton,
+            {
+              backgroundColor: filter === 'all' ? colors.secondary : 'transparent',
+              borderColor: colors.border,
+            }
+          ]}
+          onPress={() => setFilter('all')}
         >
-          <Ionicons name="checkmark-done" size={16} color={colors.textTertiary} />
-          <Text style={[styles.markAllText, { color: colors.textTertiary }]}>
-            Tout lire
+          <Text
+            style={[
+              styles.uniformButtonText,
+              { color: filter === 'all' ? colors.textTertiary : colors.textSecondary }
+            ]}
+          >
+            Toutes
           </Text>
         </TouchableOpacity>
-      )}
+
+        <TouchableOpacity
+          style={[
+            styles.uniformButton,
+            {
+              backgroundColor: filter === 'unread' ? colors.secondary : 'transparent',
+              borderColor: colors.border,
+            }
+          ]}
+          onPress={() => setFilter('unread')}
+        >
+          <Text
+            style={[
+              styles.uniformButtonText,
+              { color: filter === 'unread' ? colors.textTertiary : colors.textSecondary }
+            ]}
+          >
+            Non lues
+          </Text>
+        </TouchableOpacity>
+
+        {notifications.some(n => !n.read_at) && (
+          <TouchableOpacity
+            style={[styles.uniformButton, { backgroundColor: colors.primary, borderColor: colors.primary }]}
+            onPress={handleMarkAllAsRead}
+          >
+            <Ionicons name="checkmark-done" size={14} color={colors.textTertiary} />
+            <Text style={[styles.uniformButtonText, { color: colors.textTertiary }]}>
+              Tout lire
+            </Text>
+          </TouchableOpacity>
+        )}
+        
+        {notifications.some(n => n.read_at) && (
+          <TouchableOpacity
+            style={[styles.uniformButton, { backgroundColor: colors.error, borderColor: colors.error }]}
+            onPress={handleDeleteReadNotifications}
+          >
+            <Ionicons name="trash" size={14} color={colors.textTertiary} />
+            <Text style={[styles.uniformButtonText, { color: colors.textTertiary }]}>
+              Supprimer lues
+            </Text>
+          </TouchableOpacity>
+        )}
+      </ScrollView>
     </View>
   );
 
@@ -324,36 +381,31 @@ const styles = StyleSheet.create({
   
   // Filter tabs
   filterContainer: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
     paddingVertical: 12,
-    alignItems: 'center',
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
   },
-  filterTab: {
+  scrollContainer: {
     paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    marginRight: 12,
-    borderWidth: 1,
+    gap: 8,
+    alignItems: 'center',
   },
-  filterTabText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  markAllButton: {
+  uniformButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingVertical: 8,
     borderRadius: 16,
-    marginLeft: 'auto',
+    borderWidth: 1,
+    minWidth: 95,
+    height: 36,
   },
-  markAllText: {
+  uniformButtonText: {
     fontSize: 12,
     fontWeight: '600',
-    marginLeft: 4,
+    marginLeft: 3,
+    textAlign: 'center',
   },
 
   // List
@@ -380,10 +432,13 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginVertical: 6,
     borderRadius: 16,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
+    ...createShadow({
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 3 },
+      shadowOpacity: 0.08,
+      shadowRadius: 8,
+      elevation: 3,
+    }),
   },
   notificationContent: {
     padding: 16,

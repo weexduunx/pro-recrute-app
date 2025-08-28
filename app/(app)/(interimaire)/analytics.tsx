@@ -544,7 +544,7 @@ export default function AnalyticsScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <CustomHeader title="Analytics" showBackButton={true} />
+      <CustomHeader title="Suivi Facturation" showBackButton={true} />
       
       {renderPeriodSelector()}
       {renderYearSelector()}

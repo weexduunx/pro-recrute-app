@@ -32,6 +32,15 @@ export const useBiometricAuth = () => {
 
   // Vérifier la disponibilité et les paramètres de l'authentification biométrique
   const checkBiometricStatus = async () => {
+    // Skip biometric check on web
+    if (Platform.OS === 'web') {
+      return {
+        isAvailable: false,
+        isEnabled: false,
+        hasStoredCredentials: false,
+      };
+    }
+    
     if (isChecking) return state; // Éviter les appels multiples simultanés
     setIsChecking(true);
     
@@ -84,6 +93,12 @@ export const useBiometricAuth = () => {
 
   // Authentifier avec biométrie et récupérer les credentials
   const authenticateWithBiometrics = async (): Promise<StoredCredentials | null> => {
+    // Skip biometric auth on web
+    if (Platform.OS === 'web') {
+      console.warn('Biometric authentication not supported on web');
+      return null;
+    }
+    
     try {
       const result = await LocalAuthentication.authenticateAsync({
         promptMessage: Platform.OS === 'ios' 
@@ -126,6 +141,12 @@ export const useBiometricAuth = () => {
 
   // Stocker les credentials de façon sécurisée (après connexion réussie)
   const storeCredentials = async (email: string, password: string): Promise<void> => {
+    // Skip credential storage on web
+    if (Platform.OS === 'web') {
+      console.warn('Credential storage not supported on web for security reasons');
+      return;
+    }
+    
     try {
       // Vérifier d'abord si l'authentification biométrique est activée
       const biometricEnabled = await AsyncStorage.getItem(BIOMETRIC_STORAGE_KEY);
@@ -183,6 +204,11 @@ export const useBiometricAuth = () => {
 
   // Vérifier le type d'authentification biométrique disponible
   const getBiometricType = async (): Promise<string> => {
+    // Return default type for web
+    if (Platform.OS === 'web') {
+      return 'Authentification biométrique';
+    }
+    
     try {
       const types = await LocalAuthentication.supportedAuthenticationTypesAsync();
       

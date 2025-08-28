@@ -147,15 +147,23 @@ export default function IpmFileScreen() {
   }, [user, t]);
 
   const loadFamilleMembers = useCallback(async () => {
-    if (!user) { setLoadingFamilleMembers(false); return; }
-    setLoadingFamilleMembers(true); setErrorFamilleMembers(null);
+    if (!user) { 
+      setFamilleMembers([]);
+      setLoadingFamilleMembers(false); 
+      return; 
+    }
+    setLoadingFamilleMembers(true); 
+    setErrorFamilleMembers(null);
     try {
       const members = await getFamilleMembers();
-      setFamilleMembers(members);
+      setFamilleMembers(Array.isArray(members) ? members : []);
     } catch (err: any) {
       console.error("Erreur de chargement des membres de la famille:", err);
+      setFamilleMembers([]);
       setErrorFamilleMembers(err.response?.data?.message || t("Impossible de charger les membres de la famille."));
-    } finally { setLoadingFamilleMembers(false); }
+    } finally { 
+      setLoadingFamilleMembers(false); 
+    }
   }, [user, t]);
 
   const loadPrisesEnChargeHistory = useCallback(async () => {
@@ -270,6 +278,20 @@ export default function IpmFileScreen() {
     return months[monthNumber] || `Mois ${monthNumber}`;
   };
 
+  // Fonction pour obtenir le nom du lien familial
+  const getLienLabel = (lienCode: string | number) => {
+    const code = parseInt(lienCode.toString());
+    switch (code) {
+      case 1: return 'Enfant';
+      case 2: return 'Conjoint';
+      case 3: return 'Père';
+      case 4: return 'Mère';
+      case 5: return 'Autre';
+      case 6: return 'Personne Ressource';
+      default: return lienCode || 'Non spécifié';
+    }
+  };
+
   const renderLoanItem = ({ item }: { item: Loan }) => (
     <View style={[styles.cardItem, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
       <Ionicons name="wallet-outline" size={24} color={colors.secondary} style={styles.itemIcon} />
@@ -322,7 +344,7 @@ export default function IpmFileScreen() {
         </Text>
         {item.famille ? (
           <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>
-            {t("Bénéficiaire:")} {item.famille.prenom} {item.famille.nom} ({item.famille.lien})
+            {t("Bénéficiaire:")} {item.famille.prenom} {item.famille.nom} ({getLienLabel(item.famille.lien)})
           </Text>
         ) : (
           <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>{t("Bénéficiaire:")} {t("Vous-même")}</Text>
@@ -352,7 +374,7 @@ export default function IpmFileScreen() {
         </Text> */}
         {item.famille ? (
           <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>
-            {t("Bénéficiaire:")} {item.famille.prenom} {item.famille.nom} ({item.famille.lien})
+            {t("Bénéficiaire:")} {item.famille.prenom} {item.famille.nom} ({getLienLabel(item.famille.lien)})
           </Text>
         ) : (
           <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>{t("Bénéficiaire:")} {t("Vous-même")}</Text>
@@ -372,30 +394,33 @@ export default function IpmFileScreen() {
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
-      <CustomHeader title={t("Mon Dossier IPM")} user={user} showBackButton={true} onAvatarPress={handleAvatarPress} showNotificationIcon={true} />
+      <CustomHeader title={t("Prestations IPM")} user={user} showBackButton={true} onAvatarPress={handleAvatarPress} showNotificationIcon={true} />
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
         {/* Bouton Retour & Section Demandes */}
-        <View style={{ flexDirection: 'row', justifyContent: 'space-around', marginBottom: 16 }}>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={{ flexDirection: 'row', alignItems: 'center' }}
-          >
-            <Ionicons name="arrow-back-outline" size={22} color={colors.primary} style={styles.sectionIcon} />
-          </TouchableOpacity>
-          {user?.is_contract_active !== false && (
-            <View>
-              {/* <TouchableOpacity style={[styles.requestButton, { backgroundColor: colors.secondary }]} onPress={() => openRequestModal('prise_en_charge')}>
-                <Text style={styles.requestButtonText}>{t('Prise en Charge')}</Text>
-              </TouchableOpacity> */}
-              <TouchableOpacity style={[styles.requestButton, { backgroundColor: colors.secondary }]} onPress={() => openRequestModal('feuille_de_soins')}>
-                 <Ionicons name="add-circle-outline" size={20} color='#fff'  style={styles.sectionIcon} />
-                <Text style={styles.requestButtonText}>{t('Demander Une Feuille de Soins')}</Text>
+         {user?.is_contract_active !== false && (
+            <View style={styles.header}>
+              <View style={styles.headerTextContainer}>
+                <Text style={[styles.headerTitle, { color: colors.primary }]}>
+                  Feuille de Soins
+                </Text>
+                <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>
+                  Demandez et téléchargez vos feuilles de soins
+                </Text>
+              </View>
+              
+              <TouchableOpacity
+                style={[styles.generateButton, { backgroundColor: colors.secondary }]}
+                onPress={() => openRequestModal('feuille_de_soins')}
+              >
+                <Ionicons name="add" size={20} color={colors.textTertiary} />
+                <Text style={[styles.generateButtonText, { color: colors.textTertiary }]}>
+                  Demandez
+                </Text>
               </TouchableOpacity>
             </View>
           )}
-        </View>
         {/* Section Mes Prêts et Échéanciers */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -613,8 +638,8 @@ export default function IpmFileScreen() {
                     style={{ height: 50, paddingHorizontal: 12, color: '#091e60' }}
                   >
                     <Picker.Item label={t("Vous-même")} value={undefined} />
-                    {familleMembers.map(member => (
-                      <Picker.Item key={member.id} label={`${member.prenom} ${member.nom} (${member.lien})`} value={member.id} />
+                    {Array.isArray(familleMembers) && familleMembers.map(member => (
+                      <Picker.Item key={member.id} label={`${member.prenom} ${member.nom} (${getLienLabel(member.lien)})`} value={member.id} />
                     ))}
                   </Picker>
                 </View>
@@ -769,6 +794,40 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 20,
     fontWeight: '700',
+  },
+    header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingHorizontal: 16,
+    paddingVertical: 20,
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  headerSubtitle: {
+    fontSize: 14,
+  },
+  headerTextContainer: {
+    flex: 1,
+    minWidth: 200,
+  },
+  generateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    flexShrink: 0,
+  },
+  generateButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 6,
   },
   errorContainer: {
     alignItems: 'center',

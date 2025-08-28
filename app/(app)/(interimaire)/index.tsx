@@ -12,7 +12,8 @@ import {
   Alert,
   Animated,
   StatusBar,
-   RefreshControl,
+  RefreshControl,
+  Image,
 } from "react-native";
 import CustomHeader from '../../../components/CustomHeader';
 import { useAuth } from '../../../components/AuthProvider';
@@ -22,7 +23,7 @@ import { useNotifications } from '../../../hooks/useNotifications';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { getDashboardStats } from "../../../utils/analytics-api";
-import { getIPMCardData } from "../../../utils/api";
+import { getIPMCardData, checkBirthday } from "../../../utils/api";
 import { Ionicons, FontAwesome5, FontAwesome6 } from '@expo/vector-icons';
 import { format } from "date-fns";
 import QRCode from 'react-native-qrcode-svg';
@@ -62,6 +63,10 @@ export default function InterimDashboardScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  
+  // État pour l'anniversaire
+  const [birthdayInfo, setBirthdayInfo] = useState<any>(null);
+  const [birthdayLoading, setBirthdayLoading] = useState(true);
 
   // Animation d'entrée des sections
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -75,23 +80,23 @@ export default function InterimDashboardScreen() {
       icon: 'folder-outline',
       color: colors.primary,
       route: '/(app)/(interimaire)/hr_file',
-      description: 'Documents et informations RH'
+      description: 'Informations administratives'
     },
     {
       id: 'ipm_file',
-      title: t('Dossier IPM'),
+      title: t('Prestations IPM'),
       icon: 'medkit-outline',
       color: colors.secondary,
       route: '/(app)/(interimaire)/ipm_file',
-      description: 'Remboursements santé'
+      description: 'Echéanciers, Historique Prises en charge et Feuille de Soins'
     },
     {
       id: 'analytics',
-      title: t('Analytics'),
+      title: t('Suivi Facturation'),
       icon: 'analytics',
       color: '#8B5CF6',
       route: '/(app)/(interimaire)/analytics',
-      description: 'Statistiques détaillées'
+      description: 'Suivi de la facturation'
     },
     {
       id: 'reports',
@@ -158,6 +163,18 @@ export default function InterimDashboardScreen() {
       if (ipmResponse) {
         setIpmData(ipmResponse);
       }
+
+      // Vérifier l'anniversaire
+      setBirthdayLoading(true);
+      try {
+        const birthdayResponse = await checkBirthday();
+        setBirthdayInfo(birthdayResponse);
+      } catch (birthdayError) {
+        console.log('Erreur anniversaire:', birthdayError);
+        setBirthdayInfo(null);
+      } finally {
+        setBirthdayLoading(false);
+      }
     } catch (err: any) {
       console.error("Erreur chargement données:", err);
       setError(err.message || t("Impossible de charger les données"));
@@ -197,14 +214,16 @@ export default function InterimDashboardScreen() {
 
   // --- Fonctions de rendu des nouvelles sections ---
 
-  // Carte IPM avec QR code
+  // Icône Carte IPM (remplace la carte complète)
   const renderIPMCard = () => {
     if (!ipmData || !ipmData.qr_data) {
       return (
-        <View style={styles.ipmCardContainer}>
-          <View style={styles.loadingCard}>
+        <View style={styles.ipmCardIconContainer}>
+          <View style={[styles.loadingCard, { backgroundColor: colors.cardBackground }]}>
             <ActivityIndicator size="large" color="#0f8e35" />
-            <Text style={styles.loadingText}>Chargement de la carte IPM...</Text>
+            <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
+              Chargement de la carte IPM...
+            </Text>
           </View>
         </View>
       );
@@ -213,158 +232,57 @@ export default function InterimDashboardScreen() {
     const profile = ipmData.profile;
     const contractStatus = ipmData.contract_status || 'Inactif';
     const contractEndDate = ipmData.contract_end_date;
-    const entrepriseUtilisatrice = ipmData.entreprise_utilisatrice;
-    const ayantsDroit = ipmData.ayants_droit || [];
-    const feuillesSoinsStats = ipmData.feuilles_soins_stats || {};
-    
-    // Version optimisée pour le QR code avec données essentielles uniquement
-    const qrDataOptimized = {
-      id: profile?.id,
-      nom: profile?.name,
-      matricule: profile?.matricule,
-      email: profile?.email,
-      phone: profile?.phone,
-      contrat_statut: contractStatus,
-      contrat_fin: contractEndDate,
-      entreprise: entrepriseUtilisatrice?.designation,
-      ayants_droit: ayantsDroit.map(ayant => {
-        // Conversion du code numérique en libellé
-        const getLienLabel = (lienCode) => {
-          const code = parseInt(lienCode);
-          switch (code) {
-            case 1: return 'Enfant';
-            case 2: return 'Conjoint';
-            case 3: return 'Père';
-            case 4: return 'Mère';
-            case 5: return 'Autre';
-            case 6: return 'Personne Ressource';
-            default: return ayant.lien || 'Non spécifié';
-          }
-        };
-        
-        return {
-          nom: ayant.nom,
-          prenom: ayant.prenom,
-          lien: getLienLabel(ayant.lien)
-        };
-      }),
-      feuilles_soins: `${feuillesSoinsStats.validees || 0}/${feuillesSoinsStats.total || 0}`,
-      type: 'ipm',
-      version: '1.0',
-      generated: new Date().toISOString().split('T')[0] // Date uniquement
-    };
-    
-    const qrData = JSON.stringify(qrDataOptimized);
-    
-    // Debug : Afficher la taille des données du QR code
-    console.log('QR Code data length:', qrData.length);
-    console.log('QR Code data:', qrData);
     
     return (
       <Animated.View
         style={[
-          styles.ipmCardContainer,
+          styles.ipmCardIconContainer,
           {
             opacity: fadeAnim,
             transform: [{ translateY: slideAnim }]
           }
         ]}
       >
-        <LinearGradient
-          colors={['#091e60', '#0f8e35']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.ipmCard}
+        <TouchableOpacity
+          style={[styles.ipmCardIcon, { backgroundColor: colors.cardBackground }]}
+          onPress={() => router.push('/(app)/(interimaire)/carte-ipm')}
+          activeOpacity={0.7}
         >
-          {/* En-tête de la carte */}
-          <View style={styles.ipmCardHeader}>
-            <View style={styles.ipmCardTitle}>
-              <FontAwesome5 name="id-card" size={24} color="#FFFFFF" />
-              <Text style={styles.ipmCardTitleText}>Carte IPM</Text>
-              
-            </View>
-              {entrepriseUtilisatrice && (
-                <View style={styles.ipmEntrepriseInfo}>
-                  <Text style={styles.ipmEntrepriseText}>
-                    {entrepriseUtilisatrice.designation}
-                  </Text>
-                </View>
-              )}
-          </View>
-
-          {/* Contenu principal */}
-          <View style={styles.ipmCardContent}>
-            {/* Informations utilisateur */}
-            <View style={styles.ipmUserInfo}>
-              <Text style={styles.ipmUserName}>{profile?.name || 'Nom non disponible'}</Text>
-              <Text style={styles.ipmUserEmail}>{profile?.email || 'Email non disponible'}</Text>
-              {profile?.matricule && (
-                <Text style={styles.ipmMatricule}>Matricule: {profile.matricule}</Text>
-              )}
-              <View style={styles.ipmContractInfo}>
-                <Text style={styles.ipmContractText}>
-                  {contractEndDate ? 
-                  `Valide jusqu'au ${format(new Date(contractEndDate), 'dd/MM/yyyy')}` : 
-                  'Date de fin non disponible'}
-                </Text>
-              </View>
-
-            </View>
-
-            {/* QR Code */}
-            <TouchableOpacity 
-              style={styles.qrCodeContainer}
-              onPress={() => {
-                Alert.alert(
-                  'Données du QR Code',
-                  `Taille: ${qrData.length} caractères\n\nContenu:\n${qrData}`,
-                  [{ text: 'OK' }]
-                );
-              }}
-            >
-              <QRCode
-                value={qrData}
-                size={130}
-                backgroundColor="white"
-                color="black"
-                ecl="M"
-                getRef={(c) => console.log('QR Code generated successfully')}
-                onError={(error) => console.error('QR Code error:', error)}
-              />
-            </TouchableOpacity>
-          </View>
-
-          {/* Informations supplémentaires */}
-          {/* <View style={styles.ipmCardInfo}>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Ayants droit:</Text>
-              <Text style={styles.infoValue}>{ayantsDroit.length}</Text>
-            </View>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Feuilles de soins:</Text>
-              <Text style={styles.infoValue}>
-                {feuillesSoinsStats.validees || 0}/{feuillesSoinsStats.total || 0}
-              </Text>
-            </View>
-          </View> */}
-
-          {/* Pied de carte */}
-          <View style={styles.ipmCardFooter}>
-            <View style={styles.ipmCardId}>
-              <Text style={styles.ipmCardIdText}>
-                ID: {profile?.id || 'N/A'}
-              </Text>
-            </View>
-            <View style={styles.ipmCardStatus}>
-              <View style={[styles.statusDot, { 
+          <LinearGradient
+            colors={['#0f8e35', '#10B981']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.cardIconGradient}
+          >
+            <Ionicons name="card" size={32} color="#FFFFFF" />
+          </LinearGradient>
+          
+          <View style={styles.cardIconInfo}>
+            <Text style={[styles.cardIconTitle, { color: colors.textPrimary }]}>
+              Carte IPM
+            </Text>
+            <Text style={[styles.cardIconSubtitle, { color: colors.textSecondary }]}>
+              ID: {profile?.id || 'N/A'} • {contractStatus}
+            </Text>
+            <View style={styles.cardIconFooter}>
+              <View style={[styles.statusIndicator, { 
                 backgroundColor: contractStatus === 'Actif' ? '#10B981' : 
                                contractStatus === 'À venir' ? '#F59E0B' : 
-                               '#EF4444' 
+                               contractStatus === 'Expiré' ? '#EF4444' : '#6B7280' 
               }]} />
-              <Text style={styles.statusText}>{contractStatus}</Text>
+              <Text style={[styles.cardIconAction, { color: colors.secondary }]}>
+                Toucher pour voir la carte complète
+              </Text>
             </View>
           </View>
-        </LinearGradient>
+          
+          <Ionicons 
+            name="chevron-forward" 
+            size={20} 
+            color={colors.textSecondary} 
+            style={styles.cardIconChevron}
+          />
+        </TouchableOpacity>
       </Animated.View>
     );
   };
@@ -407,6 +325,50 @@ export default function InterimDashboardScreen() {
   //     </Animated.View>
   //   );
   // };
+
+  // Fonction de rendu de la bannière d'anniversaire
+  const renderBirthdayBanner = () => {
+    if (birthdayLoading || !birthdayInfo?.is_birthday) {
+      return null;
+    }
+
+    return (
+      <Animated.View
+        style={[
+          styles.birthdayBanner,
+          {
+            opacity: fadeAnim,
+            transform: [{ translateY: slideAnim }]
+          }
+        ]}
+      >
+        <LinearGradient
+          colors={['#ec4899', '#f97316']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.birthdayGradient}
+        >
+          <View style={styles.birthdayContent}>
+            <View style={styles.birthdayIcon}>
+              <Text style={styles.birthdayEmoji}>🎉</Text>
+            </View>
+            <View style={styles.birthdayText}>
+              <Text style={styles.birthdayTitle}>
+                Joyeux Anniversaire !
+              </Text>
+              <Text style={styles.birthdayMessage}>
+                {birthdayInfo.message}
+              </Text>
+            </View>
+            <View style={styles.birthdayDecoration}>
+              <Text style={styles.decorationEmoji}>🎈</Text>
+              <Text style={styles.decorationEmoji}>🎁</Text>
+            </View>
+          </View>
+        </LinearGradient>
+      </Animated.View>
+    );
+  };
 
   // Section actions rapides améliorée
   const renderQuickActions = () => {
@@ -539,6 +501,7 @@ export default function InterimDashboardScreen() {
       >
         <View style={styles.content}>
           {renderIPMCard()}
+          {renderBirthdayBanner()}
           {/* {renderCurrentStatus()} */}
           {renderQuickActions()}
         </View>
@@ -605,7 +568,7 @@ const styles = StyleSheet.create({
   },
   ipmCard: {
     borderRadius: 16,
-    padding: 20,
+    padding: 14,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.15,
@@ -613,18 +576,23 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   ipmCardHeader: {
-    marginBottom: 16,
+    marginBottom: 0,
   },
   ipmCardTitle: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 4,
   },
   ipmCardTitleText: {
     fontSize: 20,
     fontWeight: 'bold',
     color: '#FFFFFF',
-    marginLeft: 8,
+  },
+  ipmCardLogo: {
+    width: 75,
+    height: 40,
+    tintColor: '#FFFFFF',
   },
   ipmCardSubtitle: {
     fontSize: 12,
@@ -636,7 +604,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    marginBottom: 8,
   },
   ipmUserInfo: {
     flex: 1,
@@ -645,7 +613,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: '#FFFFFF',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   ipmUserEmail: {
     fontSize: 14,
@@ -674,7 +642,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderTopWidth: 1,
     borderTopColor: 'rgba(255,255,255,0.2)',
-    paddingTop: 12,
+    paddingTop: 10,
   },
   ipmCardId: {
     flex: 1,
@@ -682,6 +650,7 @@ const styles = StyleSheet.create({
   ipmCardIdText: {
     fontSize: 12,
     color: '#FFFFFF',
+    fontWeight: '600',
     opacity: 0.8,
   },
   ipmCardStatus: {
@@ -1065,5 +1034,134 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#FFFFFF',
     fontWeight: '600',
+  },
+
+  // Styles pour la bannière d'anniversaire
+  birthdayBanner: {
+    marginBottom: 16,
+  },
+  
+  birthdayGradient: {
+    borderRadius: 16,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  
+  birthdayContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  
+  birthdayIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  
+  birthdayEmoji: {
+    fontSize: 28,
+  },
+  
+  birthdayText: {
+    flex: 1,
+  },
+  
+  birthdayTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    marginBottom: 4,
+  },
+  
+  birthdayMessage: {
+    fontSize: 14,
+    color: '#FFFFFF',
+    opacity: 0.9,
+  },
+  
+  birthdayDecoration: {
+    alignItems: 'center',
+    gap: 4,
+  },
+  
+  decorationEmoji: {
+    fontSize: 20,
+  },
+
+  // IPM Card Icon Styles
+  ipmCardIconContainer: {
+    marginBottom: 20,
+  },
+
+  ipmCardIcon: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+
+  cardIconGradient: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+
+  cardIconInfo: {
+    flex: 1,
+  },
+
+  cardIconTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+
+  cardIconSubtitle: {
+    fontSize: 14,
+    marginBottom: 8,
+    opacity: 0.8,
+  },
+
+  cardIconFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+
+  statusIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+
+  cardIconAction: {
+    fontSize: 12,
+    fontStyle: 'italic',
+  },
+
+  cardIconChevron: {
+    marginLeft: 8,
   },
 });
