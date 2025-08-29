@@ -49,6 +49,7 @@ export default function CarteIPMScreen() {
   const [showLockModal, setShowLockModal] = useState(false);
   const [cardEvents, setCardEvents] = useState<CardUsageEvent[]>([]);
   const [showAyantsDroit, setShowAyantsDroit] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   
   const fadeAnim = useState(new Animated.Value(0))[0];
   const slideAnim = useState(new Animated.Value(50))[0];
@@ -57,6 +58,7 @@ export default function CarteIPMScreen() {
     loadProfile();
     loadIPMData();
     loadCardEvents();
+    loadCardLockState();
     
     // Animation d'entrée
     Animated.parallel([
@@ -208,6 +210,26 @@ export default function CarteIPMScreen() {
     }
   };
 
+  // Fonctions de persistance du verrouillage
+  const loadCardLockState = async () => {
+    try {
+      const lockState = await AsyncStorage.getItem(`card_lock_${user?.id}`);
+      if (lockState === 'true') {
+        setIsCardLocked(true);
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement de l\'état de verrouillage:', error);
+    }
+  };
+
+  const saveCardLockState = async (isLocked: boolean) => {
+    try {
+      await AsyncStorage.setItem(`card_lock_${user?.id}`, isLocked.toString());
+    } catch (error) {
+      console.error('Erreur lors de la sauvegarde de l\'état de verrouillage:', error);
+    }
+  };
+
   // Fonction utilitaire pour les liens familiaux
   const getLienLabel = (lienCode: string | number) => {
     const code = parseInt(lienCode.toString());
@@ -250,6 +272,7 @@ export default function CarteIPMScreen() {
       // Déverrouiller
       setIsCardLocked(false);
       setIsDataVisible(false);
+      saveCardLockState(false); // Sauvegarder l'état
       
       const newEvent: CardUsageEvent = {
         id: Date.now().toString(),
@@ -271,6 +294,7 @@ export default function CarteIPMScreen() {
     setIsCardLocked(true);
     setIsDataVisible(false);
     setShowLockModal(false);
+    saveCardLockState(true); // Sauvegarder l'état
     
     const newEvent: CardUsageEvent = {
       id: Date.now().toString(),
@@ -377,6 +401,38 @@ export default function CarteIPMScreen() {
             end={{ x: 1, y: 1 }}
             style={styles.ipmCard}
           >
+            {/* Pattern wavy en arrière-plan */}
+            <View style={styles.wavyPattern}>
+              {/* Lignes diagonales ondulées */}
+              {Array.from({ length: 20 }, (_, i) => (
+                <View
+                  key={i}
+                  style={[
+                    styles.wavyStripe,
+                    {
+                      top: i * 15 - 50,
+                      transform: [{ rotate: '45deg' }],
+                      opacity: 0.1,
+                    },
+                  ]}
+                />
+              ))}
+              {/* Cercles décoratifs */}
+              {Array.from({ length: 8 }, (_, i) => (
+                <View
+                  key={`circle-${i}`}
+                  style={[
+                    styles.wavyCircle,
+                    {
+                      top: (i * 40) % 180,
+                      left: (i * 60) % 300,
+                      opacity: 0.05,
+                    },
+                  ]}
+                />
+              ))}
+            </View>
+
             {contractExpiringSoon && (
               <View style={styles.expirationWarning}>
                 <Ionicons name="warning" size={16} color="#FFF" />
@@ -394,9 +450,9 @@ export default function CarteIPMScreen() {
               <Text style={styles.ipmUserName}>
                 {user?.name || 'Nom Utilisateur'}
               </Text>
-              <TouchableOpacity onPress={toggleCardLock} style={styles.lockButton}>
+              <TouchableOpacity onPress={() => setShowSettings(!showSettings)} style={styles.settingsButton}>
                 <Ionicons 
-                  name={isCardLocked ? 'lock-closed' : 'lock-open'} 
+                  name="settings-outline" 
                   size={18} 
                   color="#FFFFFF" 
                 />
@@ -577,6 +633,54 @@ export default function CarteIPMScreen() {
           </View>
         )}
 
+        {/* Section Paramètres de la carte */}
+        {showSettings && (
+          <View style={[styles.settingsSection, { backgroundColor: colors.cardBackground }]}>
+            <View style={styles.settingsHeader}>
+              <Ionicons name="settings" size={20} color={colors.primary} />
+              <Text style={[styles.settingsTitle, { color: colors.textPrimary }]}>
+                Paramètres de la carte
+              </Text>
+            </View>
+            
+            <View style={styles.settingsContent}>
+              <TouchableOpacity 
+                style={[styles.settingsOption, { borderBottomColor: colors.border }]}
+                onPress={toggleCardLock}
+              >
+                <View style={styles.settingsOptionLeft}>
+                  <Ionicons 
+                    name={isCardLocked ? 'lock-closed' : 'lock-open'} 
+                    size={20} 
+                    color={isCardLocked ? colors.error : colors.success} 
+                  />
+                  <Text style={[styles.settingsOptionText, { color: colors.textPrimary }]}>
+                    {isCardLocked ? 'Déverrouiller la carte' : 'Verrouiller la carte'}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[styles.settingsOption, { borderBottomWidth: 0 }]}
+                onPress={() => {
+                  setIsDataVisible(false);
+                  setShowAyantsDroit(false);
+                  Alert.alert('Données masquées', 'Les données sensibles ont été masquées.');
+                }}
+              >
+                <View style={styles.settingsOptionLeft}>
+                  <Ionicons name="eye-off" size={20} color={colors.textSecondary} />
+                  <Text style={[styles.settingsOptionText, { color: colors.textPrimary }]}>
+                    Masquer les données sensibles
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
         {/* Historique des événements */}
         <View style={styles.historySection}>
           <Text style={[styles.historyTitle, { color: colors.textPrimary }]}>
@@ -737,10 +841,78 @@ const styles = StyleSheet.create({
     height: 40,
     tintColor: '#FFFFFF',
   },
-  lockButton: {
+  settingsButton: {
     padding: 8,
     borderRadius: 20,
     backgroundColor: 'rgba(255,255,255,0.2)',
+  },
+
+  // Styles pour la section paramètres
+  settingsSection: {
+    marginHorizontal: 2,
+    marginTop: 8,
+    marginBottom: 16,
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  settingsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  settingsTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  settingsContent: {
+    borderRadius: 12,
+  },
+  settingsOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 16,
+    paddingHorizontal: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  settingsOptionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  settingsOptionText: {
+    fontSize: 16,
+    marginLeft: 12,
+  },
+
+  // Styles pour le pattern wavy
+  wavyPattern: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    overflow: 'hidden',
+  },
+  wavyStripe: {
+    position: 'absolute',
+    width: 400,
+    height: 3,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    left: -100,
+  },
+  wavyCircle: {
+    position: 'absolute',
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
   },
   expirationWarning: {
     flexDirection: 'row',

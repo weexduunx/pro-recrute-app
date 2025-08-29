@@ -248,14 +248,13 @@ export default function InterimDashboardScreen() {
           onPress={() => router.push('/(app)/(interimaire)/carte-ipm')}
           activeOpacity={0.7}
         >
-          <LinearGradient
-            colors={['#0f8e35', '#10B981']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.cardIconGradient}
-          >
-            <Ionicons name="card" size={32} color="#FFFFFF" />
-          </LinearGradient>
+          <View style={[styles.actionIcon, { backgroundColor: colors.secondary + '15' }]}>
+            <Image 
+              source={require('../../../assets/images/game-icons--key-card.png')} 
+              style={styles.cardIconImage}
+              resizeMode="contain"
+            />
+          </View>
           
           <View style={styles.cardIconInfo}>
             <Text style={[styles.cardIconTitle, { color: colors.textPrimary }]}>
@@ -879,12 +878,17 @@ const styles = StyleSheet.create({
   },
   
   actionIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 70,
+    height: 70,
+    borderRadius: 34,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 12,
+  },
+  
+  cardIconImage: {
+    width: 60,
+    height: 60,
   },
   
   actionTitle: {
@@ -1130,6 +1134,7 @@ const styles = StyleSheet.create({
 
   cardIconInfo: {
     flex: 1,
+    marginLeft: 8,
   },
 
   cardIconTitle: {
