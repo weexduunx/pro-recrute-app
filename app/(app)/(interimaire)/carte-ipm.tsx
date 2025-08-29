@@ -550,7 +550,7 @@ export default function CarteIPMScreen() {
         {/* Section Ayants-droit */}
         {showAyantsDroit && (ipmData as any)?.ayants_droit && (
           <View style={[styles.ayantsDroitSection, { backgroundColor: colors.cardBackground }]}>
-            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
+            <Text style={[{ fontSize: 20, fontWeight: 'bold', marginBottom: 16 }, { color: colors.textPrimary }]}>
               Ayants-droit ({(ipmData as any).ayants_droit.length})
             </Text>
             

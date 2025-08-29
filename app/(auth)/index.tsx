@@ -113,7 +113,7 @@ export default function LoginScreen() {
         {/* Section Header */}
         <View style={styles.headerSection}>
           <Image
-            source={require('../../assets/images/logo.png')} // Assurez-vous que le chemin est correct
+            source={require('../../assets/images/logogbg.png')} // Assurez-vous que le chemin est correct
             style={styles.logo}
             resizeMode="contain"
           />
@@ -297,8 +297,8 @@ const styles = StyleSheet.create({
     paddingTop: 12,
   },
   logo: {
-    width: 80,
-    height: 80,
+    width: 95,
+    height: 95,
     marginBottom: 16,
   },
   title: {
