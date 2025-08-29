@@ -18,7 +18,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../../components/ThemeContext';
 import { useAuth } from '../../../components/AuthProvider';
 import CustomHeader from '../../../components/CustomHeader';
-import { getInterimProfile, getIPMCardData } from '../../../utils/api';
+import { getInterimProfile, getIPMCardData, getIpmRecapByMonth } from '../../../utils/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createShadow } from '../../../utils/shadow-utils';
 
@@ -109,71 +109,93 @@ export default function CarteIPMScreen() {
 
   const loadCardEvents = async () => {
     try {
-      // Récupérer les données réelles depuis l'API
+      // Récupérer uniquement les données spécifiques à la carte IPM
       const events: CardUsageEvent[] = [];
       
-      // Récupérer l'historique des prises en charge
+      // Récupérer les données de retenues et remboursements IPM
       try {
-        const prisesEnChargeResponse = await fetch('http://192.168.1.11:8000/api/interim/prises-en-charge', {
-          headers: {
-            'Authorization': `Bearer ${user?.token}`,
-            'Content-Type': 'application/json'
-          }
-        });
-        const prisesData = await prisesEnChargeResponse.json();
+        const ipmRecapData = await getIpmRecapByMonth();
+        console.log('=== DEBUG IPM RECAP DATA ===');
+        console.log('ipmRecapData:', JSON.stringify(ipmRecapData, null, 2));
         
-        if (prisesData.success && prisesData.data) {
-          prisesData.data.forEach((prise: any) => {
-            events.push({
-              id: `pec_${prise.id}`,
-              type: 'prise_en_charge',
-              description: `Prise en charge - ${prise.objet || 'Demande médicale'}`,
-              timestamp: prise.created_at || prise.date,
-              beneficiaire: prise.famille ? `${prise.famille.prenom} ${prise.famille.nom} (${getLienLabel(prise.famille.lien)})` : 'Vous-même',
-              statut: prise.statut === 1 ? 'Approuvée' : prise.statut === 0 ? 'En attente' : 'Rejetée',
-              location: prise.structure?.nom || 'Structure non spécifiée'
-            });
+        if (ipmRecapData && ipmRecapData.recap_ipm) {
+          // Traiter chaque récapitulatif mensuel
+          ipmRecapData.recap_ipm.forEach((recap: any) => {
+            const moisNom = ['', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 
+                            'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'][recap.mois] || `Mois ${recap.mois}`;
+            
+            // Ajouter événement pour les consultations
+            if (recap.consultations > 0) {
+              events.push({
+                id: `consultation_${recap.id}`,
+                type: 'prise_en_charge',
+                description: `Consultations médicales - ${moisNom} ${recap.annee}`,
+                timestamp: recap.updated_at || recap.created_at,
+                montant: `${recap.consultations} FCFA`,
+                statut: 'Traité',
+                beneficiaire: recap.name
+              });
+            }
+            
+            // Ajouter événement pour les médicaments
+            if (recap.medicaments > 0) {
+              events.push({
+                id: `medicaments_${recap.id}`,
+                type: 'feuille_soins',
+                description: `Médicaments - ${moisNom} ${recap.annee}`,
+                timestamp: recap.updated_at || recap.created_at,
+                montant: `${recap.medicaments} FCFA`,
+                statut: 'Ligne Ordonnance',
+                beneficiaire: recap.name
+              });
+            }
+            
+            // Ajouter événement pour les retenues
+            if (recap.retenu > 0) {
+              events.push({
+                id: `retenue_${recap.id}`,
+                type: 'validation',
+                description: `Retenue IPM (${ipmRecapData.taux_retenu || '30%'}) - ${moisNom} ${recap.annee}`,
+                timestamp: recap.updated_at || recap.created_at,
+                montant: `${recap.retenu} FCFA`,
+                statut: 'Prélevée',
+                // location: `Société ID: ${recap.societe_id}`,
+                beneficiaire: recap.name
+              });
+            }
+            
+            // Ajouter événement pour les remboursements
+            if (recap.remboursement > 0) {
+              events.push({
+                id: `remboursement_${recap.id}`,
+                type: 'validation',
+                description: `Remboursement IPM (${ipmRecapData.taux_remboursse || '70%'}) - ${moisNom} ${recap.annee}`,
+                timestamp: recap.updated_at || recap.created_at,
+                montant: `${recap.remboursement} FCFA`,
+                statut: 'Remboursé',
+                beneficiaire: recap.name
+              });
+            }
+            
+            // Ajouter récapitulatif mensuel complet
+            const totalFrais = recap.consultations + recap.soins + recap.medicaments + recap.protheses + recap.examens;
+            if (totalFrais > 0) {
+              events.push({
+                id: `recap_complet_${recap.id}`,
+                type: 'validation',
+                description: `Récapitulatif complet - ${moisNom} ${recap.annee}`,
+                timestamp: recap.updated_at || recap.created_at,
+                montant: `Total frais: ${totalFrais} FCFA`,
+                statut: 'Calculé',
+                location: `Retenu: ${recap.retenu} - Remboursé: ${recap.remboursement}`,
+                beneficiaire: recap.name
+              });
+            }
           });
         }
       } catch (error) {
-        console.error('Erreur lors du chargement des prises en charge:', error);
+        console.error('Erreur lors du chargement des données IPM recap:', error);
       }
-      
-      // Récupérer l'historique des feuilles de soins
-      try {
-        const feuillesResponse = await fetch('http://192.168.1.11:8000/api/interim/feuilles-de-soins', {
-          headers: {
-            'Authorization': `Bearer ${user?.token}`,
-            'Content-Type': 'application/json'
-          }
-        });
-        const feuillesData = await feuillesResponse.json();
-        
-        if (feuillesData.success && feuillesData.data) {
-          feuillesData.data.forEach((feuille: any) => {
-            events.push({
-              id: `fds_${feuille.id}`,
-              type: 'feuille_soins',
-              description: `Feuille de soins - ${feuille.type_consultation || 'Consultation'}`,
-              timestamp: feuille.created_at || feuille.date_consultation,
-              beneficiaire: feuille.famille ? `${feuille.famille.prenom} ${feuille.famille.nom} (${getLienLabel(feuille.famille.lien)})` : 'Vous-même',
-              statut: feuille.statut === 1 ? 'Validée' : feuille.statut === 0 ? 'En cours' : 'Rejetée',
-              montant: feuille.montant_total ? `${feuille.montant_total} FCFA` : undefined
-            });
-          });
-        }
-      } catch (error) {
-        console.error('Erreur lors du chargement des feuilles de soins:', error);
-      }
-      
-      // Ajouter des événements de consultation de la carte
-      events.push({
-        id: 'card_access_' + Date.now(),
-        type: 'access',
-        description: 'Carte IPM consultée',
-        timestamp: new Date().toISOString(),
-        ip_address: '192.168.1.100'
-      });
       
       // Trier par date décroissante
       events.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
@@ -181,14 +203,8 @@ export default function CarteIPMScreen() {
       setCardEvents(events);
     } catch (error) {
       console.error('Erreur lors du chargement de l\'historique:', error);
-      // En cas d'échec, utiliser des données par défaut
-      setCardEvents([{
-        id: 'default',
-        type: 'access',
-        description: 'Carte IPM consultée',
-        timestamp: new Date().toISOString(),
-        ip_address: '192.168.1.100'
-      }]);
+      // En cas d'échec, laisser l'historique vide
+      setCardEvents([]);
     }
   };
 
@@ -216,34 +232,17 @@ export default function CarteIPMScreen() {
       return;
     }
     
-    // Basculer entre données sensibles et ayants-droit
+    // Cycle simple: masqué → données sensibles + ayants droits → masqué
     if (!isDataVisible && !showAyantsDroit) {
-      // Montrer les données sensibles
+      // Premier clic : montrer données sensibles ET ayants-droit
       setIsDataVisible(true);
-      setShowAyantsDroit(false);
-    } else if (isDataVisible && !showAyantsDroit) {
-      // Montrer les ayants-droit
-      setIsDataVisible(false);
       setShowAyantsDroit(true);
     } else {
-      // Masquer tout
+      // Deuxième clic : masquer tout
       setIsDataVisible(false);
       setShowAyantsDroit(false);
     }
     
-    // Ajouter l'événement à l'historique
-    const newEvent: CardUsageEvent = {
-      id: Date.now().toString(),
-      type: 'access',
-      description: !isDataVisible && !showAyantsDroit 
-        ? 'Données sensibles consultées'
-        : isDataVisible 
-          ? 'Ayants-droit consultés'
-          : 'Données masquées',
-      timestamp: new Date().toISOString(),
-      ip_address: '192.168.1.100'
-    };
-    setCardEvents(prev => [newEvent, ...prev]);
   };
 
   const toggleCardLock = () => {
@@ -627,19 +626,19 @@ export default function CarteIPMScreen() {
                     )}
                   </View>
                 </View>
-                {event.beneficiaire && (
+                {/* {event.beneficiaire && (
                   <Text style={[styles.eventBeneficiaire, { color: colors.textSecondary }]}>
                     👥 {event.beneficiaire}
                   </Text>
-                )}
+                )} */}
                 {event.montant && (
                   <Text style={[styles.eventMontant, { color: colors.primary }]}>
-                    💰 {event.montant}
+                    {event.montant}
                   </Text>
                 )}
                 {event.location && (
                   <Text style={[styles.eventLocation, { color: colors.textSecondary }]}>
-                    📍 {event.location}
+                    {event.location}
                   </Text>
                 )}
               </View>

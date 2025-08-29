@@ -25,6 +25,7 @@ import {
   getPrisesEnChargeHistory,
   getFeuillesDeSoinsHistory,
   getPdf, // Utiliser la même fonction getPdf pour télécharger
+  getAffiliatedStructures,
 } from '../../../utils/api';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -104,6 +105,11 @@ export default function IpmFileScreen() {
   const [familleMembers, setFamilleMembers] = useState<FamilleMember[]>([]);
   const [loadingFamilleMembers, setLoadingFamilleMembers] = useState(true);
   const [errorFamilleMembers, setErrorFamilleMembers] = useState<string | null>(null);
+
+  // États pour les structures médicales
+  const [affiliatedStructures, setAffiliatedStructures] = useState<any[]>([]);
+  const [loadingStructures, setLoadingStructures] = useState(true);
+  const [errorStructures, setErrorStructures] = useState<string | null>(null);
 
   const [prisesEnChargeHistory, setPrisesEnChargeHistory] = useState<PriseEnChargeRequest[]>([]);
   const [loadingPrisesEnCharge, setLoadingPrisesEnCharge] = useState(true);
@@ -190,6 +196,53 @@ export default function IpmFileScreen() {
     } finally { setLoadingFeuillesDeSoins(false); }
   }, [user, t]);
 
+  const loadAffiliatedStructures = useCallback(async () => {
+    if (!user) { 
+      setAffiliatedStructures([]);
+      setLoadingStructures(false); 
+      return; 
+    }
+    setLoadingStructures(true); 
+    setErrorStructures(null);
+    try {
+      let allStructures: any[] = [];
+      let page = 1;
+      let hasMorePages = true;
+      const perPage = 50; // Récupérer 50 par page
+      
+      // Boucle pour récupérer toutes les pages
+      while (hasMorePages && page <= 10) { // Limite sécurité: max 10 pages (500 structures)
+        const response = await getAffiliatedStructures(page, perPage);
+        console.log(`=== DEBUG STRUCTURES PAGE ${page} ===`);
+        console.log('Response:', response);
+        
+        const structures = response.data || response || [];
+        const structuresArray = Array.isArray(structures) ? structures : [];
+        
+        allStructures = [...allStructures, ...structuresArray];
+        console.log(`Page ${page}: ${structuresArray.length} structures, Total: ${allStructures.length}`);
+        
+        // Vérifier s'il y a d'autres pages
+        hasMorePages = structuresArray.length === perPage;
+        page++;
+      }
+      
+      console.log('=== TOTAL STRUCTURES CHARGÉES ===', allStructures.length);
+      setAffiliatedStructures(allStructures);
+      
+      // Sélectionner automatiquement la première structure si disponible
+      if (allStructures.length > 0 && !pecStructureId) {
+        setPecStructureId(allStructures[0].id);
+      }
+    } catch (err: any) {
+      console.error("Erreur de chargement des structures affiliées:", err);
+      setAffiliatedStructures([]);
+      setErrorStructures(err.response?.data?.message || t("Impossible de charger les structures médicales."));
+    } finally { 
+      setLoadingStructures(false); 
+    }
+  }, [user, t, pecStructureId]);
+
 
   // --- useEffects ---
   useEffect(() => {
@@ -197,7 +250,8 @@ export default function IpmFileScreen() {
     loadFamilleMembers();
     loadPrisesEnChargeHistory();
     loadFeuillesDeSoinsHistory();
-  }, [loadLoans, loadFamilleMembers, loadPrisesEnChargeHistory, loadFeuillesDeSoinsHistory]);
+    loadAffiliatedStructures();
+  }, [loadLoans, loadFamilleMembers, loadPrisesEnChargeHistory, loadFeuillesDeSoinsHistory, loadAffiliatedStructures]);
 
   // --- Gestion des formulaires de demande ---
   const openRequestModal = (type: 'prise_en_charge' | 'feuille_de_soins') => {
@@ -210,18 +264,38 @@ export default function IpmFileScreen() {
     setRequestType(null);
     // Réinitialiser les champs du formulaire
     setPecObjet(''); setPecDate(new Date().toISOString().split('T')[0]); setPecFamilleId(undefined);
+    // Réinitialiser la structure avec la première disponible
+    if (affiliatedStructures.length > 0) {
+      setPecStructureId(affiliatedStructures[0].id);
+    }
     setFdsType(''); setFdsDateSoins(new Date().toISOString().split('T')[0]); setFdsMontantTotal(''); setFdsFamilleId(undefined);
   };
 
   const handleSubmitPriseEnCharge = async () => {
+    // Validation des champs obligatoires
+    if (!pecObjet.trim()) {
+      Alert.alert(t('Erreur'), t('Veuillez renseigner l\'objet de la demande.'));
+      return;
+    }
+    
+    if (!pecStructureId && affiliatedStructures.length > 0) {
+      // Utiliser la première structure par défaut si aucune n'est sélectionnée
+      setPecStructureId(affiliatedStructures[0].id);
+    }
+    
+    if (!pecStructureId) {
+      Alert.alert(t('Erreur'), t('Veuillez sélectionner une structure médicale.'));
+      return;
+    }
+
     setSubmittingPec(true);
     try {
       await requestPriseEnCharge({
         objet: pecObjet,
         date: pecDate,
         famille_id: pecFamilleId,
-        medcin_id: pecMedcinId, // Assurez-vous que ces IDs sont gérés si besoin
-        structure_id: pecStructureId, // Assurez-vous que ces IDs sont gérés si besoin
+        medcin_id: pecMedcinId,
+        structure_id: pecStructureId, // Maintenant garanti d'avoir une valeur
       });
       Alert.alert(t('Succès'), t('Demande de prise en charge soumise !'));
       closeRequestModal();
@@ -398,27 +472,31 @@ export default function IpmFileScreen() {
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
-        {/* Bouton Retour & Section Demandes */}
+        {/* Section Demandes IPM - Simplifiée */}
          {user?.is_contract_active !== false && (
-            <View style={styles.header}>
-              <View style={styles.headerTextContainer}>
-                <Text style={[styles.headerTitle, { color: colors.primary }]}>
-                  Feuille de Soins
-                </Text>
-                <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>
-                  Demandez et téléchargez vos feuilles de soins
-                </Text>
-              </View>
+            <View style={[styles.demandesSection, { backgroundColor: colors.cardBackground }]}>
+              <Text style={[styles.demandesSectionTitle, { color: colors.textPrimary }]}>
+                {t('Nouvelles demandes')}
+              </Text>
               
-              <TouchableOpacity
-                style={[styles.generateButton, { backgroundColor: colors.secondary }]}
-                onPress={() => openRequestModal('feuille_de_soins')}
-              >
-                <Ionicons name="add" size={20} color={colors.textTertiary} />
-                <Text style={[styles.generateButtonText, { color: colors.textTertiary }]}>
-                  Demandez
-                </Text>
-              </TouchableOpacity>
+              {/* Boutons de demandes simplifiés */}
+              <View style={styles.demandesButtonsContainer}>
+                <TouchableOpacity
+                  style={[styles.demandeButtonSimple, { backgroundColor: colors.primary }]}
+                  onPress={() => openRequestModal('prise_en_charge')}
+                >
+                  <Ionicons name="medkit" size={20} color="#FFFFFF" />
+                  <Text style={styles.demandeButtonSimpleText}>{t('Prise en charge')}</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={[styles.demandeButtonSimple, { backgroundColor: colors.secondary }]}
+                  onPress={() => openRequestModal('feuille_de_soins')}
+                >
+                  <Ionicons name="receipt" size={20} color="#FFFFFF" />
+                  <Text style={styles.demandeButtonSimpleText}>{t('Feuille de soins')}</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           )}
         {/* Section Mes Prêts et Échéanciers */}
@@ -474,33 +552,35 @@ export default function IpmFileScreen() {
           )}
         </View>
 
-        {/* Section Historique Prises en Charge */}
+        {/* Section Historique des demandes unifiée */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Ionicons name="document-text-outline" size={22} color={colors.primary} style={styles.sectionIcon} />
-            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{t('Historique Prises en Charge')}</Text>
+            <Ionicons name="time-outline" size={22} color={colors.primary} style={styles.sectionIcon} />
+            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{t('Historique des demandes')}</Text>
           </View>
 
-          {loadingPrisesEnCharge ? (
+          {(loadingPrisesEnCharge || loadingFeuillesDeSoins) ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color={colors.secondary} />
               <Text style={[styles.loadingText, { color: colors.textSecondary }]}>{t('Chargement historique...')}</Text>
             </View>
-          ) : errorPrisesEnCharge ? (
-
+          ) : (errorPrisesEnCharge && errorFeuillesDeSoins) ? (
             <View style={[styles.errorContainer, { backgroundColor: colors.error + '10' }]}>
               <Ionicons name="alert-circle-outline" size={24} color={colors.error} />
-              <Text style={[styles.errorText, { color: colors.error }]}>{errorPrisesEnCharge}</Text>
+              <Text style={[styles.errorText, { color: colors.error }]}>{t('Impossible de charger l\'historique')}</Text>
               <TouchableOpacity
                 style={[styles.retryButton, { backgroundColor: colors.primary }]}
-                onPress={loadPrisesEnChargeHistory}
+                onPress={() => {
+                  loadPrisesEnChargeHistory();
+                  loadFeuillesDeSoinsHistory();
+                }}
               >
                 <Text style={styles.retryButtonText}>{t('Réessayer')}</Text>
               </TouchableOpacity>
             </View>
-          ) : prisesEnChargeHistory.length === 0 ? (
+          ) : (prisesEnChargeHistory.length === 0 && feuillesDeSoinsHistory.length === 0) ? (
             <View style={[styles.emptyState, { backgroundColor: colors.cardBackground, position: 'relative', overflow: 'hidden' }]}>
-              <Ionicons name="document-text-outline" size={120}
+              <Ionicons name="time-outline" size={120}
                 color={colors.textSecondary + '22'}
                 style={{
                   position: 'absolute',
@@ -509,72 +589,54 @@ export default function IpmFileScreen() {
                   transform: [{ translateX: -60 }],
                   zIndex: 0,
                 }} />
-              <Ionicons name="document-text-outline" size={48} color={colors.textSecondary} style={{ zIndex: 1 }} />
+              <Ionicons name="time-outline" size={48} color={colors.textSecondary} style={{ zIndex: 1 }} />
               <Text style={[styles.emptyTitle, { color: colors.textPrimary, zIndex: 1 }]}>
-                {t('Aucune prise en charge')}
+                {t('Aucune demande')}
               </Text>
               <Text style={[styles.emptyText, { color: colors.textSecondary, zIndex: 1 }]}>
-                {t('Vos prises en charge apparaîtront ici.')}
+                {t('Vos demandes de prises en charge et feuilles de soins apparaîtront ici.')}
               </Text>
             </View>
           ) : (
-            <FlatList
-              data={prisesEnChargeHistory || []}
-              renderItem={renderPriseEnChargeItem}
-              keyExtractor={item => item.id?.toString() || Math.random().toString()}
-              scrollEnabled={false}
-              contentContainerStyle={styles.listContainer}
-            />
-          )}
-        </View>
+            <View>
+              {/* Sous-section Prises en Charge */}
+              {prisesEnChargeHistory.length > 0 && (
+                <View style={styles.subSection}>
+                  <View style={styles.subSectionHeader}>
+                    <Ionicons name="medkit-outline" size={18} color={colors.secondary} />
+                    <Text style={[styles.subSectionTitle, { color: colors.textPrimary }]}>
+                      {t('Prises en charge')} ({prisesEnChargeHistory.length})
+                    </Text>
+                  </View>
+                  <FlatList
+                    data={prisesEnChargeHistory || []}
+                    renderItem={renderPriseEnChargeItem}
+                    keyExtractor={item => item.id?.toString() || Math.random().toString()}
+                    scrollEnabled={false}
+                    contentContainerStyle={styles.subListContainer}
+                  />
+                </View>
+              )}
 
-        {/* Section Historique Feuilles de Soins */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Ionicons name="receipt-outline" size={22} color={colors.primary} style={styles.sectionIcon} />
-            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{t('Historique Feuilles de Soins')}</Text>
-          </View>
-
-          {loadingFeuillesDeSoins ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color={colors.secondary} />
-              <Text style={[styles.loadingText, { color: colors.textSecondary }]}>{t('Chargement historique...')}</Text>
+              {/* Sous-section Feuilles de Soins */}
+              {feuillesDeSoinsHistory.length > 0 && (
+                <View style={styles.subSection}>
+                  <View style={styles.subSectionHeader}>
+                    <Ionicons name="receipt-outline" size={18} color={colors.secondary} />
+                    <Text style={[styles.subSectionTitle, { color: colors.textPrimary }]}>
+                      {t('Feuilles de soins')} ({feuillesDeSoinsHistory.length})
+                    </Text>
+                  </View>
+                  <FlatList
+                    data={feuillesDeSoinsHistory || []}
+                    renderItem={renderFeuilleDeSoinsItem}
+                    keyExtractor={item => item.id?.toString() || Math.random().toString()}
+                    scrollEnabled={false}
+                    contentContainerStyle={styles.subListContainer}
+                  />
+                </View>
+              )}
             </View>
-          ) : errorFeuillesDeSoins ? (
-            <View style={[styles.errorContainer, { backgroundColor: colors.error + '10' }]}>
-              <Ionicons name="alert-circle-outline" size={24} color={colors.error} />
-              <Text style={[styles.errorText, { color: colors.error }]}>{errorFeuillesDeSoins}</Text>
-              <TouchableOpacity style={[styles.retryButton, { backgroundColor: colors.primary }]} onPress={loadFeuillesDeSoinsHistory}>
-                <Text style={styles.retryButtonText}>{t('Réessayer')}</Text>
-              </TouchableOpacity>
-            </View>
-          ) : feuillesDeSoinsHistory.length === 0 ? (
-            <View style={[styles.emptyState, { backgroundColor: colors.cardBackground, position: 'relative', overflow: 'hidden' }]}>
-              <Ionicons name="receipt-outline" size={120}
-                color={colors.textSecondary + '22'}
-                style={{
-                  position: 'absolute',
-                  top: '20%',
-                  left: '50%',
-                  transform: [{ translateX: -60 }],
-                  zIndex: 0,
-                }} />
-              <Ionicons name="receipt-outline" size={48} color={colors.textSecondary} style={{ zIndex: 1 }} />
-              <Text style={[styles.emptyTitle, { color: colors.textPrimary, zIndex: 1 }]}>
-                {t('Aucune feuille de soins')}
-              </Text>
-              <Text style={[styles.emptyText, { color: colors.textSecondary, zIndex: 1 }]}>
-                {t('Vos feuilles de soins apparaîtront ici.')}
-              </Text>
-            </View>
-          ) : (
-            <FlatList
-              data={feuillesDeSoinsHistory || []}
-              renderItem={renderFeuilleDeSoinsItem}
-              keyExtractor={item => item.id?.toString() || Math.random().toString()}
-              scrollEnabled={false}
-              contentContainerStyle={styles.listContainer}
-            />
           )}
         </View>
       </ScrollView>
@@ -589,19 +651,41 @@ export default function IpmFileScreen() {
             maxHeight: '90%',
             paddingBottom: 20
           }}>
-            {/* Header - Style identique à la modale de stockage */}
+            {/* Header amélioré avec icône */}
             <View style={{
               flexDirection: 'row',
               justifyContent: 'space-between',
               alignItems: 'center',
               padding: 20,
-              paddingBottom: 10,
+              paddingBottom: 15,
               borderBottomWidth: 1,
               borderBottomColor: '#F3F4F6'
             }}>
-              <Text style={{ fontSize: 20, fontWeight: '700', color: '#091e60' }}>
-                {requestType === 'prise_en_charge' ? t('Demande de Prise en Charge') : t('Demande de Feuille de Soins')}
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                <View style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
+                  backgroundColor: requestType === 'prise_en_charge' ? colors.primary + '20' : colors.secondary + '20',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginRight: 12
+                }}>
+                  <Ionicons 
+                    name={requestType === 'prise_en_charge' ? 'medkit' : 'receipt'} 
+                    size={20} 
+                    color={requestType === 'prise_en_charge' ? colors.primary : colors.secondary} 
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 18, fontWeight: '700', color: '#091e60', marginBottom: 2 }}>
+                    {requestType === 'prise_en_charge' ? t('Prise en Charge') : t('Feuille de Soins')}
+                  </Text>
+                  <Text style={{ fontSize: 12, color: colors.textSecondary }}>
+                    {requestType === 'prise_en_charge' ? t('Nouvelle demande médicale') : t('Génération de document')}
+                  </Text>
+                </View>
+              </View>
               <TouchableOpacity onPress={closeRequestModal} style={{ padding: 8 }}>
                 <Ionicons name="close" size={24} color={colors.textSecondary} />
               </TouchableOpacity>
@@ -691,6 +775,45 @@ export default function IpmFileScreen() {
                     value={pecDate}
                     onChangeText={setPecDate}
                   />
+
+                  <Text style={{ color: colors.textSecondary, marginBottom: 8 }}>
+                    {t('Structure médicale')} *
+                  </Text>
+                  {loadingStructures ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 20 }}>
+                      <ActivityIndicator size="small" color={colors.secondary} />
+                      <Text style={{ color: colors.textSecondary, marginLeft: 10 }}>
+                        {t('Chargement des structures...')}
+                      </Text>
+                    </View>
+                  ) : errorStructures ? (
+                    <Text style={{ color: colors.error, fontSize: 14, marginBottom: 16 }}>
+                      {errorStructures}
+                    </Text>
+                  ) : (
+                    <View style={{ 
+                      borderWidth: 1, 
+                      borderColor: '#E5E7EB', 
+                      borderRadius: 8, 
+                      marginBottom: 16,
+                      backgroundColor: '#F9FAFB' 
+                    }}>
+                      <Picker
+                        selectedValue={pecStructureId}
+                        onValueChange={(itemValue: number | undefined) => setPecStructureId(itemValue)}
+                        style={{ height: 50, paddingHorizontal: 12, color: '#091e60' }}
+                      >
+                        <Picker.Item label={t("Sélectionner une structure")} value={undefined} />
+                        {Array.isArray(affiliatedStructures) && affiliatedStructures.map(structure => (
+                          <Picker.Item 
+                            key={structure.id} 
+                            label={structure.nom || structure.name || `Structure ${structure.id}`} 
+                            value={structure.id} 
+                          />
+                        ))}
+                      </Picker>
+                    </View>
+                  )}
                 </>
               ) : (
                 <>
@@ -794,40 +917,6 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 20,
     fontWeight: '700',
-  },
-    header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    paddingHorizontal: 16,
-    paddingVertical: 20,
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  headerSubtitle: {
-    fontSize: 14,
-  },
-  headerTextContainer: {
-    flex: 1,
-    minWidth: 200,
-  },
-  generateButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    flexShrink: 0,
-  },
-  generateButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginLeft: 6,
   },
   errorContainer: {
     alignItems: 'center',
@@ -1062,5 +1151,68 @@ const styles = StyleSheet.create({
 
   loadingText: {
     fontSize: 14,
+  },
+
+  // Styles pour les sous-sections
+  subSection: {
+    marginBottom: 20,
+  },
+  subSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    paddingHorizontal: 4,
+  },
+  subSectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  subListContainer: {
+    paddingLeft: 8,
+  },
+
+  // Styles pour la section demandes IPM - Simplifiés
+  demandesSection: {
+    marginBottom: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  demandesSectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  demandesButtonsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  demandeButtonSimple: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  demandeButtonSimpleText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 6,
   },
 });
