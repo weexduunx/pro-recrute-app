@@ -102,6 +102,95 @@ export const getMonthlyPerformance = async (year = null) => {
   }
 };
 
+// ============================================================================
+// NOUVELLES FONCTIONS POUR LES LISTES DÉTAILLÉES
+// ============================================================================
+
+// Obtenir la liste des consultations avec détails
+export const getConsultationsList = async (year = null, month = null) => {
+  try {
+    const params = {};
+    if (year) params.year = year;
+    if (month) params.month = month;
+    
+    const response = await api.get('/interim/analytics/consultations-list', {
+      params
+    });
+    return response.data;
+  } catch (error) {
+    console.error("Échec de l'appel API getConsultationsList:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+// Obtenir la liste des examens avec détails
+export const getExamensList = async (year = null, month = null) => {
+  try {
+    const params = {};
+    if (year) params.year = year;
+    if (month) params.month = month;
+    
+    const response = await api.get('/interim/analytics/examens-list', {
+      params
+    });
+    return response.data;
+  } catch (error) {
+    console.error("Échec de l'appel API getExamensList:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+// Obtenir la liste des soins avec détails
+export const getSoinsList = async (year = null, month = null) => {
+  try {
+    const params = {};
+    if (year) params.year = year;
+    if (month) params.month = month;
+    
+    const response = await api.get('/interim/analytics/soins-list', {
+      params
+    });
+    return response.data;
+  } catch (error) {
+    console.error("Échec de l'appel API getSoinsList:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+// Obtenir la liste des médicaments avec détails
+export const getMedicamentsList = async (year = null, month = null) => {
+  try {
+    const params = {};
+    if (year) params.year = year;
+    if (month) params.month = month;
+    
+    const response = await api.get('/interim/analytics/medicaments-list', {
+      params
+    });
+    return response.data;
+  } catch (error) {
+    console.error("Échec de l'appel API getMedicamentsList:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+// Obtenir la liste des prothèses avec détails
+export const getProthesesList = async (year = null, month = null) => {
+  try {
+    const params = {};
+    if (year) params.year = year;
+    if (month) params.month = month;
+    
+    const response = await api.get('/interim/analytics/protheses-list', {
+      params
+    });
+    return response.data;
+  } catch (error) {
+    console.error("Échec de l'appel API getProthesesList:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
 // Générer et télécharger un rapport PDF
 export const generateAnalyticsReport = async (reportType, params = {}) => {
   try {
