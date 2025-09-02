@@ -576,9 +576,18 @@ export const getInterimProfile = async () => {
 
 export const getIPMCardData = async () => {
   try {
+    console.log('=== API CALL: getIPMCardData START ===');
     const response = await api.get('/interim/ipm-card-data'); // Laravel: GET /api/interim/ipm-card-data
+    console.log('=== API CALL: getIPMCardData SUCCESS ===');
+    console.log('Response status:', response.status);
+    console.log('Response data keys:', response.data ? Object.keys(response.data) : 'no data');
     return response.data;
   } catch (error) {
+    console.error('=== API CALL: getIPMCardData ERROR ===');
+    console.error('Error status:', error.response?.status);
+    console.error('Error data:', error.response?.data);
+    console.error('Error message:', error.message);
+    
     if (error.response?.status === 404) {
       console.log("Données IPM non trouvées (404).");
       return null;
@@ -1485,6 +1494,43 @@ export const checkBirthday = async () => {
   } catch (error) {
     console.error('Erreur lors de la vérification d\'anniversaire:', error);
     return { success: false, is_birthday: false };
+  }
+};
+
+// ============= MISSION PREFERENCES =============
+
+// Récupérer les préférences de mission de l'utilisateur
+export const getMissionPreferences = async () => {
+  try {
+    console.log('=== API CALL: getMissionPreferences START ===');
+    const response = await api.get('/user/mission-preferences');
+    console.log('=== API CALL: getMissionPreferences SUCCESS ===');
+    console.log('Response data:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('=== API CALL: getMissionPreferences ERROR ===');
+    console.error('Error status:', error.response?.status);
+    console.error('Error data:', error.response?.data);
+    console.error("Échec de l'appel API getMissionPreferences:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+// Mettre à jour les préférences de mission de l'utilisateur
+export const updateMissionPreferences = async (preferences) => {
+  try {
+    console.log('=== API CALL: updateMissionPreferences START ===');
+    console.log('Preferences data:', preferences);
+    const response = await api.post('/user/mission-preferences', preferences);
+    console.log('=== API CALL: updateMissionPreferences SUCCESS ===');
+    console.log('Response data:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('=== API CALL: updateMissionPreferences ERROR ===');
+    console.error('Error status:', error.response?.status);
+    console.error('Error data:', error.response?.data);
+    console.error("Échec de l'appel API updateMissionPreferences:", error.response?.data || error.message);
+    throw error;
   }
 };
 

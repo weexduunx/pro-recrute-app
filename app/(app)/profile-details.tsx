@@ -35,7 +35,10 @@ import {
   createOrUpdateCandidatProfile,
   getInterimProfile,
   createOrUpdateInterimProfile,
+  getMissionPreferences,
+  updateMissionPreferences,
 } from '../../utils/api';
+import { getJobPreferences, updateJobPreferences } from '../../utils/ai-api';
 import { router } from 'expo-router';
 import { useTheme } from '../../components/ThemeContext';
 import { useLanguage } from '../../components/LanguageContext';
@@ -248,6 +251,8 @@ export default function ProfileDetailsScreen() {
     workEnvironment: [], // Environnements de travail préférés
   });
   const [editingMissionPrefs, setEditingMissionPrefs] = useState(false);
+  const [loadingMissionPrefs, setLoadingMissionPrefs] = useState(false);
+  const [savingMissionPrefs, setSavingMissionPrefs] = useState(false);
 
   // Options pour le Picker du type de contrat
   const contractTypeOptions = [
@@ -535,6 +540,104 @@ export default function ProfileDetailsScreen() {
     }
   }, [user]); // Retiré checkCompletionStatus des dépendances
 
+  // Fonctions pour les préférences de mission
+  const loadMissionPreferences = useCallback(async () => {
+    if (!user) return;
+    
+    try {
+      setLoadingMissionPrefs(true);
+      console.log('=== LOADING MISSION PREFERENCES ===');
+      const response = await getMissionPreferences();
+      
+      console.log('API Response:', response);
+      if (response.success && response.data) {
+        console.log('Setting mission preferences with data:', response.data);
+        console.log('Mission duration from API:', response.data.missionDuration);
+        
+        // Mise à jour défensive pour s'assurer que tous les champs sont définis
+        const updatedPrefs = {
+          sectors: response.data.sectors || [],
+          contractTypes: response.data.contractTypes || [],
+          missionDuration: response.data.missionDuration || '',
+          salaryExpectation: response.data.salaryExpectation || '',
+          workEnvironment: response.data.workEnvironment || [],
+        };
+        
+        console.log('Final preferences being set:', updatedPrefs);
+        setMissionPreferences(updatedPrefs);
+        console.log('Mission preferences loaded:', response.data);
+      } else {
+        console.log('Response does not have success/data:', { success: response.success, hasData: !!response.data });
+        console.log('Full response for debugging:', JSON.stringify(response, null, 2));
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement des préférences de mission:', error);
+    } finally {
+      setLoadingMissionPrefs(false);
+    }
+  }, [user]);
+
+  const saveMissionPreferences = useCallback(async () => {
+    if (!user) return;
+    
+    try {
+      setSavingMissionPrefs(true);
+      console.log('=== SAVING MISSION PREFERENCES ===');
+      console.log('Data to save:', missionPreferences);
+      console.log('Mission duration being saved:', missionPreferences.missionDuration);
+      console.log('Mission duration type:', typeof missionPreferences.missionDuration);
+      console.log('Mission duration length:', missionPreferences.missionDuration.length);
+      
+      const response = await updateMissionPreferences(missionPreferences);
+      console.log('Save response:', response);
+      
+      if (response.success) {
+        // Synchroniser avec le système AI
+        try {
+          const aiPrefs = {
+            preferredSectors: missionPreferences.sectors,
+            preferredLocations: [],
+            salaryExpectation: {
+              min: missionPreferences.salaryExpectation ? parseInt(missionPreferences.salaryExpectation) : 300000,
+              max: missionPreferences.salaryExpectation ? Math.round(parseInt(missionPreferences.salaryExpectation) * 1.5) : 1000000,
+              currency: 'XOF'
+            },
+            contractTypes: missionPreferences.contractTypes,
+            experienceLevel: 'intermediate',
+            remoteWork: false,
+            travelWillingness: 50,
+            notificationFrequency: 'weekly',
+            minimumMatchScore: 60,
+            careerGoals: [],
+            skillsToImprove: [],
+            workSchedule: 'no_preference',
+            companySize: 'no_preference',
+            missionDuration: missionPreferences.missionDuration, // ✅ AJOUT DU CHAMP MANQUANT
+            workEnvironment: missionPreferences.workEnvironment,
+          };
+          
+          await updateJobPreferences(aiPrefs);
+          console.log('Preferences synchronized to AI system');
+        } catch (aiError) {
+          console.log('Could not sync to AI system (not critical):', aiError);
+          // Ce n'est pas critique, on continue
+        }
+        
+        Alert.alert('Succès', 'Vos préférences de mission ont été sauvegardées avec succès');
+        setEditingMissionPrefs(false);
+        // Recharger les préférences pour être sûr
+        await loadMissionPreferences();
+      } else {
+        Alert.alert('Erreur', 'Impossible de sauvegarder vos préférences');
+      }
+    } catch (error) {
+      console.error('Erreur lors de la sauvegarde des préférences de mission:', error);
+      Alert.alert('Erreur', 'Une erreur est survenue lors de la sauvegarde');
+    } finally {
+      setSavingMissionPrefs(false);
+    }
+  }, [user, missionPreferences, loadMissionPreferences]);
+
   // Callback de chargement intérimaire optimisé
   const loadInterimProfile = useCallback(async () => {
     if (user && user.role === 'interimaire') {
@@ -624,15 +727,20 @@ export default function ProfileDetailsScreen() {
     }
 
     const loadProfiles = async () => {
+      console.log('=== STARTING LOAD PROFILES ===');
+      console.log('User:', user?.id, user?.email);
       setInitialLoadComplete(false);
       setEditableName(user?.name || '');
 
       // Charger en parallèle pour optimiser
+      console.log('=== CALLING LOAD FUNCTIONS ===');
       await Promise.all([
         loadCandidatProfile(),
         loadInterimProfile(),
+        loadMissionPreferences(),
         // loadParsedCv() si nécessaire
       ]);
+      console.log('=== LOAD FUNCTIONS COMPLETED ===');
 
       // Marquer le chargement initial comme terminé avec un délai pour stabiliser les états
       setTimeout(() => {
@@ -653,6 +761,13 @@ export default function ProfileDetailsScreen() {
     }
   }, [initialLoadComplete, candidatProfile, checkCompletionStatus]);
 
+  // Debug des changements de missionPreferences
+  useEffect(() => {
+    console.log('=== MISSION PREFERENCES STATE CHANGED ===');
+    console.log('Current missionPreferences:', missionPreferences);
+    console.log('Mission duration value:', missionPreferences.missionDuration);
+    console.log('Mission duration type:', typeof missionPreferences.missionDuration);
+  }, [missionPreferences]);
 
   // Gestionnaire d'événements pour la sauvegarde des informations personnelles
   const handlePersonalInfoSave = async () => {
@@ -1747,6 +1862,14 @@ export default function ProfileDetailsScreen() {
 
   const renderMissionPreferences = () => (
     <View style={[styles.section, { backgroundColor: colors.cardBackground }]}>
+      {loadingMissionPrefs && (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="small" color={colors.primary} />
+          <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
+            {t('Chargement des préférences...')}
+          </Text>
+        </View>
+      )}
       <View style={styles.sectionHeader}>
         <View style={styles.headerLeft}>
           <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
@@ -1754,19 +1877,44 @@ export default function ProfileDetailsScreen() {
           </Text>
         </View>
         <View style={styles.headerActions}>
+          {editingMissionPrefs && (
+            <TouchableOpacity
+              style={[
+                styles.actionButton,
+                { backgroundColor: colors.border, marginRight: 8 }
+              ]}
+              onPress={() => {
+                setEditingMissionPrefs(false);
+                // Recharger les préférences pour annuler les changements
+                loadMissionPreferences();
+              }}
+              disabled={savingMissionPrefs}
+            >
+              <Ionicons
+                name="close"
+                size={18}
+                color={colors.textSecondary}
+              />
+            </TouchableOpacity>
+          )}
           <TouchableOpacity
             style={[
               styles.actionButton,
               editingMissionPrefs && styles.actionButtonActive,
               { backgroundColor: editingMissionPrefs ? colors.secondary : colors.settingIconBg }
             ]}
-            onPress={() => setEditingMissionPrefs(!editingMissionPrefs)}
+            onPress={editingMissionPrefs ? saveMissionPreferences : () => setEditingMissionPrefs(true)}
+            disabled={savingMissionPrefs}
           >
-            <Ionicons
-              name={editingMissionPrefs ? "checkmark" : "pencil"}
-              size={18}
-              color={editingMissionPrefs ? "#ffffff" : colors.secondary}
-            />
+            {savingMissionPrefs ? (
+              <ActivityIndicator size="small" color="#ffffff" />
+            ) : (
+              <Ionicons
+                name={editingMissionPrefs ? "checkmark" : "pencil"}
+                size={18}
+                color={editingMissionPrefs ? "#ffffff" : colors.secondary}
+              />
+            )}
           </TouchableOpacity>
         </View>
       </View>
@@ -1875,13 +2023,13 @@ export default function ProfileDetailsScreen() {
           {/* Prétentions salariales */}
           <View style={styles.inputGroup}>
             <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
-              {t('Prétentions salariales (€/jour)')}
+              {t('Prétentions salariales (FCFA/mois)')}
             </Text>
             <TextInput
               style={[styles.input, { borderColor: colors.border, backgroundColor: colors.background, color: colors.textPrimary }]}
               value={missionPreferences.salaryExpectation}
               onChangeText={(text) => setMissionPreferences(prev => ({ ...prev, salaryExpectation: text }))}
-              placeholder={t('Ex: 350')}
+              placeholder={t('Ex: 350000')}
               placeholderTextColor={colors.textSecondary}
               keyboardType="numeric"
             />
@@ -1925,7 +2073,7 @@ export default function ProfileDetailsScreen() {
               </Text>
               <Text style={[styles.valueText, { color: colors.textPrimary }]}>
                 {missionPreferences.salaryExpectation 
-                  ? `${missionPreferences.salaryExpectation}€/jour` 
+                  ? `${parseInt(missionPreferences.salaryExpectation).toLocaleString()} FCFA/mois` 
                   : t('Non renseigné')}
               </Text>
             </View>
@@ -4207,18 +4355,30 @@ const additionalStyles = StyleSheet.create({
     marginTop: 8,
   },
   chip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    borderWidth: 1,
-    margin: 2,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    margin: 3,
+    minHeight: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
   chipSelected: {
-    // Styles appliqués dynamiquement via backgroundColor et borderColor
+    transform: [{ scale: 1.05 }],
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    elevation: 3,
   },
   chipText: {
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: '600',
+    textAlign: 'center',
   },
   
   // Styles pour l'affichage des informations

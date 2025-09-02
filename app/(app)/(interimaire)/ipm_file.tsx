@@ -137,6 +137,10 @@ export default function IpmFileScreen() {
   const [fdsFamilleId, setFdsFamilleId] = useState<number | undefined>(undefined);
   const [submittingFds, setSubmittingFds] = useState(false);
 
+  // États pour les téléchargements
+  const [downloadingPec, setDownloadingPec] = useState<string | null>(null);
+  const [downloadingFds, setDownloadingFds] = useState<string | null>(null);
+
 
 
   // --- Callbacks de chargement ---
@@ -330,12 +334,26 @@ export default function IpmFileScreen() {
 
   const handleDownloadPdf = async (encryptedId: string, type: 'prise_en_charge' | 'feuille_de_soins') => {
     try {
+      // Définir l'état de téléchargement selon le type
+      if (type === 'prise_en_charge') {
+        setDownloadingPec(encryptedId);
+      } else {
+        setDownloadingFds(encryptedId);
+      }
+
       // Le PDF est généré par le backend, la fonction getPdf va le télécharger et l'ouvrir
-      await getPdf(encryptedId, type); // getPdf doit être adapté pour prendre le type et l'ID encrypté
+      await getPdf(encryptedId, type);
       Alert.alert(t("Succès"), t("Document téléchargé avec succès !"));
     } catch (err: any) {
       console.error(`Erreur lors du téléchargement du PDF de ${type}:`, err);
       Alert.alert(t("Erreur"), err.response?.data?.message || t("Impossible de télécharger le document."));
+    } finally {
+      // Réinitialiser l'état de téléchargement
+      if (type === 'prise_en_charge') {
+        setDownloadingPec(null);
+      } else {
+        setDownloadingFds(null);
+      }
     }
   };
 
@@ -367,102 +385,192 @@ export default function IpmFileScreen() {
   };
 
   const renderLoanItem = ({ item }: { item: Loan }) => (
-    <View style={[styles.cardItem, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
-      <Ionicons name="wallet-outline" size={24} color={colors.secondary} style={styles.itemIcon} />
-      <View style={styles.itemContent}>
-        <Text style={[styles.itemTitle, { color: colors.error }]}>{t('Retenu')} : {item.montant_retenu ?? t('Non spécifié')} FCFA</Text>
-        <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>
-          {t("Mois du prêt:")} {item.mois_pret ? getMonthName(item.mois_pret) : t("N/A")}
-        </Text>
-        <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>
-          {t("Durée échéance:")} {item.duree_echelonnement ?
-            `${Math.floor(item.duree_echelonnement / 30)} ${Math.floor(item.duree_echelonnement / 30) > 1 ? 'mois' : 'mois'}`
-            : t("N/A")}
-        </Text>
-        <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>
-          {t("Début échéance:")} {item.date_debut ? new Date(item.date_debut).toLocaleDateString() : t("N/A")}
-        </Text>
-        <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>
-          {t("Fin échéance:")} {item.date_fin ? new Date(item.date_fin).toLocaleDateString() : t("N/A")}
-        </Text>
-        {item.valider_par_name && (
-          <Text style={[styles.itemSubtitle, { color: colors.success }]}>
-            {t("Validé par:")} {item.valider_par_name}
+    <View style={[styles.modernCardItem, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
+      <View style={styles.modernCardHeader}>
+        <View style={[styles.modernItemIcon, { backgroundColor: '#FFF7ED' }]}>
+          <Ionicons name="wallet" size={20} color="#EA580C" />
+        </View>
+        <View style={styles.modernCardTitleContainer}>
+          <Text style={[styles.modernCardTitle, { color: colors.textPrimary }]}>
+            {t('Échéancier')} - {item.mois_pret ? getMonthName(item.mois_pret) : t("N/A")}
           </Text>
+          <View style={[styles.modernStatusBadge, { 
+            backgroundColor: item.statut === 1 ? '#DCFCE7' : '#FEF3C7',
+            borderColor: item.statut === 1 ? '#16A34A' : '#D97706'
+          }]}>
+            <Text style={[styles.modernStatusText, { 
+              color: item.statut === 1 ? '#16A34A' : '#D97706'
+            }]}>
+              {item.statut === 1 ? t("Validé") : t("En attente")}
+            </Text>
+          </View>
+        </View>
+      </View>
+      
+      <View style={styles.modernCardContent}>
+        <View style={styles.modernAmountContainer}>
+          <Text style={[styles.modernAmountLabel, { color: colors.textSecondary }]}>{t('Montant retenu')}</Text>
+          <Text style={[styles.modernAmountValue, { color: colors.error }]}>
+            {item.montant_retenu ?? t('Non spécifié')} FCFA
+          </Text>
+        </View>
+        
+        <View style={styles.modernDetailsGrid}>
+          <View style={styles.modernDetailItem}>
+            <Ionicons name="calendar-outline" size={16} color={colors.textSecondary} />
+            <Text style={[styles.modernDetailText, { color: colors.textSecondary }]}>
+              {item.date_debut ? new Date(item.date_debut).toLocaleDateString() : t("N/A")}
+            </Text>
+          </View>
+          <View style={styles.modernDetailItem}>
+            <Ionicons name="time-outline" size={16} color={colors.textSecondary} />
+            <Text style={[styles.modernDetailText, { color: colors.textSecondary }]}>
+              {item.duree_echelonnement ? 
+                `${Math.floor(item.duree_echelonnement / 30)} mois` : t("N/A")}
+            </Text>
+          </View>
+        </View>
+        
+        {item.valider_par_name && (
+          <View style={styles.modernValidatorContainer}>
+            <Ionicons name="checkmark-circle" size={16} color={colors.success} />
+            <Text style={[styles.modernValidatorText, { color: colors.success }]}>
+              {t("Validé par:")} {item.valider_par_name}
+            </Text>
+          </View>
         )}
-        <Text style={[styles.itemSubtitle, { color: item.statut === 1 ? colors.success : colors.warning }]}>
-          {t("Statut:")} {item.statut === 1 ? t("Validé") : t("En attente")}
-        </Text>
+        
         {item.details && item.details.length > 0 && (
-          <View style={[styles.detailsList, { borderTopColor: colors.border }]}>
-            <Text style={[styles.detailsListTitle, { color: colors.textPrimary }]}>{t('Détails des mensualités :')}</Text>
-            {item.details.map(detail => (
-              <Text key={detail.id} style={[styles.detailsListItem, { color: colors.textSecondary }]}>
-                - {detail.mois}: {detail.montant} FCFA
-              </Text>
-            ))}
+          <View style={[styles.modernDetailsList, { borderTopColor: colors.border }]}>
+            <Text style={[styles.modernDetailsTitle, { color: colors.textPrimary }]}>
+              {t('Mensualités')} ({item.details.length})
+            </Text>
+            <View style={styles.modernMensualitesContainer}>
+              {item.details.slice(0, 3).map(detail => (
+                <View key={detail.id} style={[styles.modernMensualiteItem, { backgroundColor: colors.background }]}>
+                  <Text style={[styles.modernMensualiteMois, { color: colors.textSecondary }]}>
+                    {detail.mois}
+                  </Text>
+                  <Text style={[styles.modernMensualiteMontant, { color: colors.textPrimary }]}>
+                    {detail.montant} FCFA
+                  </Text>
+                </View>
+              ))}
+              {item.details.length > 3 && (
+                <Text style={[styles.modernMoreText, { color: colors.textSecondary }]}>
+                  +{item.details.length - 3} autres
+                </Text>
+              )}
+            </View>
           </View>
         )}
       </View>
-      <Ionicons name="chevron-forward-outline" size={20} color={colors.textSecondary} />
     </View>
   );
 
   const renderPriseEnChargeItem = ({ item }: { item: PriseEnChargeRequest }) => (
-    <View style={[styles.cardItem, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
-      <Ionicons name="medkit-outline" size={24} color={colors.secondary} style={styles.itemIcon} />
-      <View style={styles.itemContent}>
-        <Text style={[styles.itemTitle, { color: colors.textPrimary }]}>{item.objet}</Text>
-        <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>
-          {t("Date:")} {new Date(item.date).toLocaleDateString()}
-        </Text>
-        {item.famille ? (
-          <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>
-            {t("Bénéficiaire:")} {item.famille.prenom} {item.famille.nom} ({getLienLabel(item.famille.lien)})
-          </Text>
-        ) : (
-          <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>{t("Bénéficiaire:")} {t("Vous-même")}</Text>
+    <View style={[styles.modernCardItem, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
+      <View style={styles.modernCardHeader}>
+        <View style={[styles.modernItemIcon, { backgroundColor: colors.primary + '15' }]}>
+          <Ionicons name="medkit" size={20} color={colors.primary} />
+        </View>
+        <View style={styles.modernCardTitleContainer}>
+          <Text style={[styles.modernCardTitle, { color: colors.textPrimary }]}>{item.objet}</Text>
+          <View style={[styles.modernStatusBadge, { 
+            backgroundColor: item.statut === 1 ? '#DCFCE7' : item.statut === 2 ? '#FEE2E2' : '#FEF3C7',
+            borderColor: item.statut === 1 ? '#16A34A' : item.statut === 2 ? '#DC2626' : '#D97706'
+          }]}>
+            <Text style={[styles.modernStatusText, { 
+              color: item.statut === 1 ? '#16A34A' : item.statut === 2 ? '#DC2626' : '#D97706'
+            }]}>
+              {item.statut_label}
+            </Text>
+          </View>
+        </View>
+        {item.statut === 1 && (
+          <TouchableOpacity 
+            style={[styles.modernDownloadButton, { backgroundColor: colors.primary + '10' }]}
+            onPress={() => handleDownloadPdf(item.id?.toString() || '', 'prise_en_charge')}
+            disabled={downloadingPec === item.id?.toString()}
+          >
+            {downloadingPec === item.id?.toString() ? (
+              <ActivityIndicator size="small" color={colors.primary} />
+            ) : (
+              <Ionicons name="download" size={18} color={colors.primary} />
+            )}
+          </TouchableOpacity>
         )}
-        <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>
-          {t("Statut:")} <Text style={{ color: item.statut === 1 ? colors.success : item.statut === 2 ? colors.error : colors.warning }}>{item.statut_label}</Text>
-        </Text>
       </View>
-      {item.statut === 1 && ( // Bouton de téléchargement si accordée
-        <TouchableOpacity onPress={() => handleDownloadPdf(item.id?.toString() || '', 'prise_en_charge')}>
-          <Ionicons name="download-outline" size={24} color={colors.secondary} />
-        </TouchableOpacity>
-      )}
+      
+      <View style={styles.modernCardContent}>
+        <View style={styles.modernDetailsGrid}>
+          <View style={styles.modernDetailItem}>
+            <Ionicons name="calendar-outline" size={16} color={colors.textSecondary} />
+            <Text style={[styles.modernDetailText, { color: colors.textSecondary }]}>
+              {new Date(item.date).toLocaleDateString()}
+            </Text>
+          </View>
+          <View style={styles.modernDetailItem}>
+            <Ionicons name="person-outline" size={16} color={colors.textSecondary} />
+            <Text style={[styles.modernDetailText, { color: colors.textSecondary }]}>
+              {item.famille ? `${item.famille.prenom} ${item.famille.nom}` : t("Vous-même")}
+            </Text>
+          </View>
+        </View>
+      </View>
     </View>
   );
 
   const renderFeuilleDeSoinsItem = ({ item }: { item: FeuilleDeSoinsRequest }) => (
-    <View style={[styles.cardItem, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
-      <Ionicons name="receipt-outline" size={24} color={colors.secondary} style={styles.itemIcon} />
-      <View style={styles.itemContent}>
-        <Text style={[styles.itemTitle, { color: colors.textPrimary }]}>{item.type}</Text>
-        <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>
-          {t("Feuille générée le:")} {new Date(item.created_at).toLocaleDateString()}
-        </Text>
-        {/* <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>
-          {t("Montant:")} {item.montant_total} FCFA
-        </Text> */}
-        {item.famille ? (
-          <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>
-            {t("Bénéficiaire:")} {item.famille.prenom} {item.famille.nom} ({getLienLabel(item.famille.lien)})
-          </Text>
-        ) : (
-          <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>{t("Bénéficiaire:")} {t("Vous-même")}</Text>
+    <View style={[styles.modernCardItem, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
+      <View style={styles.modernCardHeader}>
+        <View style={[styles.modernItemIcon, { backgroundColor: colors.secondary + '15' }]}>
+          <Ionicons name="receipt" size={20} color={colors.secondary} />
+        </View>
+        <View style={styles.modernCardTitleContainer}>
+          <Text style={[styles.modernCardTitle, { color: colors.textPrimary }]}>{item.type}</Text>
+          <View style={[styles.modernStatusBadge, { 
+            backgroundColor: item.statut === 1 ? '#DCFCE7' : item.statut === 2 ? '#FEE2E2' : '#FEF3C7',
+            borderColor: item.statut === 1 ? '#16A34A' : item.statut === 2 ? '#DC2626' : '#D97706'
+          }]}>
+            <Text style={[styles.modernStatusText, { 
+              color: item.statut === 1 ? '#16A34A' : item.statut === 2 ? '#DC2626' : '#D97706'
+            }]}>
+              {item.statut_label}
+            </Text>
+          </View>
+        </View>
+        {item.statut === 1 && (
+          <TouchableOpacity 
+            style={[styles.modernDownloadButton, { backgroundColor: colors.secondary + '10' }]}
+            onPress={() => handleDownloadPdf(item.encrypted_id?.toString() || '', 'feuille_de_soins')}
+            disabled={downloadingFds === item.encrypted_id?.toString()}
+          >
+            {downloadingFds === item.encrypted_id?.toString() ? (
+              <ActivityIndicator size="small" color={colors.secondary} />
+            ) : (
+              <Ionicons name="download" size={18} color={colors.secondary} />
+            )}
+          </TouchableOpacity>
         )}
-        <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>
-          {t("Statut:")} <Text style={{ color: item.statut === 1 ? colors.success : item.statut === 2 ? colors.error : colors.warning }}>{item.statut_label}</Text>
-        </Text>
       </View>
-      {item.statut === 1 && ( // Bouton de téléchargement si validée
-        <TouchableOpacity onPress={() => handleDownloadPdf(item.encrypted_id?.toString() || '', 'feuille_de_soins')}>
-          <Ionicons name="download-outline" size={24} color={colors.secondary} />
-        </TouchableOpacity>
-
-      )}
+      
+      <View style={styles.modernCardContent}>
+        <View style={styles.modernDetailsGrid}>
+          <View style={styles.modernDetailItem}>
+            <Ionicons name="calendar-outline" size={16} color={colors.textSecondary} />
+            <Text style={[styles.modernDetailText, { color: colors.textSecondary }]}>
+              {new Date(item.created_at).toLocaleDateString()}
+            </Text>
+          </View>
+          <View style={styles.modernDetailItem}>
+            <Ionicons name="person-outline" size={16} color={colors.textSecondary} />
+            <Text style={[styles.modernDetailText, { color: colors.textSecondary }]}>
+              {item.famille ? `${item.famille.prenom} ${item.famille.nom}` : t("Vous-même")}
+            </Text>
+          </View>
+        </View>
+      </View>
     </View>
   );
 
@@ -472,38 +580,55 @@ export default function IpmFileScreen() {
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
-        {/* Section Demandes IPM - Simplifiée */}
+        {/* Section Demandes IPM - Design moderne */}
          {user?.is_contract_active !== false && (
-            <View style={[styles.demandesSection, { backgroundColor: colors.cardBackground }]}>
-              <Text style={[styles.demandesSectionTitle, { color: colors.textPrimary }]}>
-                {t('Nouvelles demandes')}
-              </Text>
+            <View style={[styles.modernDemandesSection, { backgroundColor: colors.cardBackground }]}>
+              <View style={styles.modernSectionHeader}>
+                <View style={[styles.modernSectionIcon, { backgroundColor: colors.primary + '15' }]}>
+                  <Ionicons name="add-circle" size={24} color={colors.primary} />
+                </View>
+                <View style={styles.modernSectionTitleContainer}>
+                  <Text style={[styles.modernSectionTitle, { color: colors.textPrimary }]}>
+                    {t('Nouvelles demandes')}
+                  </Text>
+                  <Text style={[styles.modernSectionSubtitle, { color: colors.textSecondary }]}>
+                    {t('Créer une demande médicale')}
+                  </Text>
+                </View>
+              </View>
               
               {/* Boutons de demandes simplifiés */}
-              <View style={styles.demandesButtonsContainer}>
+              <View style={styles.compactButtonsGrid}>
                 <TouchableOpacity
-                  style={[styles.demandeButtonSimple, { backgroundColor: colors.primary }]}
+                  style={[styles.compactActionButton, { backgroundColor: colors.primary }]}
                   onPress={() => openRequestModal('prise_en_charge')}
                 >
-                  <Ionicons name="medkit" size={20} color="#FFFFFF" />
-                  <Text style={styles.demandeButtonSimpleText}>{t('Prise en charge')}</Text>
+                  <Ionicons name="medkit" size={18} color="#FFFFFF" />
+                  <Text style={styles.compactActionText}>{t('Prise en charge')}</Text>
                 </TouchableOpacity>
                 
                 <TouchableOpacity
-                  style={[styles.demandeButtonSimple, { backgroundColor: colors.secondary }]}
+                  style={[styles.compactActionButton, { backgroundColor: colors.secondary }]}
                   onPress={() => openRequestModal('feuille_de_soins')}
                 >
-                  <Ionicons name="receipt" size={20} color="#FFFFFF" />
-                  <Text style={styles.demandeButtonSimpleText}>{t('Feuille de soins')}</Text>
+                  <Ionicons name="receipt" size={18} color="#FFFFFF" />
+                  <Text style={styles.compactActionText}>{t('Feuille de soins')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
           )}
-        {/* Section Mes Prêts et Échéanciers */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Ionicons name="cash-outline" size={22} color={colors.primary} style={styles.sectionIcon} />
-            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{t('Mes Échéanciers')}</Text>
+        {/* Section Mes Prêts et Échéanciers - Design moderne */}
+        <View style={styles.modernSection}>
+          <View style={styles.modernSectionHeader}>
+            <View style={[styles.modernSectionIcon, { backgroundColor: '#FFF7ED' }]}>
+              <Ionicons name="wallet" size={24} color="#EA580C" />
+            </View>
+            <View style={styles.modernSectionTitleContainer}>
+              <Text style={[styles.modernSectionTitle, { color: colors.textPrimary }]}>{t('Mes Échéanciers')}</Text>
+              <Text style={[styles.modernSectionSubtitle, { color: colors.textSecondary }]}>
+                {loans.length > 0 ? `${loans.length} échéancier(s) actif(s)` : t('Aucun échéancier')}
+              </Text>
+            </View>
           </View>
 
           {loadingLoans ? (
@@ -552,11 +677,20 @@ export default function IpmFileScreen() {
           )}
         </View>
 
-        {/* Section Historique des demandes unifiée */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Ionicons name="time-outline" size={22} color={colors.primary} style={styles.sectionIcon} />
-            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{t('Historique des demandes')}</Text>
+        {/* Section Historique des demandes - Design moderne */}
+        <View style={styles.modernSection}>
+          <View style={styles.modernSectionHeader}>
+            <View style={[styles.modernSectionIcon, { backgroundColor: '#F0F9FF' }]}>
+              <Ionicons name="time" size={24} color="#0284C7" />
+            </View>
+            <View style={styles.modernSectionTitleContainer}>
+              <Text style={[styles.modernSectionTitle, { color: colors.textPrimary }]}>{t('Historique des demandes')}</Text>
+              <Text style={[styles.modernSectionSubtitle, { color: colors.textSecondary }]}>
+                {(prisesEnChargeHistory.length + feuillesDeSoinsHistory.length) > 0 
+                  ? `${prisesEnChargeHistory.length + feuillesDeSoinsHistory.length} demande(s)` 
+                  : t('Aucune demande')}
+              </Text>
+            </View>
           </View>
 
           {(loadingPrisesEnCharge || loadingFeuillesDeSoins) ? (
@@ -1214,5 +1348,247 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     marginLeft: 6,
+  },
+
+  // Nouveaux styles modernes
+  modernDemandesSection: {
+    marginBottom: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  
+  modernSection: {
+    marginBottom: 20,
+  },
+
+  modernSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingHorizontal: 4,
+  },
+
+  modernSectionIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+
+  modernSectionTitleContainer: {
+    flex: 1,
+  },
+
+  modernSectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 2,
+    letterSpacing: -0.2,
+  },
+
+  modernSectionSubtitle: {
+    fontSize: 13,
+    fontWeight: '500',
+    opacity: 0.8,
+  },
+
+  compactButtonsGrid: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 8,
+  },
+
+  compactActionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.02,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+
+  compactActionText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 6,
+  },
+
+  // Styles pour les cards modernes
+  modernCardItem: {
+    padding: 14,
+    borderRadius: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.02,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+
+  modernCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+
+  modernItemIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+
+  modernCardTitleContainer: {
+    flex: 1,
+    marginRight: 8,
+  },
+
+  modernCardTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 6,
+    letterSpacing: -0.1,
+    lineHeight: 20,
+  },
+
+  modernStatusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignSelf: 'flex-start',
+  },
+
+  modernStatusText: {
+    fontSize: 11,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+  },
+
+  modernDownloadButton: {
+    width: 30,
+    height: 30,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 6,
+  },
+
+  modernCardContent: {
+    paddingTop: 8,
+  },
+
+  modernAmountContainer: {
+    marginBottom: 12,
+  },
+
+  modernAmountLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+    marginBottom: 3,
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+  },
+
+  modernAmountValue: {
+    fontSize: 17,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+  },
+
+  modernDetailsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+
+  modernDetailItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minWidth: '45%',
+  },
+
+  modernDetailText: {
+    fontSize: 12,
+    fontWeight: '500',
+    marginLeft: 6,
+    flex: 1,
+  },
+
+  modernValidatorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+  },
+
+  modernValidatorText: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+
+  modernDetailsList: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+  },
+
+  modernDetailsTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    marginBottom: 8,
+    letterSpacing: -0.1,
+  },
+
+  modernMensualitesContainer: {
+    gap: 6,
+  },
+
+  modernMensualiteItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 8,
+    borderRadius: 6,
+  },
+
+  modernMensualiteMois: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+
+  modernMensualiteMontant: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+
+  modernMoreText: {
+    fontSize: 11,
+    fontWeight: '500',
+    textAlign: 'center',
+    fontStyle: 'italic',
+    marginTop: 3,
   },
 });

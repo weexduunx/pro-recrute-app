@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../components/ThemeContext';
 import { useAuth } from '../../../components/AuthProvider';
 import { getJobPreferences, updateJobPreferences } from '../../../utils/ai-api';
+import { getMissionPreferences, updateMissionPreferences } from '../../../utils/api';
 import CustomHeader from '../../../components/CustomHeader';
 import { Picker } from '@react-native-picker/picker';
 
@@ -59,6 +60,59 @@ const SKILLS_TO_IMPROVE = [
 export default function AIPreferencesScreen() {
   const { colors } = useTheme();
   const { user } = useAuth();
+  
+  // Fonction pour convertir les préférences de mission vers le format AI
+  const convertMissionToAI = (missionPrefs: any) => {
+    return {
+      preferredSectors: missionPrefs.sectors || [],
+      preferredLocations: [],
+      salaryExpectation: {
+        min: missionPrefs.salaryExpectation ? parseInt(missionPrefs.salaryExpectation) : 300000,
+        max: missionPrefs.salaryExpectation ? Math.round(parseInt(missionPrefs.salaryExpectation) * 1.5) : 1000000,
+        currency: 'XOF'
+      },
+      contractTypes: missionPrefs.contractTypes || [],
+      experienceLevel: 'intermediate',
+      remoteWork: false,
+      travelWillingness: 50,
+      notificationFrequency: 'weekly' as const,
+      minimumMatchScore: 60,
+      careerGoals: [],
+      skillsToImprove: [],
+      workSchedule: 'no_preference' as const,
+      companySize: 'no_preference' as const,
+    };
+  };
+  
+  // Fonction pour synchroniser avec les préférences de mission
+  const syncWithMissionPreferences = async () => {
+    try {
+      console.log('=== SYNCING WITH MISSION PREFERENCES ===');
+      const missionResponse = await getMissionPreferences();
+      
+      if (missionResponse.success && missionResponse.data) {
+        const missionPrefs = missionResponse.data;
+        console.log('Mission preferences found:', missionPrefs);
+        
+        // Convertir et fusionner les préférences
+        const convertedPrefs = convertMissionToAI(missionPrefs);
+        
+        // Fusionner avec les préférences actuelles AI (priorité aux préférences AI pour les champs spécifiques)
+        setPreferences(prev => ({
+          ...convertedPrefs,
+          ...prev, // Les préférences AI actuelles ont la priorité
+          // Mais on garde les secteurs et types de contrat des préférences mission s'ils sont vides dans AI
+          preferredSectors: prev.preferredSectors.length > 0 ? prev.preferredSectors : convertedPrefs.preferredSectors,
+          contractTypes: prev.contractTypes.length > 0 ? prev.contractTypes : convertedPrefs.contractTypes,
+        }));
+        
+        console.log('Preferences synced successfully');
+      }
+    } catch (error) {
+      console.log('No mission preferences found or error syncing:', error);
+      // Ce n'est pas grave, on continue avec les préférences AI normales
+    }
+  };
   const [preferences, setPreferences] = useState<JobPreferences>({
     preferredSectors: [],
     preferredLocations: [],
@@ -88,12 +142,25 @@ export default function AIPreferencesScreen() {
   const fetchPreferences = async () => {
     try {
       setLoading(true);
+      
+      // Charger d'abord les préférences AI
       const response = await getJobPreferences();
       if (response.data) {
         setPreferences({ ...preferences, ...response.data });
       }
+      
+      // Puis synchroniser avec les préférences de mission
+      await syncWithMissionPreferences();
+      
     } catch (error) {
       console.error('Erreur lors du chargement des préférences:', error);
+      
+      // En cas d'erreur avec les préférences AI, essayer quand même de charger les préférences mission
+      try {
+        await syncWithMissionPreferences();
+      } catch (syncError) {
+        console.error('Erreur lors de la synchronisation:', syncError);
+      }
     } finally {
       setLoading(false);
     }
@@ -102,7 +169,27 @@ export default function AIPreferencesScreen() {
   const savePreferences = async () => {
     try {
       setSaving(true);
+      
+      // Sauvegarder dans le système AI
       await updateJobPreferences(preferences);
+      
+      // Sauvegarder aussi dans le système mission (conversion)
+      try {
+        const missionPrefs = {
+          sectors: preferences.preferredSectors,
+          contractTypes: preferences.contractTypes,
+          missionDuration: '', // Pas équivalent dans AI
+          salaryExpectation: preferences.salaryExpectation.min ? preferences.salaryExpectation.min.toString() : '',
+          workEnvironment: [], // Pas équivalent dans AI
+        };
+        
+        await updateMissionPreferences(missionPrefs);
+        console.log('Preferences synchronized to mission system');
+      } catch (missionError) {
+        console.log('Could not sync to mission system (not critical):', missionError);
+        // Ce n'est pas critique, on continue
+      }
+      
       Alert.alert('Succès', 'Vos préférences ont été sauvegardées');
       router.back();
     } catch (error) {

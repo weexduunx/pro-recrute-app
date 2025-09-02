@@ -10,9 +10,10 @@ import {
   Image,
   Modal,
   Animated,
-  Dimensions
+  Dimensions,
+  RefreshControl
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../../components/ThemeContext';
@@ -43,6 +44,8 @@ export default function CarteIPMScreen() {
   const [profile, setProfile] = useState(null);
   const [ipmData, setIpmData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadingEvents, setLoadingEvents] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [isDataVisible, setIsDataVisible] = useState(false);
   const [isCardLocked, setIsCardLocked] = useState(false);
   const [contractExpiringSoon, setContractExpiringSoon] = useState(false);
@@ -56,8 +59,11 @@ export default function CarteIPMScreen() {
 
   useEffect(() => {
     loadProfile();
-    loadIPMData();
-    loadCardEvents();
+    const loadData = async () => {
+      const ipmDataResponse = await loadIPMData();
+      await loadCardEvents(ipmDataResponse);
+    };
+    loadData();
     loadCardLockState();
     
     // Animation d'entrée
@@ -75,6 +81,44 @@ export default function CarteIPMScreen() {
     ]).start();
   }, []);
 
+  // Fonction de rechargement complète des données
+  const reloadAllData = async (showLoading = true) => {
+    try {
+      if (showLoading) setLoading(true);
+      console.log('=== RELOADING ALL DATA ===');
+      
+      // Charger les données IPM d'abord
+      const ipmDataResponse = await loadIPMData();
+      
+      // Puis charger les événements avec les données IPM fraîches
+      await loadCardEvents(ipmDataResponse);
+      
+    } catch (error) {
+      console.error('Erreur lors du rechargement des données:', error);
+    } finally {
+      if (showLoading) setLoading(false);
+    }
+  };
+
+  // Fonction pour pull-to-refresh
+  const onRefresh = useCallback(async () => {
+    console.log('=== PULL TO REFRESH ===');
+    setRefreshing(true);
+    try {
+      await reloadAllData(false); // Ne pas montrer le loader principal
+    } finally {
+      setRefreshing(false);
+    }
+  }, []);
+
+  // Recharger les données à chaque fois que l'utilisateur revient sur la page
+  useFocusEffect(
+    useCallback(() => {
+      console.log('=== CARTE IPM FOCUSED - RECHARGING DATA ===');
+      reloadAllData();
+    }, [])
+  );
+
   const loadProfile = async () => {
     try {
       const response = await getInterimProfile();
@@ -91,9 +135,47 @@ export default function CarteIPMScreen() {
 
   const loadIPMData = async () => {
     try {
+      console.log('=== LOADING IPM DATA START ===');
+      setIpmData(null); // Vider les anciennes données
+      
+      console.log('=== CALLING getIPMCardData() ===');
       const response = await getIPMCardData();
+      console.log('=== getIPMCardData() RESPONSE RECEIVED ===');
+      console.log('=== DEBUG IPM CARD DATA RESPONSE ===');
+      console.log('Response keys:', response ? Object.keys(response) : 'null response');
+      console.log('Full response:', JSON.stringify(response, null, 2));
+      
       if (response) {
         setIpmData(response);
+        console.log('=== IPM DATA SET ===', {
+          hasProfile: !!response.profile,
+          profileKeys: response.profile ? Object.keys(response.profile) : null,
+          hasContract: !!response.contract
+        });
+        
+        // Logging détaillé des relations
+        if (response.profile) {
+          const profile = response.profile;
+          console.log('=== RELATIONS DETAILED LOG ===');
+          console.log('Profile has consultations?', 'consultations' in profile, Array.isArray(profile.consultations) ? profile.consultations.length : 'not array');
+          console.log('Profile has ordonnances?', 'ordonnances' in profile, Array.isArray(profile.ordonnances) ? profile.ordonnances.length : 'not array');
+          console.log('Profile has prisesEnCharge?', 'prisesEnCharge' in profile, Array.isArray(profile.prisesEnCharge) ? profile.prisesEnCharge.length : 'not array');
+          console.log('Profile has prises_en_charge?', 'prises_en_charge' in profile, Array.isArray(profile.prises_en_charge) ? profile.prises_en_charge.length : 'not array');
+          console.log('Profile has feuillesDeSoins?', 'feuillesDeSoins' in profile, Array.isArray(profile.feuillesDeSoins) ? profile.feuillesDeSoins.length : 'not array');
+          console.log('Profile has feuilles_de_soins?', 'feuilles_de_soins' in profile, Array.isArray(profile.feuilles_de_soins) ? profile.feuilles_de_soins.length : 'not array');
+          console.log('Profile has examens?', 'examens' in profile, Array.isArray(profile.examens) ? profile.examens.length : 'not array');
+          console.log('Profile has derogations?', 'derogations' in profile, Array.isArray(profile.derogations) ? profile.derogations.length : 'not array');
+          
+          // Log all array properties
+          Object.keys(profile).forEach(key => {
+            if (Array.isArray(profile[key])) {
+              console.log(`Array found: ${key} with ${profile[key].length} items`);
+              if (profile[key].length > 0) {
+                console.log(`First item structure:`, Object.keys(profile[key][0]));
+              }
+            }
+          });
+        }
         
         // Vérifier si le contrat expire dans moins de 3 mois
         if (response.contract_end_date) {
@@ -103,18 +185,152 @@ export default function CarteIPMScreen() {
           
           setContractExpiringSoon(endDate < threeMonthsFromNow);
         }
+        
+        return response; // Retourner les données pour reloadAllData
       }
     } catch (error) {
-      console.error('Erreur lors du chargement des données IPM:', error);
+      console.error('=== ERREUR LORS DU CHARGEMENT DES DONNÉES IPM ===');
+      console.error('Error details:', error);
+      console.error('Error message:', error?.message);
+      console.error('Error stack:', error?.stack);
+      setIpmData(null);
+      return null;
     }
   };
 
-  const loadCardEvents = async () => {
+  const loadCardEvents = async (freshIpmData = null) => {
     try {
-      // Récupérer uniquement les données spécifiques à la carte IPM
+      console.log('=== LOADING CARD EVENTS START ===');
+      console.log('Current ipmData state:', !!ipmData, ipmData ? 'has data' : 'no data');
+      console.log('Fresh IPM data passed:', !!freshIpmData, freshIpmData ? 'has fresh data' : 'no fresh data');
+      
+      // Utiliser les données fraîches si disponibles, sinon l'état
+      const dataToUse = freshIpmData || ipmData;
+      // Vider les événements existants et indiquer le chargement
+      setCardEvents([]);
+      setLoadingEvents(true);
+      
+      // Set pour éviter les doublons
+      const eventIds = new Set<string>();
       const events: CardUsageEvent[] = [];
       
-      // Récupérer les données de retenues et remboursements IPM
+      const addEventIfUnique = (event: CardUsageEvent) => {
+        if (!eventIds.has(event.id)) {
+          eventIds.add(event.id);
+          events.push(event);
+        }
+      };
+      
+      // Si nous avons les données IPM chargées avec les relations
+      if (dataToUse) {
+        console.log('=== DEBUG IPM DATA WITH RELATIONS ===');
+        console.log('dataToUse structure:', Object.keys(dataToUse));
+        console.log('profile structure:', (dataToUse as any).profile ? Object.keys((dataToUse as any).profile) : 'no profile');
+        console.log('Full dataToUse:', JSON.stringify(dataToUse, null, 2));
+        
+        // Ajouter les événements depuis les consultations
+        if ((dataToUse as any)?.profile?.consultations) {
+          console.log('Processing consultations:', (dataToUse as any).profile.consultations.length);
+          (dataToUse as any).profile.consultations.forEach((consultation: any) => {
+            addEventIfUnique({
+              id: `consultation_detail_${consultation.id}`,
+              type: 'prise_en_charge',
+              description: `Consultation médicale - ${consultation.libelle || 'Consultation'}`,
+              timestamp: consultation.updated_at || consultation.created_at,
+              montant: consultation.montant ? `${consultation.montant} FCFA` : undefined,
+              statut: consultation.nature === 1 ? 'Remboursable' : consultation.nature === 0 ? 'Non remboursable' : 'Inconnue'
+            });
+          });
+        }
+
+        // Ajouter les événements depuis les ordonnances
+        if ((dataToUse as any)?.profile?.ordonnances) {
+          console.log('Processing ordonnances:', (dataToUse as any).profile.ordonnances.length);
+          (dataToUse as any).profile.ordonnances.forEach((ordonnance: any) => {
+            addEventIfUnique({
+              id: `ordonnance_detail_${ordonnance.id}`,
+              type: 'feuille_soins',
+              description: `Ordonnance médicale - ${ordonnance.numero_ordonnance || 'Ordonnance'}`,
+              timestamp: ordonnance.updated_at || ordonnance.created_at,
+              montant: ordonnance.montant_total ? `${ordonnance.montant_total} FCFA` : undefined,
+              statut: ordonnance.nature === 1 ? 'Remboursable' : ordonnance.nature === 0 ? 'Non remboursable' : 'Inconnue'
+            });
+          });
+        }
+
+        // Ajouter les événements depuis les examens
+        if ((dataToUse as any)?.profile?.examens) {
+          console.log('Processing examens:', (dataToUse as any).profile.examens.length);
+          (dataToUse as any).profile.examens.forEach((examen: any) => {
+            addEventIfUnique({
+              id: `examen_detail_${examen.id}`,
+              type: 'prise_en_charge',
+              description: `Examen médical - ${examen.type_examen || 'Examen'}`,
+              timestamp: examen.updated_at || examen.created_at,
+              montant: examen.cout ? `${examen.cout} FCFA` : undefined,
+              statut: examen.statut === 1 ? 'Validé' : examen.statut === 0 ? 'En attente' : 'Rejeté'
+            });
+          });
+        }
+
+        // Ajouter les événements depuis les dérogations
+        if ((dataToUse as any)?.profile?.derogations) {
+          console.log('Processing derogations:', (dataToUse as any).profile.derogations.length);
+          (dataToUse as any).profile.derogations.forEach((derogation: any) => {
+            addEventIfUnique({
+              id: `derogation_detail_${derogation.id}`,
+              type: 'validation',
+              description: `Dérogation - ${derogation.motif || 'Demande de dérogation'}`,
+              timestamp: derogation.updated_at || derogation.created_at,
+              statut: derogation.statut === 1 ? 'Approuvée' : derogation.statut === 0 ? 'En attente' : 'Rejetée'
+            });
+          });
+        }
+
+        // Ajouter les événements depuis les prises en charge
+        if ((dataToUse as any)?.profile?.prisesEnCharge || (dataToUse as any)?.profile?.prises_en_charge) {
+          const prisesEnCharge = (dataToUse as any).profile.prisesEnCharge || (dataToUse as any).profile.prises_en_charge;
+          console.log('Processing prises_en_charge:', prisesEnCharge.length);
+          prisesEnCharge.forEach((prise: any) => {
+            addEventIfUnique({
+              id: `prise_charge_detail_${prise.id}`,
+              type: 'prise_en_charge',
+              description: `Prise en charge - ${prise.numero_prise_en_charge || 'Prise en charge'}`,
+              timestamp: prise.updated_at || prise.created_at,
+              montant: prise.montant_prise_en_charge ? `${prise.montant_prise_en_charge} FCFA` : undefined,
+              statut: prise.statut === 1 ? 'Approuvée' : prise.statut === 0 ? 'En attente' : 'Rejetée'
+            });
+          });
+        }
+
+        // Ajouter les événements depuis les feuilles de soins
+        if ((dataToUse as any)?.profile?.feuillesDeSoins || (dataToUse as any)?.profile?.feuilles_de_soins) {
+          const feuillesDeSoins = (dataToUse as any).profile.feuillesDeSoins || (dataToUse as any).profile.feuilles_de_soins;
+          console.log('Processing feuilles_de_soins:', feuillesDeSoins.length);
+          feuillesDeSoins.forEach((feuille: any) => {
+            addEventIfUnique({
+              id: `feuille_soins_detail_${feuille.id}`,
+              type: 'feuille_soins',
+              description: `Feuille de soins - ${feuille.numero_feuille || 'Feuille de soins'}`,
+              timestamp: feuille.updated_at || feuille.created_at,
+              montant: feuille.montant_total ? `${feuille.montant_total} FCFA` : undefined,
+              statut: feuille.statut === 1 ? 'Validée' : feuille.statut === 0 ? 'En attente' : 'Rejetée'
+            });
+          });
+        }
+
+        // Debug des relations disponibles
+        const profile = (dataToUse as any).profile;
+        if (profile) {
+          const availableRelations = Object.keys(profile).filter(key => Array.isArray(profile[key]));
+          console.log('Available relations on profile:', availableRelations);
+          availableRelations.forEach(relationName => {
+            console.log(`- ${relationName}: ${profile[relationName].length} items`);
+          });
+        }
+      }
+      
+      // Récupérer aussi les données de récapitulatifs IPM
       try {
         const ipmRecapData = await getIpmRecapByMonth();
         console.log('=== DEBUG IPM RECAP DATA ===');
@@ -128,8 +344,8 @@ export default function CarteIPMScreen() {
             
             // Ajouter événement pour les consultations
             if (recap.consultations > 0) {
-              events.push({
-                id: `consultation_${recap.id}`,
+              addEventIfUnique({
+                id: `consultation_recap_${recap.id}`,
                 type: 'prise_en_charge',
                 description: `Consultations médicales - ${moisNom} ${recap.annee}`,
                 timestamp: recap.updated_at || recap.created_at,
@@ -141,8 +357,8 @@ export default function CarteIPMScreen() {
             
             // Ajouter événement pour les médicaments
             if (recap.medicaments > 0) {
-              events.push({
-                id: `medicaments_${recap.id}`,
+              addEventIfUnique({
+                id: `medicaments_recap_${recap.id}`,
                 type: 'feuille_soins',
                 description: `Médicaments - ${moisNom} ${recap.annee}`,
                 timestamp: recap.updated_at || recap.created_at,
@@ -154,8 +370,8 @@ export default function CarteIPMScreen() {
             
             // Ajouter événement pour les retenues
             if (recap.retenu > 0) {
-              events.push({
-                id: `retenue_${recap.id}`,
+              addEventIfUnique({
+                id: `retenue_recap_${recap.id}`,
                 type: 'validation',
                 description: `Retenue IPM (${ipmRecapData.taux_retenu || '30%'}) - ${moisNom} ${recap.annee}`,
                 timestamp: recap.updated_at || recap.created_at,
@@ -168,8 +384,8 @@ export default function CarteIPMScreen() {
             
             // Ajouter événement pour les remboursements
             if (recap.remboursement > 0) {
-              events.push({
-                id: `remboursement_${recap.id}`,
+              addEventIfUnique({
+                id: `remboursement_recap_${recap.id}`,
                 type: 'validation',
                 description: `Remboursement IPM (${ipmRecapData.taux_remboursse || '70%'}) - ${moisNom} ${recap.annee}`,
                 timestamp: recap.updated_at || recap.created_at,
@@ -182,7 +398,7 @@ export default function CarteIPMScreen() {
             // Ajouter récapitulatif mensuel complet
             const totalFrais = recap.consultations + recap.soins + recap.medicaments + recap.protheses + recap.examens;
             if (totalFrais > 0) {
-              events.push({
+              addEventIfUnique({
                 id: `recap_complet_${recap.id}`,
                 type: 'validation',
                 description: `Récapitulatif complet - ${moisNom} ${recap.annee}`,
@@ -202,11 +418,14 @@ export default function CarteIPMScreen() {
       // Trier par date décroissante
       events.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
       
+      console.log('=== EVENTS LOADED ===', events.length, 'events found');
       setCardEvents(events);
     } catch (error) {
       console.error('Erreur lors du chargement de l\'historique:', error);
       // En cas d'échec, laisser l'historique vide
       setCardEvents([]);
+    } finally {
+      setLoadingEvents(false);
     }
   };
 
@@ -387,7 +606,18 @@ export default function CarteIPMScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <CustomHeader title={ "Carte IPM"} showBackButton />
       
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.content} 
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[colors.primary]}
+            tintColor={colors.primary}
+          />
+        }
+      >
         {/* Carte IPM Principal - Style Original */}
         <Animated.View
           style={{
@@ -473,17 +703,6 @@ export default function CarteIPMScreen() {
                   </View>
                 )}
                 
-                {/* ID Intérimaire (masquable) */}
-                <View style={styles.dataRow}>
-                  <Text style={styles.dataLabel}>ID:</Text>
-                  <Text style={styles.dataValue}>
-                    {isDataVisible 
-                      ? ((ipmData as any)?.profile?.id || 'N/A')
-                      : maskSensitiveData((ipmData as any)?.profile?.id, 4)
-                    }
-                  </Text>
-                </View>
-
                 {/* Matricule (masquable) */}
                 {(ipmData as any)?.profile?.matricule && (
                   <View style={styles.dataRow}>
@@ -496,32 +715,35 @@ export default function CarteIPMScreen() {
                     </Text>
                   </View>
                 )}
+                
 
-                {/* Email (masquable) */}
-                {/* {(ipmData as any)?.profile?.email && (
+                {/* Catégorie (non masquée) */}
+                {(ipmData as any)?.contract?.libelle_categorie && (
                   <View style={styles.dataRow}>
-                    <Text style={styles.dataLabel}>Email:</Text>
+                    <Text style={styles.dataLabel}>Cat:</Text>
                     <Text style={styles.dataValue}>
                       {isDataVisible 
-                        ? (ipmData as any)?.profile?.email
-                        : maskSensitiveData((ipmData as any)?.profile?.email, 3)
+                        ? (ipmData as any)?.contract?.libelle_categorie
+                        : maskSensitiveData((ipmData as any)?.contract?.libelle_categorie, 0)
+                      }
+                     
+                    </Text>
+                  </View>
+                )}
+
+                {/* Salaire de base (masquable) */}
+                {(ipmData as any)?.contract?.sal_base && (
+                  <View style={styles.dataRow}>
+                    <Text style={styles.dataLabel}>Salaire de base: </Text>
+                    <Text style={styles.dataValue}>
+                      {isDataVisible 
+                        ? `${(ipmData as any)?.contract?.sal_base} FCFA`
+                        : maskSensitiveData(`${(ipmData as any)?.contract?.sal_base} FCFA`, 0)
                       }
                     </Text>
                   </View>
-                )} */}
+                )}
 
-                {/* Téléphone (masquable) */}
-                {/* {(ipmData as any)?.profile?.phone && (
-                  <View style={styles.dataRow}>
-                    <Text style={styles.dataLabel}>Tél:</Text>
-                    <Text style={styles.dataValue}>
-                      {isDataVisible 
-                        ? (ipmData as any)?.profile?.phone
-                        : maskSensitiveData((ipmData as any)?.profile?.phone, 2)
-                      }
-                    </Text>
-                  </View>
-                )} */}
               </View>
 
               {/* Photo de profil à droite */}
@@ -604,32 +826,46 @@ export default function CarteIPMScreen() {
 
         {/* Section Ayants-droit */}
         {showAyantsDroit && (ipmData as any)?.ayants_droit && (
-          <View style={[styles.ayantsDroitSection, { backgroundColor: colors.cardBackground }]}>
-            <Text style={[{ fontSize: 20, fontWeight: 'bold', marginBottom: 16 }, { color: colors.textPrimary }]}>
+          <View style={styles.historySection}>
+            <Text style={[styles.historyTitle, { color: colors.textPrimary }]}>
               Ayants-droit ({(ipmData as any).ayants_droit.length})
             </Text>
             
-            {(ipmData as any).ayants_droit.map((ayant: any, index: number) => (
-              <View key={index} style={[styles.ayantCard, { backgroundColor: colors.background }]}>
-                <View style={styles.ayantHeader}>
-                  <View style={[styles.ayantIconLarge, { backgroundColor: ayant.lien === 1 ? '#10B981' : ayant.lien === 2 ? '#EF4444' : '#8B5CF6' }]}>
-                    <Ionicons 
-                      name={ayant.lien === 1 ? 'person' : ayant.lien === 2 ? 'heart' : ayant.lien === 3 || ayant.lien === 4 ? 'people' : 'person-circle'} 
-                      size={20} 
-                      color="#FFFFFF" 
-                    />
-                  </View>
-                  <View style={styles.ayantInfo}>
-                    <Text style={[styles.ayantName, { color: colors.textPrimary }]}>
-                      {ayant.nom} {ayant.prenom}
-                    </Text>
-                    <Text style={[styles.ayantLienText, { color: colors.textSecondary }]}>
-                      {ayant.lien === 1 ? 'Enfant' : ayant.lien === 2 ? 'Conjoint' : ayant.lien === 3 ? 'Père' : ayant.lien === 4 ? 'Mère' : ayant.lien === 5 ? 'Autre' : 'Personne Ressource'}
-                    </Text>
+            {(ipmData as any).ayants_droit.length === 0 ? (
+              <View style={styles.noEventsContainer}>
+                <Ionicons name="people-outline" size={48} color={colors.textSecondary} />
+                <Text style={[styles.noEventsText, { color: colors.textSecondary }]}>
+                  Aucun ayant-droit enregistré
+                </Text>
+              </View>
+            ) : (
+              (ipmData as any).ayants_droit.map((ayant: any, index: number) => (
+                <View key={index} style={[styles.eventItem, { backgroundColor: colors.cardBackground }]}>
+                  <View style={styles.eventHeader}>
+                    <View style={[styles.eventIcon, { backgroundColor: (ayant.lien === 1 ? '#10B981' : ayant.lien === 2 ? '#EF4444' : '#8B5CF6') + '20' }]}>
+                      <Ionicons 
+                        name={ayant.lien === 1 ? 'person' : ayant.lien === 2 ? 'heart' : ayant.lien === 3 || ayant.lien === 4 ? 'people' : 'person-circle'} 
+                        size={16} 
+                        color={ayant.lien === 1 ? '#10B981' : ayant.lien === 2 ? '#EF4444' : '#8B5CF6'} 
+                      />
+                    </View>
+                    <View style={styles.eventDetails}>
+                      <Text style={[styles.eventDescription, { color: colors.textPrimary }]}>
+                        {ayant.nom} {ayant.prenom}
+                      </Text>
+                      <Text style={[styles.eventTimestamp, { color: colors.textSecondary }]}>
+                        {ayant.lien === 1 ? 'Enfant' : ayant.lien === 2 ? 'Conjoint' : ayant.lien === 3 ? 'Père' : ayant.lien === 4 ? 'Mère' : ayant.lien === 5 ? 'Autre' : 'Personne Ressource'}
+                      </Text>
+                      {ayant.naissance && (
+                        <Text style={[styles.eventTimestamp, { color: colors.textSecondary }]}>
+                          Né(e) le {new Date(ayant.naissance).toLocaleDateString('fr-FR')}
+                        </Text>
+                      )}
+                    </View>
                   </View>
                 </View>
-              </View>
-            ))}
+              ))
+            )}
           </View>
         )}
 
@@ -687,7 +923,14 @@ export default function CarteIPMScreen() {
             Historique d'utilisation
           </Text>
           
-          {cardEvents.length === 0 ? (
+          {loadingEvents ? (
+            <View style={styles.noEventsContainer}>
+              <ActivityIndicator size="large" color={colors.primary} />
+              <Text style={[styles.noEventsText, { color: colors.textSecondary }]}>
+                Chargement de l'historique...
+              </Text>
+            </View>
+          ) : cardEvents.length === 0 ? (
             <View style={styles.noEventsContainer}>
               <Ionicons name="time-outline" size={48} color={colors.textSecondary} />
               <Text style={[styles.noEventsText, { color: colors.textSecondary }]}>
@@ -718,11 +961,15 @@ export default function CarteIPMScreen() {
                     {event.statut && (
                       <View style={styles.eventStatusContainer}>
                         <View style={[styles.eventStatusBadge, { 
-                          backgroundColor: event.statut === 'Approuvée' || event.statut === 'Validée' || event.statut === 'Active' 
-                            ? '#10B981' 
-                            : event.statut === 'En attente' 
-                              ? '#F59E0B' 
-                              : colors.textSecondary 
+                          backgroundColor: event.statut === 'Non remboursable' 
+                            ? '#EF4444' // Rouge pour non remboursable
+                            : event.statut === 'Approuvée' || event.statut === 'Validée' || event.statut === 'Active' || event.statut === 'Remboursé'
+                              ? '#10B981' // Vert pour approuvé/validé/actif/remboursable
+                              : event.statut === 'Remboursable'
+                              ? '#0f8e35' // Vert pour remboursable
+                              : event.statut === 'En attente' 
+                                ? '#F59E0B' // Orange pour en attente
+                                : colors.textSecondary // Couleur par défaut
                         }]}>
                           <Text style={styles.eventStatusText}>{event.statut}</Text>
                         </View>
