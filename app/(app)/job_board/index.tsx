@@ -17,7 +17,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../../components/AuthProvider';
-import { getOffres } from '../../../utils/api';
+import { getOffres, toggleFavori, checkFavoriStatus, getFavoris } from '../../../utils/api';
 import { router } from 'expo-router';
 import CustomHeader from '../../../components/CustomHeader';
 
@@ -47,12 +47,35 @@ export default function AuthenticatedJobBoardScreen() {
   });
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [filteredOffres, setFilteredOffres] = useState([]);
+  
+  // États pour la gestion des favoris
+  const [favorisIds, setFavorisIds] = useState(new Set()); // Set des IDs des offres en favoris
+  const [togglingFavori, setTogglingFavori] = useState(null); // ID de l'offre en cours de toggle
 
-  // Fonction de filtrage et recherche
-  const applyFiltersAndSearch = (offres, query, filters) => {
+  // Fonction pour recharger seulement les favoris
+  const refreshFavoris = async () => {
+    if (!user) return;
+    
+    try {
+      const favorisResponse = await getFavoris();
+      
+      if (favorisResponse.success && favorisResponse.data) {
+        const favorisSet = new Set();
+        favorisResponse.data.forEach((favori: { offre_id: number | string }) => {
+          favorisSet.add(favori.offre_id.toString());
+        });
+        setFavorisIds(favorisSet);
+      }
+    } catch (error) {
+      console.log('Erreur lors du rafraîchissement des favoris:', error);
+    }
+  };
+
+  // Fonction de filtrage et de recherche
+  const applyFiltersAndSearch = (offres: any[], query: string, filters: { type_contrat: string, lieu_travail: string, secteur: string }) => {
     let result = offres;
 
-    // Filtrer par recherche
+    // Filtre par recherche
     if (query.trim()) {
       result = result.filter(offre => 
         offre.poste?.titre_poste?.toLowerCase().includes(query.toLowerCase()) ||
@@ -61,16 +84,16 @@ export default function AuthenticatedJobBoardScreen() {
       );
     }
 
-    // Filtrer par type de contrat
+    // Filtre par type de contrat
     if (filters.type_contrat) {
       result = result.filter(offre => 
         offre.poste?.type_contrat === filters.type_contrat
       );
     }
 
-    // Filtrer par lieu
+    // Filtre par lieu
     if (filters.lieu_travail) {
-      result = result.filter(offre => 
+      result = result.filter(offre =>  
         offre.lieux?.toLowerCase().includes(filters.lieu_travail.toLowerCase())
       );
     }
@@ -91,6 +114,28 @@ export default function AuthenticatedJobBoardScreen() {
       setErrorOffres(null);
       const fetchedOffres = await getOffres();
       setAllOffres(fetchedOffres);
+      
+      // Charger l'état des favoris si l'utilisateur est connecté
+      if (user && fetchedOffres.length > 0) {
+        try {
+          // Utiliser l'API getFavoris pour récupérer tous les favoris d'un coup
+          const favorisResponse = await getFavoris();
+          
+          if (favorisResponse.success && favorisResponse.data) {
+            const favorisSet = new Set();
+            favorisResponse.data.forEach(favori => {
+              favorisSet.add(favori.offre_id.toString());
+            });
+            setFavorisIds(favorisSet);
+          } else {
+            // Si la réponse n'est pas successful, garder l'état actuel des favoris
+            console.log('Réponse favoris non successful:', favorisResponse);
+          }
+        } catch (error) {
+          console.log('Erreur lors du chargement des favoris, conservation de l\'état actuel:', error);
+          // Ne pas vider l'état des favoris en cas d'erreur
+        }
+      }
       
       // Appliquer les filtres et recherche
       const filtered = applyFiltersAndSearch(fetchedOffres, searchQuery, selectedFilters);
@@ -129,6 +174,8 @@ export default function AuthenticatedJobBoardScreen() {
   const onRefresh = async () => {
     setRefreshing(true);
     await fetchOffres();
+    // Rafraîchir aussi les favoris après avoir chargé les offres
+    await refreshFavoris();
     setRefreshing(false);
   };
 
@@ -137,7 +184,7 @@ export default function AuthenticatedJobBoardScreen() {
     
     const newStartIndex = (pageNumber - 1) * ITEMS_PER_PAGE;
     const newEndIndex = newStartIndex + ITEMS_PER_PAGE;
-    const pageOffres = allOffres.slice(0, newEndIndex); // Charger jusqu'à cette page
+    const pageOffres = workingOffres.slice(0, newEndIndex); // Utiliser les offres filtrées
     
     setDisplayedOffres(pageOffres);
     setCurrentPage(pageNumber);
@@ -146,6 +193,16 @@ export default function AuthenticatedJobBoardScreen() {
   useEffect(() => {
     fetchOffres();
   }, []);
+
+  // Charger les favoris quand l'utilisateur change
+  useEffect(() => {
+    if (user) {
+      refreshFavoris();
+    } else {
+      // Si l'utilisateur se déconnecte, vider les favoris
+      setFavorisIds(new Set());
+    }
+  }, [user]);
 
   // Fonction pour appliquer la recherche
   const handleSearch = (query: string) => {
@@ -198,6 +255,58 @@ export default function AuthenticatedJobBoardScreen() {
     router.push('/(app)/dashboard');
   };
 
+  // Fonction pour gérer l'ajout/suppression des favoris
+  const handleToggleFavori = async (offreId: string) => {
+    if (!user) {
+      Alert.alert("Connexion requise", "Vous devez être connecté pour ajouter des favoris.");
+      return;
+    }
+
+    try {
+      setTogglingFavori(offreId);
+      const response = await toggleFavori(offreId);
+      
+      console.log('Réponse toggle favori:', response); // Debug
+      
+      // Mettre à jour l'état local des favoris
+      const newFavorisIds = new Set(favorisIds);
+      const wasInFavoris = favorisIds.has(offreId);
+      
+      // Vérifier différentes structures de réponse possibles
+      let isFavorited = false;
+      if (response.data && response.data.is_favorite !== undefined) {
+        isFavorited = response.data.is_favorite;
+      } else if (response.is_favorite !== undefined) {
+        isFavorited = response.is_favorite;
+      } else if (response.is_favorited !== undefined) {
+        isFavorited = response.is_favorited;
+      } else if (response.favorited !== undefined) {
+        isFavorited = response.favorited;
+      } else if (response.success !== undefined) {
+        // Si pas d'indicateur explicite, inverser l'état actuel
+        isFavorited = !wasInFavoris;
+      } else {
+        // Fallback: inverser l'état actuel
+        isFavorited = !wasInFavoris;
+      }
+      
+      if (isFavorited) {
+        newFavorisIds.add(offreId);
+        Alert.alert("Succès", "Offre ajoutée aux favoris !");
+      } else {
+        newFavorisIds.delete(offreId);
+        Alert.alert("Succès", "Offre supprimée des favoris !");
+      }
+      setFavorisIds(newFavorisIds);
+      
+    } catch (error: any) {
+      console.error('Erreur lors du toggle favori:', error);
+      Alert.alert("Erreur", "Impossible de modifier les favoris. Veuillez réessayer.");
+    } finally {
+      setTogglingFavori(null);
+    }
+  };
+
   const getContractTypeIcon = (contractType: string) => {
     const type = contractType?.toLowerCase();
     if (type?.includes('cdi')) return 'briefcase';
@@ -230,8 +339,20 @@ export default function AuthenticatedJobBoardScreen() {
             </Text>
           </View>
         </View>
-        <TouchableOpacity style={styles.favoriteButton}>
-          <Ionicons name="heart-outline" size={20} color="#6B7280" />
+        <TouchableOpacity 
+          style={styles.favoriteButton}
+          onPress={() => handleToggleFavori(offre.id)}
+          disabled={togglingFavori === offre.id}
+        >
+          {togglingFavori === offre.id ? (
+            <ActivityIndicator size="small" color="#EF4444" />
+          ) : (
+            <Ionicons 
+              name={favorisIds.has(offre.id) ? "heart" : "heart-outline"} 
+              size={20} 
+              color={favorisIds.has(offre.id) ? "#EF4444" : "#6B7280"} 
+            />
+          )}
         </TouchableOpacity>
       </View>
 
@@ -308,7 +429,7 @@ export default function AuthenticatedJobBoardScreen() {
       <View style={styles.paginationContainer}>
         <View style={styles.paginationInfo}>
           <Text style={styles.paginationText}>
-            Affichage de {displayedOffres.length} sur {allOffres.length} offres
+            Affichage de {displayedOffres.length} sur {workingOffres.length} offres
           </Text>
           <Text style={styles.paginationSubtext}>
             Page {currentPage} sur {totalPages}
@@ -371,7 +492,7 @@ export default function AuthenticatedJobBoardScreen() {
               <Ionicons name="add-circle-outline" size={20} color="#0f8e35" />
             )}
             <Text style={styles.loadMoreText}>
-              {loadingMore ? 'Chargement...' : `Charger plus (${allOffres.length - displayedOffres.length} restantes)`}
+              {loadingMore ? 'Chargement...' : `Charger plus (${workingOffres.length - displayedOffres.length} restantes)`}
             </Text>
           </TouchableOpacity>
         )}

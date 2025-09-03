@@ -677,7 +677,7 @@ export default function AnalyticsScreen() {
     );
   };
 
-  const renderDetailedDataCard = (title, data, iconName, color) => {
+  const renderDetailedDataCard = (title: string, data: any[], iconName: string, color: string) => {
     if (!data || data.length === 0) return null;
 
     return (
@@ -686,7 +686,7 @@ export default function AnalyticsScreen() {
           <View style={[styles.detailedDataIcon, { backgroundColor: color + '20' }]}>
             <Ionicons name={iconName as any} size={16} color={color} />
           </View>
-          <Text style={[styles.detailedDataTitle, { color: colors.text }]}>
+          <Text style={[styles.detailedDataTitle, { color: colors.textPrimary }]}>
             {title} ({data.length})
           </Text>
         </View>
@@ -696,7 +696,7 @@ export default function AnalyticsScreen() {
             <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>
               Total
             </Text>
-            <Text style={[styles.summaryValue, { color: colors.text }]}>
+            <Text style={[styles.summaryValue, { color: colors.textPrimary }]}>
               {safeFormatCurrency(data.reduce((sum, item) => sum + (item.montant || 0), 0))}
             </Text>
           </View>
@@ -730,7 +730,7 @@ export default function AnalyticsScreen() {
 
   const renderDetailedData = () => {
     return (
-      <View style={[styles.section, { backgroundColor: colors.surface || colors.background }]}>
+      <View style={[styles.section, { backgroundColor: colors.background }]}>
         <View style={styles.detailedDataTitleContainer}>
           <Text style={[styles.sectionTitle, { color: colors.primary }]}>
             Activité médicale ({selectedYear})
@@ -766,7 +766,7 @@ export default function AnalyticsScreen() {
               Liste complète
             </Text>
             
-            {/* Combiner toutes les données pour affichage */}
+            {/* Combine toutes les données pour affichage */}
             {[
               ...consultationsList.map(item => ({ ...item, category: 'Consultation', color: colors.primary })),
               ...examensList.map(item => ({ ...item, category: 'Examen', color: colors.secondary })),
@@ -793,13 +793,13 @@ export default function AnalyticsScreen() {
                   </View>
                 </View>
                 
-                <Text style={[styles.detailedDataItemType, { color: colors.text }]}>
+                <Text style={[styles.detailedDataItemType, { color: colors.textPrimary }]}>
                   {item.type}
                 </Text>
                 
                 <View style={styles.detailedDataItemFooter}>
                   <View style={styles.detailedDataItemAmounts}>
-                    <Text style={[styles.detailedDataItemAmount, { color: colors.text }]}>
+                    <Text style={[styles.detailedDataItemAmount, { color: colors.textPrimary }]}>
                       Montant: {safeFormatCurrency(item.montant)}
                     </Text>
                     {!item.exclu && (

@@ -40,7 +40,7 @@ interface CardUsageEvent {
 export default function CarteIPMScreen() {
   const { colors } = useTheme();
   const { user } = useAuth();
-  
+
   const [profile, setProfile] = useState(null);
   const [ipmData, setIpmData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -53,7 +53,7 @@ export default function CarteIPMScreen() {
   const [cardEvents, setCardEvents] = useState<CardUsageEvent[]>([]);
   const [showAyantsDroit, setShowAyantsDroit] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  
+
   const fadeAnim = useState(new Animated.Value(0))[0];
   const slideAnim = useState(new Animated.Value(50))[0];
 
@@ -65,7 +65,7 @@ export default function CarteIPMScreen() {
     };
     loadData();
     loadCardLockState();
-    
+
     // Animation d'entrée
     Animated.parallel([
       Animated.timing(fadeAnim, {
@@ -85,14 +85,14 @@ export default function CarteIPMScreen() {
   const reloadAllData = async (showLoading = true) => {
     try {
       if (showLoading) setLoading(true);
-      console.log('=== RELOADING ALL DATA ===');
-      
-      // Charger les données IPM d'abord
+      console.log('=== RECHARGEMENT DES DONNÉES COMPLÈT ===');
+
+      // Charge les données IPM d'abord
       const ipmDataResponse = await loadIPMData();
-      
-      // Puis charger les événements avec les données IPM fraîches
+
+      // Puis charge les événements avec les données IPM fraîches
       await loadCardEvents(ipmDataResponse);
-      
+
     } catch (error) {
       console.error('Erreur lors du rechargement des données:', error);
     } finally {
@@ -111,10 +111,10 @@ export default function CarteIPMScreen() {
     }
   }, []);
 
-  // Recharger les données à chaque fois que l'utilisateur revient sur la page
+  // Recharge les données à chaque fois que l'utilisateur revient sur la page
   useFocusEffect(
     useCallback(() => {
-      console.log('=== CARTE IPM FOCUSED - RECHARGING DATA ===');
+      console.log('=== FOCALISÉE SUR LA CARTE IPM  - RECHARGEMENT DES DONNÉES ===');
       reloadAllData();
     }, [])
   );
@@ -135,24 +135,24 @@ export default function CarteIPMScreen() {
 
   const loadIPMData = async () => {
     try {
-      console.log('=== LOADING IPM DATA START ===');
+      console.log('=== DÉBUT DE CHARGEMENT DES DONNÉES IPM  ===');
       setIpmData(null); // Vider les anciennes données
-      
-      console.log('=== CALLING getIPMCardData() ===');
+
+      console.log('=== APPEL DE getIPMCardData() ===');
       const response = await getIPMCardData();
       console.log('=== getIPMCardData() RESPONSE RECEIVED ===');
       console.log('=== DEBUG IPM CARD DATA RESPONSE ===');
       console.log('Response keys:', response ? Object.keys(response) : 'null response');
       console.log('Full response:', JSON.stringify(response, null, 2));
-      
+
       if (response) {
         setIpmData(response);
-        console.log('=== IPM DATA SET ===', {
+        console.log('=== DONNÉES IPM DÉFINIES ===', {
           hasProfile: !!response.profile,
           profileKeys: response.profile ? Object.keys(response.profile) : null,
           hasContract: !!response.contract
         });
-        
+
         // Logging détaillé des relations
         if (response.profile) {
           const profile = response.profile;
@@ -165,7 +165,7 @@ export default function CarteIPMScreen() {
           console.log('Profile has feuilles_de_soins?', 'feuilles_de_soins' in profile, Array.isArray(profile.feuilles_de_soins) ? profile.feuilles_de_soins.length : 'not array');
           console.log('Profile has examens?', 'examens' in profile, Array.isArray(profile.examens) ? profile.examens.length : 'not array');
           console.log('Profile has derogations?', 'derogations' in profile, Array.isArray(profile.derogations) ? profile.derogations.length : 'not array');
-          
+
           // Log all array properties
           Object.keys(profile).forEach(key => {
             if (Array.isArray(profile[key])) {
@@ -176,23 +176,23 @@ export default function CarteIPMScreen() {
             }
           });
         }
-        
+
         // Vérifier si le contrat expire dans moins de 3 mois
         if (response.contract_end_date) {
           const endDate = new Date(response.contract_end_date);
           const threeMonthsFromNow = new Date();
           threeMonthsFromNow.setMonth(threeMonthsFromNow.getMonth() + 3);
-          
+
           setContractExpiringSoon(endDate < threeMonthsFromNow);
         }
-        
+
         return response; // Retourner les données pour reloadAllData
       }
     } catch (error) {
       console.error('=== ERREUR LORS DU CHARGEMENT DES DONNÉES IPM ===');
       console.error('Error details:', error);
-      console.error('Error message:', error?.message);
-      console.error('Error stack:', error?.stack);
+      console.error('Error message:', error instanceof Error ? error.message : 'Unknown error');
+      console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace available');
       setIpmData(null);
       return null;
     }
@@ -203,31 +203,31 @@ export default function CarteIPMScreen() {
       console.log('=== LOADING CARD EVENTS START ===');
       console.log('Current ipmData state:', !!ipmData, ipmData ? 'has data' : 'no data');
       console.log('Fresh IPM data passed:', !!freshIpmData, freshIpmData ? 'has fresh data' : 'no fresh data');
-      
+
       // Utiliser les données fraîches si disponibles, sinon l'état
       const dataToUse = freshIpmData || ipmData;
       // Vider les événements existants et indiquer le chargement
       setCardEvents([]);
       setLoadingEvents(true);
-      
+
       // Set pour éviter les doublons
       const eventIds = new Set<string>();
       const events: CardUsageEvent[] = [];
-      
+
       const addEventIfUnique = (event: CardUsageEvent) => {
         if (!eventIds.has(event.id)) {
           eventIds.add(event.id);
           events.push(event);
         }
       };
-      
+
       // Si nous avons les données IPM chargées avec les relations
       if (dataToUse) {
         console.log('=== DEBUG IPM DATA WITH RELATIONS ===');
         console.log('dataToUse structure:', Object.keys(dataToUse));
         console.log('profile structure:', (dataToUse as any).profile ? Object.keys((dataToUse as any).profile) : 'no profile');
         console.log('Full dataToUse:', JSON.stringify(dataToUse, null, 2));
-        
+
         // Ajouter les événements depuis les consultations
         if ((dataToUse as any)?.profile?.consultations) {
           console.log('Processing consultations:', (dataToUse as any).profile.consultations.length);
@@ -329,19 +329,19 @@ export default function CarteIPMScreen() {
           });
         }
       }
-      
+
       // Récupérer aussi les données de récapitulatifs IPM
       try {
         const ipmRecapData = await getIpmRecapByMonth();
         console.log('=== DEBUG IPM RECAP DATA ===');
         console.log('ipmRecapData:', JSON.stringify(ipmRecapData, null, 2));
-        
+
         if (ipmRecapData && ipmRecapData.recap_ipm) {
           // Traiter chaque récapitulatif mensuel
           ipmRecapData.recap_ipm.forEach((recap: any) => {
-            const moisNom = ['', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 
-                            'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'][recap.mois] || `Mois ${recap.mois}`;
-            
+            const moisNom = ['', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+              'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'][recap.mois] || `Mois ${recap.mois}`;
+
             // Ajouter événement pour les consultations
             if (recap.consultations > 0) {
               addEventIfUnique({
@@ -354,7 +354,7 @@ export default function CarteIPMScreen() {
                 beneficiaire: recap.name
               });
             }
-            
+
             // Ajouter événement pour les médicaments
             if (recap.medicaments > 0) {
               addEventIfUnique({
@@ -367,7 +367,7 @@ export default function CarteIPMScreen() {
                 beneficiaire: recap.name
               });
             }
-            
+
             // Ajouter événement pour les retenues
             if (recap.retenu > 0) {
               addEventIfUnique({
@@ -381,7 +381,7 @@ export default function CarteIPMScreen() {
                 beneficiaire: recap.name
               });
             }
-            
+
             // Ajouter événement pour les remboursements
             if (recap.remboursement > 0) {
               addEventIfUnique({
@@ -394,7 +394,7 @@ export default function CarteIPMScreen() {
                 beneficiaire: recap.name
               });
             }
-            
+
             // Ajouter récapitulatif mensuel complet
             const totalFrais = recap.consultations + recap.soins + recap.medicaments + recap.protheses + recap.examens;
             if (totalFrais > 0) {
@@ -414,10 +414,10 @@ export default function CarteIPMScreen() {
       } catch (error) {
         console.error('Erreur lors du chargement des données IPM recap:', error);
       }
-      
+
       // Trier par date décroissante
       events.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-      
+
       console.log('=== EVENTS LOADED ===', events.length, 'events found');
       setCardEvents(events);
     } catch (error) {
@@ -472,27 +472,27 @@ export default function CarteIPMScreen() {
       );
       return;
     }
-    
+
     // Cycle simple: masqué → données sensibles + ayants droits → masqué
     if (!isDataVisible && !showAyantsDroit) {
-      // Premier clic : montrer données sensibles ET ayants-droit
+      // Premier clic : montre données sensibles ET ayants-droit
       setIsDataVisible(true);
       setShowAyantsDroit(true);
     } else {
-      // Deuxième clic : masquer tout
+      // Deuxième clic : masque les données sensibles ET ayants-droit
       setIsDataVisible(false);
       setShowAyantsDroit(false);
     }
-    
+
   };
 
   const toggleCardLock = () => {
     if (isCardLocked) {
-      // Déverrouiller
+      // Déverrouille la carte
       setIsCardLocked(false);
       setIsDataVisible(false);
-      saveCardLockState(false); // Sauvegarder l'état
-      
+      saveCardLockState(false); // Sauvegarde l'état
+
       const newEvent: CardUsageEvent = {
         id: Date.now().toString(),
         type: 'unlock',
@@ -501,7 +501,7 @@ export default function CarteIPMScreen() {
         ip_address: '192.168.1.100'
       };
       setCardEvents(prev => [newEvent, ...prev]);
-      
+
       Alert.alert('Carte déverrouillée', 'Votre carte IPM est maintenant accessible.');
     } else {
       // Verrouiller - demander confirmation
@@ -513,8 +513,8 @@ export default function CarteIPMScreen() {
     setIsCardLocked(true);
     setIsDataVisible(false);
     setShowLockModal(false);
-    saveCardLockState(true); // Sauvegarder l'état
-    
+    saveCardLockState(true); // Sauvegarde l'état
+
     const newEvent: CardUsageEvent = {
       id: Date.now().toString(),
       type: 'lock',
@@ -523,7 +523,7 @@ export default function CarteIPMScreen() {
       ip_address: '192.168.1.100'
     };
     setCardEvents(prev => [newEvent, ...prev]);
-    
+
     Alert.alert('Carte verrouillée', 'Votre carte IPM est maintenant sécurisée.');
   };
 
@@ -540,7 +540,7 @@ export default function CarteIPMScreen() {
     const date = new Date(timestamp);
     const now = new Date();
     const diffInHours = (now.getTime() - date.getTime()) / (1000 * 3600);
-    
+
     if (diffInHours < 1) {
       return 'Il y a quelques minutes';
     } else if (diffInHours < 24) {
@@ -604,17 +604,16 @@ export default function CarteIPMScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <CustomHeader title={ "Carte IPM"} showBackButton />
-      
-      <ScrollView 
-        style={styles.content} 
+      <CustomHeader title={"Carte IPM"} showBackButton />
+      <ScrollView
+        style={styles.content}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            colors={[colors.primary]}
-            tintColor={colors.primary}
+            colors={['#0f8e35']}
+            tintColor="#0f8e35"
           />
         }
       >
@@ -672,8 +671,8 @@ export default function CarteIPMScreen() {
 
             {/* Header avec logo, nom et cadenas */}
             <View style={styles.cardHeaderRow}>
-              <Image 
-                source={require('../../../assets/images/logo-gbg-white.png')} 
+              <Image
+                source={require('../../../assets/images/logo-gbg-white.png')}
                 style={styles.ipmCardLogo}
                 resizeMode="contain"
               />
@@ -681,10 +680,10 @@ export default function CarteIPMScreen() {
                 {user?.name || 'Nom Utilisateur'}
               </Text>
               <TouchableOpacity onPress={() => setShowSettings(!showSettings)} style={styles.settingsButton}>
-                <Ionicons 
-                  name="settings-outline" 
-                  size={18} 
-                  color="#FFFFFF" 
+                <Ionicons
+                  name="settings-outline"
+                  size={18}
+                  color="#FFFFFF"
                 />
               </TouchableOpacity>
             </View>
@@ -702,31 +701,31 @@ export default function CarteIPMScreen() {
                     </Text>
                   </View>
                 )}
-                
+
                 {/* Matricule (masquable) */}
                 {(ipmData as any)?.profile?.matricule && (
                   <View style={styles.dataRow}>
                     <Text style={styles.dataLabel}>Mat:</Text>
                     <Text style={styles.dataValue}>
-                      {isDataVisible 
+                      {isDataVisible
                         ? (ipmData as any)?.profile?.matricule
                         : maskSensitiveData((ipmData as any)?.profile?.matricule, 0)
                       }
                     </Text>
                   </View>
                 )}
-                
+
 
                 {/* Catégorie (non masquée) */}
                 {(ipmData as any)?.contract?.libelle_categorie && (
                   <View style={styles.dataRow}>
                     <Text style={styles.dataLabel}>Cat:</Text>
                     <Text style={styles.dataValue}>
-                      {isDataVisible 
+                      {isDataVisible
                         ? (ipmData as any)?.contract?.libelle_categorie
                         : maskSensitiveData((ipmData as any)?.contract?.libelle_categorie, 0)
                       }
-                     
+
                     </Text>
                   </View>
                 )}
@@ -736,7 +735,7 @@ export default function CarteIPMScreen() {
                   <View style={styles.dataRow}>
                     <Text style={styles.dataLabel}>Salaire de base: </Text>
                     <Text style={styles.dataValue}>
-                      {isDataVisible 
+                      {isDataVisible
                         ? `${(ipmData as any)?.contract?.sal_base} FCFA`
                         : maskSensitiveData(`${(ipmData as any)?.contract?.sal_base} FCFA`, 0)
                       }
@@ -756,11 +755,11 @@ export default function CarteIPMScreen() {
                       ? user.photo_profil
                       : `http://192.168.1.11:8000/storage/${user.photo_profil}`;
                   }
-                  
+
                   console.log('=== IMAGE DISPLAY ===');
                   console.log('user.photo_profil:', user?.photo_profil);
                   console.log('finalImageUrl:', finalImageUrl);
-                  
+
                   return (
                     <Image
                       source={{ uri: finalImageUrl }}
@@ -784,27 +783,27 @@ export default function CarteIPMScreen() {
               <View style={styles.ipmCardId}>
                 <Text style={styles.ipmCardIdText}>
                   Expire: {(ipmData as any)?.contract_end_date
-                    ? isDataVisible 
+                    ? isDataVisible
                       ? new Date((ipmData as any).contract_end_date).toLocaleDateString('fr-FR')
                       : maskSensitiveData(new Date((ipmData as any).contract_end_date).toLocaleDateString('fr-FR'), 2)
                     : 'Date non définie'
                   }
                 </Text>
               </View>
-              
+
               <View style={styles.cardActionsContainer}>
-                <TouchableOpacity 
+                <TouchableOpacity
                   onPress={toggleDataVisibility}
                   style={styles.eyeButton}
                   disabled={isCardLocked}
                 >
-                  <Ionicons 
-                    name={isDataVisible ? 'eye-off' : 'eye'} 
-                    size={18} 
-                    color={isCardLocked ? 'rgba(255,255,255,0.5)' : '#FFFFFF'} 
+                  <Ionicons
+                    name={isDataVisible ? 'eye-off' : 'eye'}
+                    size={18}
+                    color={isCardLocked ? 'rgba(255,255,255,0.5)' : '#FFFFFF'}
                   />
                 </TouchableOpacity>
-                
+
                 <View style={styles.ipmCardStatus}>
                   <View style={styles.statusDot} />
                   <Text style={styles.statusText}>
@@ -830,7 +829,7 @@ export default function CarteIPMScreen() {
             <Text style={[styles.historyTitle, { color: colors.textPrimary }]}>
               Ayants-droit ({(ipmData as any).ayants_droit.length})
             </Text>
-            
+
             {(ipmData as any).ayants_droit.length === 0 ? (
               <View style={styles.noEventsContainer}>
                 <Ionicons name="people-outline" size={48} color={colors.textSecondary} />
@@ -843,10 +842,10 @@ export default function CarteIPMScreen() {
                 <View key={index} style={[styles.eventItem, { backgroundColor: colors.cardBackground }]}>
                   <View style={styles.eventHeader}>
                     <View style={[styles.eventIcon, { backgroundColor: (ayant.lien === 1 ? '#10B981' : ayant.lien === 2 ? '#EF4444' : '#8B5CF6') + '20' }]}>
-                      <Ionicons 
-                        name={ayant.lien === 1 ? 'person' : ayant.lien === 2 ? 'heart' : ayant.lien === 3 || ayant.lien === 4 ? 'people' : 'person-circle'} 
-                        size={16} 
-                        color={ayant.lien === 1 ? '#10B981' : ayant.lien === 2 ? '#EF4444' : '#8B5CF6'} 
+                      <Ionicons
+                        name={ayant.lien === 1 ? 'person' : ayant.lien === 2 ? 'heart' : ayant.lien === 3 || ayant.lien === 4 ? 'people' : 'person-circle'}
+                        size={16}
+                        color={ayant.lien === 1 ? '#10B981' : ayant.lien === 2 ? '#EF4444' : '#8B5CF6'}
                       />
                     </View>
                     <View style={styles.eventDetails}>
@@ -878,17 +877,17 @@ export default function CarteIPMScreen() {
                 Paramètres de la carte
               </Text>
             </View>
-            
+
             <View style={styles.settingsContent}>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[styles.settingsOption, { borderBottomColor: colors.border }]}
                 onPress={toggleCardLock}
               >
                 <View style={styles.settingsOptionLeft}>
-                  <Ionicons 
-                    name={isCardLocked ? 'lock-closed' : 'lock-open'} 
-                    size={20} 
-                    color={isCardLocked ? colors.error : colors.success} 
+                  <Ionicons
+                    name={isCardLocked ? 'lock-closed' : 'lock-open'}
+                    size={20}
+                    color={isCardLocked ? colors.error : colors.success}
                   />
                   <Text style={[styles.settingsOptionText, { color: colors.textPrimary }]}>
                     {isCardLocked ? 'Déverrouiller la carte' : 'Verrouiller la carte'}
@@ -896,8 +895,8 @@ export default function CarteIPMScreen() {
                 </View>
                 <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
               </TouchableOpacity>
-              
-              <TouchableOpacity 
+
+              <TouchableOpacity
                 style={[styles.settingsOption, { borderBottomWidth: 0 }]}
                 onPress={() => {
                   setIsDataVisible(false);
@@ -922,7 +921,7 @@ export default function CarteIPMScreen() {
           <Text style={[styles.historyTitle, { color: colors.textPrimary }]}>
             Historique d'utilisation
           </Text>
-          
+
           {loadingEvents ? (
             <View style={styles.noEventsContainer}>
               <ActivityIndicator size="large" color={colors.primary} />
@@ -939,16 +938,16 @@ export default function CarteIPMScreen() {
             </View>
           ) : (
             cardEvents.map((event) => (
-              <View 
-                key={event.id} 
+              <View
+                key={event.id}
                 style={[styles.eventItem, { backgroundColor: colors.cardBackground }]}
               >
                 <View style={styles.eventHeader}>
                   <View style={[styles.eventIcon, { backgroundColor: getEventColor(event.type) + '20' }]}>
-                    <Ionicons 
-                      name={getEventIcon(event.type) as any} 
-                      size={16} 
-                      color={getEventColor(event.type)} 
+                    <Ionicons
+                      name={getEventIcon(event.type) as any}
+                      size={16}
+                      color={getEventColor(event.type)}
                     />
                   </View>
                   <View style={styles.eventDetails}>
@@ -960,16 +959,16 @@ export default function CarteIPMScreen() {
                     </Text>
                     {event.statut && (
                       <View style={styles.eventStatusContainer}>
-                        <View style={[styles.eventStatusBadge, { 
-                          backgroundColor: event.statut === 'Non remboursable' 
+                        <View style={[styles.eventStatusBadge, {
+                          backgroundColor: event.statut === 'Non remboursable'
                             ? '#EF4444' // Rouge pour non remboursable
                             : event.statut === 'Approuvée' || event.statut === 'Validée' || event.statut === 'Active' || event.statut === 'Remboursé'
                               ? '#10B981' // Vert pour approuvé/validé/actif/remboursable
                               : event.statut === 'Remboursable'
-                              ? '#0f8e35' // Vert pour remboursable
-                              : event.statut === 'En attente' 
-                                ? '#F59E0B' // Orange pour en attente
-                                : colors.textSecondary // Couleur par défaut
+                                ? '#0f8e35' // Vert pour remboursable
+                                : event.statut === 'En attente'
+                                  ? '#F59E0B' // Orange pour en attente
+                                  : colors.textSecondary // Couleur par défaut
                         }]}>
                           <Text style={styles.eventStatusText}>{event.statut}</Text>
                         </View>
@@ -1010,18 +1009,18 @@ export default function CarteIPMScreen() {
             <View style={styles.modalIcon}>
               <Ionicons name="lock-closed" size={48} color={colors.error} />
             </View>
-            
+
             <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>
               Verrouiller la carte ?
             </Text>
-            
+
             <Text style={[styles.modalDescription, { color: colors.textSecondary }]}>
-              Une fois verrouillée, vous ne pourrez plus consulter les données sensibles 
+              Une fois verrouillée, vous ne pourrez plus consulter les données sensibles
               de votre carte IPM jusqu'au déverrouillage.
             </Text>
-            
+
             <View style={styles.modalButtons}>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[styles.modalButton, styles.cancelButton, { borderColor: colors.border }]}
                 onPress={() => setShowLockModal(false)}
               >
@@ -1029,8 +1028,8 @@ export default function CarteIPMScreen() {
                   Annuler
                 </Text>
               </TouchableOpacity>
-              
-              <TouchableOpacity 
+
+              <TouchableOpacity
                 style={[styles.modalButton, styles.confirmButton, { backgroundColor: colors.error }]}
                 onPress={confirmCardLock}
               >

@@ -139,7 +139,7 @@ export default function InterimDashboardScreen() {
     ]).start();
   }, []);
 
-  // Charger les données du dashboard
+  // Chargement des données du dashboard
   const loadDashboardData = useCallback(async () => {
     if (!user) {
       setDashboardStats(null);
@@ -212,9 +212,8 @@ export default function InterimDashboardScreen() {
     return new Intl.NumberFormat('fr-FR').format(num);
   };
 
-  // --- Fonctions de rendu des nouvelles sections ---
 
-  // Icône Carte IPM (remplace la carte complète)
+  // Icône Carte IPM
   const renderIPMCard = () => {
     if (!ipmData || !ipmData.qr_data) {
       return (
@@ -369,7 +368,7 @@ export default function InterimDashboardScreen() {
     );
   };
 
-  // Section actions rapides améliorée
+  // Section actions rapides
   const renderQuickActions = () => {
     const primaryActions = quickActions.slice(0, 4);
     const secondaryActions = quickActions.slice(4);
@@ -385,7 +384,7 @@ export default function InterimDashboardScreen() {
         ]}
       >
         <Text style={[styles.sectionTitle, { color: colors.primary }]}>
-          {t('Menu Interimaire')}
+          {t('Accés rapide')}
         </Text>
         
         {/* Actions principales */}
@@ -501,7 +500,6 @@ export default function InterimDashboardScreen() {
         <View style={styles.content}>
           {renderIPMCard()}
           {renderBirthdayBanner()}
-          {/* {renderCurrentStatus()} */}
           {renderQuickActions()}
         </View>
       </ScrollView>
