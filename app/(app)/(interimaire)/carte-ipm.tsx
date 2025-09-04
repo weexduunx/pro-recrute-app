@@ -731,7 +731,7 @@ export default function CarteIPMScreen() {
                 )}
 
                 {/* Salaire de base (masquable) */}
-                {(ipmData as any)?.contract?.sal_base && (
+                {/* {(ipmData as any)?.contract?.sal_base && (
                   <View style={styles.dataRow}>
                     <Text style={styles.dataLabel}>Salaire de base: </Text>
                     <Text style={styles.dataValue}>
@@ -741,7 +741,7 @@ export default function CarteIPMScreen() {
                       }
                     </Text>
                   </View>
-                )}
+                )} */}
 
               </View>
 

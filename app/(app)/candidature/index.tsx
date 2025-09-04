@@ -16,9 +16,10 @@ import {
 } from 'react-native';
 import { useAuth } from '../../../components/AuthProvider';
 import CustomHeader from '../../../components/CustomHeader';
-import { getUserApplications } from '../../../utils/api';
-import { router } from 'expo-router';
+import { getUserApplications, deleteUserApplication, debugGetUserApplications, debugCandidatureIssue } from '../../../utils/api';
+import { router, useFocusEffect } from 'expo-router';
 import { FontAwesome5, Ionicons, MaterialIcons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width } = Dimensions.get('window');
 
@@ -39,11 +40,13 @@ interface Application {
 }
 
 export default function MyApplicationsScreen() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [applications, setApplications] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  
+  // Component initialisé - candidatures chargées automatiquement
 
   const getStatusConfig = (etat: string) => {
     switch (etat) {
@@ -108,34 +111,69 @@ export default function MyApplicationsScreen() {
     }
   };
 
-  const loadApplications = useCallback(async () => {
-    if (!user) {
+  const loadApplications = async () => {
+    if (user) {
+      setLoading(true);
+      setError(null);
+      
+      try {
+        const fetchedApplications = await getUserApplications();
+        
+        if (fetchedApplications && Array.isArray(fetchedApplications) && fetchedApplications.length > 0) {
+          setApplications(fetchedApplications);
+        } else {
+          setApplications([]);
+        }
+      } catch (err: any) {
+        console.error("Erreur chargement candidatures:", err.message);
+        setError(err.message || "Impossible de charger vos candidatures.");
+      } finally {
+        setLoading(false);
+      }
+    } else {
       setApplications([]);
-      setLoading(false);
-      return;
+      if (!authLoading) {
+        setLoading(false);
+      }
     }
-    setLoading(true);
-    setError(null);
-    try {
-      const fetchedApplications = await getUserApplications();
-      setApplications(fetchedApplications);
-    } catch (err: any) {
-      console.error("Erreur de chargement des candidatures:", err);
-      setError(err.message || "Impossible de charger vos candidatures.");
-    } finally {
-      setLoading(false);
-    }
-  }, [user]);
+  };
 
-  const onRefresh = useCallback(async () => {
+  const onRefresh = async () => {
     setRefreshing(true);
     await loadApplications();
     setRefreshing(false);
-  }, [loadApplications]);
+  };
 
+  // useFocusEffect pour charger à chaque navigation vers la page
+  useFocusEffect(
+    useCallback(() => {
+      console.log('🔄 Page candidature focused - chargement des données');
+      if (user) {
+        loadApplications();
+      }
+    }, [user])
+  );
+
+  // useEffect pour charger au mount (backup)
   useEffect(() => {
-    loadApplications();
-  }, [loadApplications]);
+    if (user) {
+      loadApplications();
+    }
+  }, []); 
+
+  // useEffect pour les changements d'user
+  useEffect(() => {
+    if (user) {
+      loadApplications();
+    }
+  }, [user]);
+
+  // useEffect séparé pour le diagnostic
+  useEffect(() => {
+    if (user?.role === 'interimaire') {
+      debugApplicationsForInterimaire();
+    }
+  }, [user]);
 
   const handleApplicationPress = (applicationId: string) => {
     router.push(`/candidature/application_details?id=${applicationId}`);
@@ -147,6 +185,86 @@ export default function MyApplicationsScreen() {
 
   const handleAvatarPress = () => {
     router.push('/(app)/profile-details');
+  };
+
+  // Fonction de diagnostic pour les intérimaires
+  const debugApplicationsForInterimaire = async () => {
+    console.log('=== DIAGNOSTIC POUR INTÉRIMAIRES ===');
+    
+    if (user?.role !== 'interimaire') {
+      console.log('Utilisateur n\'est pas intérimaire, diagnostic ignoré');
+      return;
+    }
+
+    try {
+      // Test avec la fonction de debug avancée
+      console.log('Test avec debugGetUserApplications...');
+      const debugResult = await debugGetUserApplications();
+      console.log('Résultat debug API:', debugResult);
+
+      // Test direct de l'API standard
+      console.log('Test direct de l\'API getUserApplications...');
+      const directResult = await getUserApplications();
+      console.log('Résultat direct API:', directResult);
+
+      // Test avec des headers spécifiques
+      const token = await AsyncStorage.getItem('user_token');
+      console.log('Token utilisé:', token ? 'Token présent' : 'Pas de token');
+
+      // Vérification du user actuel
+      console.log('Utilisateur actuel:', {
+        id: user.id,
+        role: user.role,
+        name: user.name,
+        email: user.email
+      });
+
+    } catch (error) {
+      console.error('Erreur lors du diagnostic:', error);
+    }
+  };
+
+  const handleDeleteApplication = (applicationId: string, jobTitle: string) => {
+    console.log('=== DELETE APPLICATION DEBUG ===');
+    console.log('Application ID to delete:', applicationId);
+    console.log('Job title:', jobTitle);
+    console.log('Application ID type:', typeof applicationId);
+    
+    if (!applicationId) {
+      Alert.alert('Erreur', 'ID de candidature manquant');
+      return;
+    }
+    
+    Alert.alert(
+      'Supprimer la candidature',
+      `Êtes-vous sûr de vouloir supprimer votre candidature pour "${jobTitle}" ?\n\nID: ${applicationId}`,
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Supprimer',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              console.log('Starting deletion process for application:', applicationId);
+              await deleteUserApplication(applicationId);
+              Alert.alert('Succès', 'Votre candidature a été supprimée avec succès.');
+              // Recharger la liste des candidatures
+              loadApplications();
+            } catch (error: any) {
+              console.error('=== ERREUR SUPPRESSION CANDIDATURE ===');
+              console.error('Error object:', error);
+              console.error('Error message:', error.message);
+              console.error('Error response:', error.response?.data);
+              
+              Alert.alert(
+                'Erreur',
+                error.message || error.response?.data?.message || 'Une erreur est survenue lors de la suppression de la candidature.'
+              );
+            }
+          }
+        }
+      ]
+    );
   };
 
   const renderApplicationCard = ({ item: app, index }: { item: Application; index: number }) => {
@@ -201,18 +319,19 @@ export default function MyApplicationsScreen() {
         {/* Footer de la carte */}
         <View style={styles.cardFooter}>
           <View style={styles.tagsContainer}>
-            <View style={styles.tag}>
-              <Ionicons name="time" size={12} color="#6B7280" />
-              <Text style={styles.tagText}>Candidature</Text>
-            </View>
-            <View style={styles.positionTag}>
-              <Text style={styles.positionText}>#{index + 1}</Text>
-            </View>
+            <TouchableOpacity 
+              style={styles.deleteButton} 
+              onPress={() => handleDeleteApplication(app.id, app.offre?.poste?.titre_poste || 'Poste non spécifié')}
+            >
+              <Ionicons name="trash-outline" size={16} color="#EF4444" />
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity style={styles.detailsButton} onPress={() => handleApplicationPress(app.id)}>
-            <Text style={styles.detailsButtonText}>Voir détails</Text>
-            <Ionicons name="chevron-forward" size={16} color="#0f8e35" />
-          </TouchableOpacity>
+          <View style={styles.actionButtonsContainer}>
+            <TouchableOpacity style={styles.detailsButton} onPress={() => handleApplicationPress(app.id)}>
+              <Text style={styles.detailsButtonText}>Voir détails</Text>
+              <Ionicons name="chevron-forward" size={16} color="#0f8e35" />
+            </TouchableOpacity>
+          </View>
         </View>
       </TouchableOpacity>
     );
@@ -250,6 +369,7 @@ export default function MyApplicationsScreen() {
         <Text style={styles.emptyText}>
           Commencez votre recherche d'emploi en postulant à des offres qui vous intéressent !
         </Text>
+        
         <TouchableOpacity
           style={styles.refreshButton}
           onPress={() => router.push('/(app)/job_board')}
@@ -272,9 +392,19 @@ export default function MyApplicationsScreen() {
         onAvatarPress={handleAvatarPress}  
       />
 
-      {loading ? renderLoadingState() : 
-       error ? renderErrorState() : 
-       applications.length === 0 ? renderEmptyState() : (
+      {(() => {
+        
+        if (loading) {
+          return renderLoadingState();
+        }
+        // Ne pas afficher l'erreur si on a quand même des candidatures
+        if (error && applications.length === 0) {
+          return renderErrorState();
+        }
+        if (applications.length === 0) {
+          return renderEmptyState();
+        }
+        return (
         <View style={styles.container}>
           {/* Header de la section */}
           <View style={styles.sectionHeader}>
@@ -309,7 +439,8 @@ export default function MyApplicationsScreen() {
             windowSize={10}
           />
         </View>
-      )}
+        );
+      })()}
     </SafeAreaView>
   );
 }
@@ -585,5 +716,17 @@ const styles = StyleSheet.create({
     color: '#0f8e35',
     fontSize: 14,
     fontWeight: '600',
+  },
+  actionButtonsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  deleteButton: {
+    padding: 8,
+    borderRadius: 6,
+    backgroundColor: '#FEE2E2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
   },
 });

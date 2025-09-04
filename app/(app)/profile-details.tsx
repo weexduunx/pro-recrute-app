@@ -37,6 +37,7 @@ import {
   createOrUpdateInterimProfile,
   getMissionPreferences,
   updateMissionPreferences,
+  deleteUserAccount,
 } from '../../utils/api';
 import { getJobPreferences, updateJobPreferences } from '../../utils/ai-api';
 import { router } from 'expo-router';
@@ -1192,6 +1193,36 @@ export default function ProfileDetailsScreen() {
 
   const handleMenuPress = () => { Alert.alert(t("Menu"), t("Menu pressé !")); };
   const handleAvatarPress = () => { Alert.alert(t("Profil"), t("Avatar pressé !")); };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      t('Supprimer le compte'),
+      t('Cette action est irréversible. Toutes vos données seront définitivement supprimées. Êtes-vous sûr de vouloir continuer ?'),
+      [
+        { text: t('Annuler'), style: 'cancel' },
+        {
+          text: t('Supprimer'),
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteUserAccount();
+              Alert.alert(
+                t('Compte supprimé'),
+                t('Votre compte a été supprimé avec succès.'),
+                [{ text: 'OK', onPress: () => logout() }]
+              );
+            } catch (error: any) {
+              console.error('Erreur lors de la suppression du compte:', error);
+              Alert.alert(
+                t('Erreur'),
+                error.response?.data?.message || t('Une erreur est survenue lors de la suppression du compte.')
+              );
+            }
+          }
+        }
+      ]
+    );
+  };
 
   const renderTabBar = () => {
     const interimaireTabs = [
@@ -3499,6 +3530,90 @@ export default function ProfileDetailsScreen() {
         keyboardShouldPersistTaps="handled"
       >
         {renderTabContent()}
+        
+        {/* Bouton de suppression de compte - toujours visible */}
+        <View style={{
+          marginTop: 24,
+          marginHorizontal: 16,
+          paddingTop: 20,
+          paddingHorizontal: 20,
+          paddingBottom: 16,
+          borderTopWidth: 3,
+          borderTopColor: '#FCA5A5',
+          backgroundColor: '#FEF2F2',
+          borderRadius: 12,
+          shadowColor: '#EF4444',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.1,
+          shadowRadius: 4,
+          elevation: 2,
+        }}>
+          <Text style={{
+            fontSize: 18,
+            fontWeight: '600',
+            marginBottom: 8,
+            textAlign: 'center',
+            color: colors.textPrimary
+          }}>{t('Zone de danger')}</Text>
+          
+          <Text style={{
+            fontSize: 14,
+            textAlign: 'center',
+            marginBottom: 16,
+            color: colors.textSecondary
+          }}>
+            {t('Actions irréversibles')}
+          </Text>
+          
+          <TouchableOpacity
+            style={{
+              flexDirection: 'row',
+              paddingVertical: 10,
+              paddingHorizontal: 24,
+              borderRadius: 16,
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginTop: 14,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.4,
+              shadowRadius: 8,
+              backgroundColor: colors.error,
+            }}
+            onPress={handleDeleteAccount}
+            disabled={authLoading}
+          >
+            <Ionicons name="warning" size={24} color="#FFFFFF" style={{ marginRight: 8 }} />
+            <Text style={{
+              color: '#FFFFFF',
+              fontSize: 16,
+              fontWeight: '600',
+            }}>{t('Supprimer définitivement mon compte')}</Text>
+          </TouchableOpacity>
+          
+          <View style={{
+            flexDirection: 'row',
+            alignItems: 'flex-start',
+            marginTop: 12,
+            paddingHorizontal: 12,
+            paddingVertical: 8,
+            backgroundColor: '#FEF9C3',
+            borderRadius: 8,
+            borderLeftWidth: 3,
+            borderLeftColor: '#F59E0B',
+          }}>
+            <Ionicons name="information-circle-outline" size={16} color={colors.textSecondary} />
+            <Text style={{
+              fontSize: 12,
+              marginLeft: 8,
+              lineHeight: 16,
+              flex: 1,
+              color: colors.textSecondary
+            }}>
+              {t('Cette action supprimera définitivement votre compte et toutes vos données. Cette opération ne peut pas être annulée.')}
+            </Text>
+          </View>
+        </View>
       </ScrollView>
       <Modal
         visible={showCompletionModal}

@@ -301,10 +301,66 @@ export const getParsedCvData = async () => {
 
 export const getUserApplications = async () => {
   try {
+    console.log('=== API CALL: getUserApplications START ===');
     const response = await api.get('/user/applications'); // Laravel: GET /api/user/applications
+    console.log('=== API CALL: getUserApplications SUCCESS ===');
+    console.log('Response status:', response.status);
+    console.log('Response data:', response.data);
+    console.log('Data length:', response.data?.length || 0);
     return response.data;
   } catch (error) {
+    console.error('=== API CALL: getUserApplications ERROR ===');
+    console.error('Error status:', error.response?.status);
+    console.error('Error data:', error.response?.data);
     console.error("Échec de l'appel API getUserApplications:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+// Route de debug pour diagnostiquer le problème candidature
+export const debugCandidatureIssue = async () => {
+  try {
+    console.log('=== DEBUG CANDIDATURE ISSUE ===');
+    const response = await api.get('/debug/applications');
+    console.log('Debug response:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('Debug candidature error:', error.response?.data || error.message);
+    throw error;
+  }
+};
+
+// Version debug spécifique pour diagnostiquer les problèmes d'intérimaires
+export const debugGetUserApplications = async () => {
+  try {
+    console.log('=== DEBUG API CALL: getUserApplications START ===');
+    
+    // Récupérer le token manuellement
+    const token = await AsyncStorage.getItem('user_token');
+    console.log('Token in storage:', token ? 'Present' : 'Missing');
+    
+    // Faire plusieurs tests d'endpoints
+    const endpoints = [
+      '/user/applications',
+      '/candidature', // Alternative endpoint
+      '/user/candidatures' // Autre alternative
+    ];
+    
+    for (const endpoint of endpoints) {
+      try {
+        console.log(`Testing endpoint: ${endpoint}`);
+        const response = await api.get(endpoint);
+        console.log(`SUCCESS ${endpoint}:`, response.status, response.data);
+        return { endpoint, success: true, data: response.data };
+      } catch (err) {
+        console.log(`FAILED ${endpoint}:`, err.response?.status, err.response?.data);
+      }
+    }
+    
+    throw new Error('All endpoints failed');
+  } catch (error) {
+    console.error('=== DEBUG API CALL: All tests failed ===');
+    console.error('Final error:', error);
     throw error;
   }
 };
@@ -1530,6 +1586,117 @@ export const updateMissionPreferences = async (preferences) => {
     console.error('Error status:', error.response?.status);
     console.error('Error data:', error.response?.data);
     console.error("Échec de l'appel API updateMissionPreferences:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+// ============= ACCOUNT MANAGEMENT =============
+
+export const deleteUserAccount = async () => {
+  try {
+    console.log('=== API CALL: deleteUserAccount START ===');
+    const response = await api.delete('/user/account');
+    console.log('=== API CALL: deleteUserAccount SUCCESS ===');
+    console.log('Response data:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('=== API CALL: deleteUserAccount ERROR ===');
+    console.error('Error status:', error.response?.status);
+    console.error('Error data:', error.response?.data);
+    console.error("Échec de l'appel API deleteUserAccount:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+export const deleteUserApplication = async (applicationId) => {
+  console.log('=== API CALL: deleteUserApplication START ===');
+  console.log('Application ID:', applicationId);
+  
+  if (!applicationId) {
+    throw new Error('Application ID is required');
+  }
+  
+  try {
+    const response = await api.delete(`/user/applications/${applicationId}`);
+    console.log('✅ Candidature supprimée avec succès:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('❌ Erreur lors de la suppression de la candidature:', error.response?.data || error.message);
+    throw error;
+  }
+};
+
+// Envoyer un avertissement d'inactivité au backend
+export const sendInactivityWarning = async (inactivityDays, warningDay) => {
+  try {
+    console.log('=== API CALL: sendInactivityWarning START ===');
+    const response = await api.post('/user/inactivity-warning', {
+      inactivity_days: inactivityDays,
+      warning_day: warningDay,
+      timestamp: Date.now()
+    });
+    console.log('=== API CALL: sendInactivityWarning SUCCESS ===');
+    console.log('Response data:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('=== API CALL: sendInactivityWarning ERROR ===');
+    console.error('Error status:', error.response?.status);
+    console.error('Error data:', error.response?.data);
+    console.error("Échec de l'appel API sendInactivityWarning:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+// Déclencher la suppression automatique d'un compte pour inactivité
+export const autoDeleteInactiveAccount = async () => {
+  try {
+    console.log('=== API CALL: autoDeleteInactiveAccount START ===');
+    const response = await api.delete('/user/account/auto-delete');
+    console.log('=== API CALL: autoDeleteInactiveAccount SUCCESS ===');
+    console.log('Response data:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('=== API CALL: autoDeleteInactiveAccount ERROR ===');
+    console.error('Error status:', error.response?.status);
+    console.error('Error data:', error.response?.data);
+    console.error("Échec de l'appel API autoDeleteInactiveAccount:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+// Obtenir le statut d'inactivité de l'utilisateur actuel
+export const getUserInactivityStatus = async () => {
+  try {
+    console.log('=== API CALL: getUserInactivityStatus START ===');
+    const response = await api.get('/user/inactivity-status');
+    console.log('=== API CALL: getUserInactivityStatus SUCCESS ===');
+    console.log('Response data:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('=== API CALL: getUserInactivityStatus ERROR ===');
+    console.error('Error status:', error.response?.status);
+    console.error('Error data:', error.response?.data);
+    console.error("Échec de l'appel API getUserInactivityStatus:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+// Enregistrer l'activité de l'utilisateur
+export const recordUserActivity = async () => {
+  try {
+    console.log('=== API CALL: recordUserActivity START ===');
+    const response = await api.post('/user/activity', {
+      timestamp: Date.now(),
+      activity_type: 'general'
+    });
+    console.log('=== API CALL: recordUserActivity SUCCESS ===');
+    console.log('Response data:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('=== API CALL: recordUserActivity ERROR ===');
+    console.error('Error status:', error.response?.status);
+    console.error('Error data:', error.response?.data);
+    console.error("Échec de l'appel API recordUserActivity:", error.response?.data || error.message);
     throw error;
   }
 };

@@ -293,12 +293,12 @@ const styles = StyleSheet.create({
   // Section Header
   headerSection: {
     alignItems: "center",
-    marginBottom: 32,
-    paddingTop: 12,
+    marginBottom: 30,
+    paddingTop: 10,
   },
   logo: {
-    width: 95,
-    height: 95,
+    width: 100,
+    height: 100,
     marginBottom: 16,
   },
   title: {

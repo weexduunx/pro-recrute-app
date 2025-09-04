@@ -44,8 +44,12 @@ export const getUnreadNotificationCount = async () => {
     const response = await api.get('/interim/notifications/unread-count');
     return response.data;
   } catch (error) {
-    console.error("Échec de l'appel API getUnreadNotificationCount:", error.response?.data || error.message);
-    throw error;
+    // Réduire les logs d'erreur pour éviter le spam
+    if (error.response?.status !== 404 && error.response?.status !== 500) {
+      console.warn("API getUnreadNotificationCount:", error.response?.status || 'Network error');
+    }
+    // Retourner un objet par défaut au lieu de throw pour éviter de casser l'app
+    return { success: false, unread_count: 0 };
   }
 };
 

@@ -11,6 +11,7 @@ import { ThemeProvider, useTheme } from '../components/ThemeContext';
 import { LanguageProvider, useLanguage } from '../components/LanguageContext';
 import { StatusBar } from 'react-native';
 import Toast from 'react-native-toast-message';
+import CleanupServiceManager from '../services/CleanupServiceManager';
 
 /**
  * Composant Layout Racine :
@@ -27,7 +28,9 @@ export default function RootLayout() {
           <LanguageProvider>
             <ThemeProvider>
               <AuthPermissionsManager>
-                <RootLayoutContent />
+                <CleanupServiceManager>
+                  <RootLayoutContent />
+                </CleanupServiceManager>
                 <Toast />
               </AuthPermissionsManager>
             </ThemeProvider>

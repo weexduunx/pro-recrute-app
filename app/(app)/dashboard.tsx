@@ -7,7 +7,8 @@ import { getUserApplications, getRecommendedOffres, getCandidatEntretiensCalendr
 import { getAIJobRecommendations } from '../../utils/ai-api'; 
 import { router, useRouter  } from 'expo-router';
 import CustomHeader from '../../components/CustomHeader';
-import { useTheme } from '../../components/ThemeContext'; 
+import { useTheme } from '../../components/ThemeContext';
+import InactivityAlert from '../../components/InactivityAlert'; 
 
 // Fonction helper pour s'assurer qu'on a toujours un tableau
 const ensureArray = (data: any): any[] => {
@@ -340,6 +341,9 @@ export default function DashboardScreen() {
         onMenuPress={handleMenuPress}
         onAvatarPress={handleAvatarPress}
       />
+
+      {/* Alerte d'inactivité */}
+      <InactivityAlert />
 
       <ScrollView 
         contentContainerStyle={[styles.scrollContainer, { backgroundColor: colors.background }]}

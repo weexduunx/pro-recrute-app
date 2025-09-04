@@ -21,8 +21,12 @@ export const getUnreadCandidatNotificationCount = async () => {
     const response = await api.get('/candidat/notifications/unread-count');
     return response.data;
   } catch (error) {
-    console.error('Erreur lors de la récupération du compteur de notifications candidat:', error);
-    throw error;
+    // Réduire les logs d'erreur pour éviter le spam
+    if (error.response?.status !== 404 && error.response?.status !== 500) {
+      console.warn("API getUnreadCandidatNotificationCount:", error.response?.status || 'Network error');
+    }
+    // Retourner un objet par défaut au lieu de throw pour éviter de casser l'app
+    return { success: false, unread_count: 0 };
   }
 };
 

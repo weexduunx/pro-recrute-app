@@ -99,7 +99,7 @@ export default function RegisterScreen() {
         {/* Section Header */}
         <View style={styles.headerSection}>
           <Image
-            source={require('../../assets/images/logo.png')}
+            source={require('../../assets/images/logogbg.png')}
             style={styles.logo}
             resizeMode="contain"
           />
@@ -321,13 +321,13 @@ const styles = StyleSheet.create({
   // Section Header
   headerSection: {
     alignItems: "center",
-    marginBottom: 48,
-    paddingTop: 20,
+    marginBottom: 30,
+    paddingTop: 10,
   },
   logo: {
     width: 100,
     height: 100,
-    marginBottom: 20,
+    marginBottom: 16,
   },
   title: {
     fontSize: 28,
