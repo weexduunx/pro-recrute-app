@@ -9,6 +9,22 @@ import * as Device from 'expo-device';
 // **IMPORTANT: Mettez à jour cette URL avec l'adresse IP et le port du  backend Laravel**
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.11:8000/api'; //Variable d'environnement en priorité
 
+// Variable pour éviter la suppression immédiate du token après connexion
+let recentTokenSet = false;
+let tokenSetTimestamp = 0;
+
+// Fonction pour marquer qu'un token a été récemment défini
+export const markTokenAsRecentlySet = () => {
+  recentTokenSet = true;
+  tokenSetTimestamp = Date.now();
+  console.log('API: Token marqué comme récemment défini à', new Date(tokenSetTimestamp));
+  
+  // Réinitialiser après 10 secondes pour éviter les problèmes à long terme
+  setTimeout(() => {
+    recentTokenSet = false;
+    console.log('API: Protection du token récent expirée');
+  }, 10000);
+};
 
 console.log('API_URL configuré:', API_URL); //Debug
 
@@ -46,8 +62,17 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && !error.config._retry) {
       error.config._retry = true; // Marque la requête comme retentée pour éviter les boucles infinies
       console.warn("API Interceptor: Jeton d'authentification expiré ou invalide (401).");
-      await AsyncStorage.removeItem('user_token'); // Nettoie le token invalide localement
-      // L'AuthProvider devrait gérer la redirection vers l'écran de connexion
+      
+      // Vérifier si un token vient d'être défini récemment (dans les 5 dernières secondes)
+      const now = Date.now();
+      if (recentTokenSet && (now - tokenSetTimestamp) < 5000) {
+        console.log("API Interceptor: Token récent détecté, pas de suppression automatique");
+        // Ne pas supprimer le token s'il vient d'être défini
+      } else {
+        await AsyncStorage.removeItem('user_token'); // Nettoie le token invalide localement
+        console.log("API Interceptor: Token supprimé en raison d'une erreur 401");
+        // L'AuthProvider devrait gérer la redirection vers l'écran de connexion
+      }
     } else {
       // Loggue les autres erreurs API comme des erreurs (y compris les 500)
       // Mais pas les 409 qui sont des cas normaux pour les skill assessments

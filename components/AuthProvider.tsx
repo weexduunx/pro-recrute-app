@@ -99,6 +99,11 @@ interface AuthContextType {
   fetchUser: () => Promise<void>;
   refreshUserProfile: () => Promise<void>;
   completeOnboarding: () => Promise<void>;
+  // Méthodes internes exposées pour LinkedIn callback
+  setUser: (user: User | null) => void;
+  setToken: (token: string | null) => void;
+  setError: (error: string | null) => void;
+  setLoading: (loading: boolean) => void;
 }
 
 // IMPORTANT: Utiliser le scheme configuré dans app.json avec le bon path
@@ -462,43 +467,18 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       } else if (provider === 'linkedin') {
         console.log('🔗 Démarrage de la connexion LinkedIn...');
         
-        // Utiliser le service LinkedIn Auth
-        const linkedinResult = await linkedinAuth.signIn();
-        
-        console.log('✅ Connexion LinkedIn réussie, envoi au backend...');
-        
-        // Envoyer les informations au backend
-        const response = await apiRequest('/auth/linkedin/token', {
-          method: 'POST',
-          body: {
-            code: linkedinResult.code,
-            state: linkedinResult.state,
-          }
-        });
-
-        if (response.success) {
-          const { user: userFromApi, token: tokenFromApi } = response;
+        try {
+          // Utiliser le service LinkedIn Auth pour ouvrir le navigateur
+          const linkedinResult = await linkedinAuth.signIn();
           
-          // D'abord sauvegarder le token et mettre à jour le contexte
-          await AsyncStorage.setItem('user_token', tokenFromApi);
-          setToken(tokenFromApi);
+          console.log('✅ Navigateur LinkedIn fermé, le traitement se poursuivra dans linkedin-callback.tsx');
           
-          // Puis récupérer le profil intérimaire si nécessaire (maintenant avec le token)
-          if (userFromApi && userFromApi.role === 'interimaire') {
-            const interimProfile = await getInterimProfile();
-            if (interimProfile) {
-              userFromApi.is_contract_active = interimProfile.is_contract_active;
-            } else {
-              userFromApi.is_contract_active = false;
-            }
-          }
-
-          setUser(userFromApi);
+          // Le traitement complet sera fait par la page linkedin-callback.tsx
+          // qui gérera l'échange du code et l'authentification
           
-          console.log('✅ Authentification LinkedIn complète');
-          handleRedirect(true, userFromApi?.role, userFromApi?.is_otp_verified, userFromApi?.is_contract_active);
-        } else {
-          setError(response.message || 'Erreur lors de l\'authentification LinkedIn');
+        } catch (error: any) {
+          console.error('Erreur LinkedIn Auth:', error);
+          throw error;
         }
       } else {
         setError(`Fournisseur ${provider} non supporté`);
@@ -547,6 +527,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     }
   };
   
+
   const clearError = () => setError(null);
 
   const authContextValue = {
@@ -567,6 +548,11 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     fetchUser,
     refreshUserProfile,
     completeOnboarding,
+    // Méthodes internes exposées pour LinkedIn callback
+    setUser,
+    setToken,
+    setError,
+    setLoading,
   };
 
   return (

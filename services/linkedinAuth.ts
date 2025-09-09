@@ -4,7 +4,7 @@ import { Platform } from 'react-native';
 // Configuration LinkedIn OAuth 2.0
 const LINKEDIN_CONFIG = {
   clientId: process.env.EXPO_PUBLIC_LINKEDIN_CLIENT_ID || 'YOUR_LINKEDIN_CLIENT_ID', // À configurer dans .env
-  redirectUri: 'https://auth.expo.io/@weexduunx88/pro-recrute-gbg/linkedin-callback',
+  redirectUri: 'https://prorecruteapp.netlify.app',
   scope: 'profile email openid', // Permissions demandées selon la doc LinkedIn
   responseType: 'code',
   state: Math.random().toString(36).substring(2, 15) // État aléatoire pour la sécurité
@@ -57,18 +57,13 @@ export class LinkedInAuthService {
           throw new Error('Code d\'autorisation LinkedIn manquant');
         }
 
-        // Échanger le code contre un access token via votre backend
-        console.log('🔄 Échange du code contre un access token...');
-        const tokenData = await this.exchangeCodeForToken(code, state);
+        console.log('✅ Code LinkedIn reçu, laissant la page callback traiter...');
         
-        // Récupérer les informations utilisateur
-        console.log('👤 Récupération du profil utilisateur...');
-        const userProfile = await this.getUserProfile(tokenData.accessToken);
-        
+        // Retourner seulement le code et state, le traitement sera fait par linkedin-callback.tsx
         return {
           code,
           state,
-          user: userProfile
+          user: null // Pas de traitement utilisateur ici
         };
 
       } else if (result.type === 'cancel') {

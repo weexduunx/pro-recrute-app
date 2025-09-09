@@ -6,12 +6,13 @@ import { AuthProvider, useAuth } from '../components/AuthProvider';
 import { PermissionsProvider } from '../components/PermissionsManager';
 import { AuthPermissionsManager } from '../components/useAuthPermissions';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import React from 'react';
+import React, { useEffect } from 'react';
 import { ThemeProvider, useTheme } from '../components/ThemeContext';
 import { LanguageProvider, useLanguage } from '../components/LanguageContext';
 import { StatusBar } from 'react-native';
 import Toast from 'react-native-toast-message';
 import CleanupServiceManager from '../services/CleanupServiceManager';
+import * as Linking from 'expo-linking';
 
 /**
  * Composant Layout Racine :
@@ -50,6 +51,33 @@ function RootLayoutContent() {
   const { isAuthenticated, isAppReady } = useAuth();
   const { isDarkMode, colors } = useTheme();
   const { t } = useLanguage();
+
+  // Gestionnaire pour les liens entrants (deep linking)
+  useEffect(() => {
+    const handleDeepLink = (url: string) => {
+      console.log('Deep link received:', url);
+      
+      // Les callbacks LinkedIn sont maintenant gérés directement par WebBrowser.openAuthSessionAsync
+      // Pas besoin de traitement supplémentaire ici
+      if (url.includes('linkedin-callback')) {
+        console.log('LinkedIn callback detected - handled by WebBrowser');
+      }
+    };
+
+    // Écouter les liens entrants
+    const subscription = Linking.addEventListener('url', (event) => {
+      handleDeepLink(event.url);
+    });
+
+    // Vérifier s'il y a un lien au démarrage de l'app
+    Linking.getInitialURL().then((url) => {
+      if (url) {
+        handleDeepLink(url);
+      }
+    });
+
+    return () => subscription?.remove();
+  }, []);
 
   StatusBar.setBarStyle(isDarkMode ? 'light-content' : 'dark-content');
   StatusBar.setBackgroundColor(colors.background);
