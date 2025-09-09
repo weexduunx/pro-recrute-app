@@ -14,16 +14,12 @@
       },
       "oauth_client": [
         {
-          "client_id": "259055828314-7mstukj4pv4atfm4pfmr5bahnjo1b8ee.apps.googleusercontent.com",
+          "client_id": "259055828314-pm6lic8jg63k8d7cl19hmhsu2db6m8r5.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.weexduunx88.prorecrutegbg",
-            "certificate_hash": "5e8f16062ea3cd2c4a0d547876baa6f38cabf625"
+            "certificate_hash": "6f2b748f0a018c4343a234661eb6a6af0187a6b6"
           }
-        },
-        {
-          "client_id": "259055828314-tsskg52hvujjphttin0t4fh6d5ri8tvf.apps.googleusercontent.com",
-          "client_type": 3
         }
       ],
       "api_key": [
@@ -33,12 +29,7 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": [
-            {
-              "client_id": "259055828314-omrmlv78nkn2vlcsvuod15tgnusun8ik.apps.googleusercontent.com",
-              "client_type": 3
-            }
-          ]
+          "other_platform_oauth_client": []
         }
       }
     }

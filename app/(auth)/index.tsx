@@ -243,7 +243,7 @@ export default function LoginScreen() {
 
           <TouchableOpacity
             style={styles.linkButton}
-            onPress={() => Alert.alert("Mot de passe oublié", "Fonctionnalité à implémenter.")}
+            onPress={() => router.push('/(auth)/forgot-password')}
             disabled={loading}
           >
             <Text style={styles.linkText}>Mot de passe oublié ?</Text>

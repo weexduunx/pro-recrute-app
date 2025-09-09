@@ -18,10 +18,13 @@ import {
   getInterimProfile,
   sendOtp as apiSendOtp,
   verifyOtp as apiVerifyOtp,
+  apiRequest,
 } from '../utils/api';
 import { router, useSegments } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import * as AuthSession from 'expo-auth-session';
+import { googleAuth } from '../services/googleAuth';
+import { linkedinAuth } from '../services/linkedinAuth';
 
 // Import conditionnel pour Device
 let Device;
@@ -98,8 +101,11 @@ interface AuthContextType {
   completeOnboarding: () => Promise<void>;
 }
 
-// IMPORTANT: Le SCHEME doit correspondre à celui que vous avez dans app.json pour votre application Expo
-const REDIRECT_URI = AuthSession.makeRedirectUri({ scheme: 'prorecruteapp' });
+// IMPORTANT: Utiliser le scheme configuré dans app.json avec le bon path
+const REDIRECT_URI = AuthSession.makeRedirectUri({
+  scheme: 'prorecruteapp',
+  path: 'auth'
+});
 console.log('AuthProvider: Redirect URI généré:', REDIRECT_URI); // Débogage 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -403,37 +409,40 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   };
 
   /**
-    * [NOUVEAU] Gère le processus de connexion sociale via OAuth.
-    * Gère le processus de connexion sociale via OAuth.
+    * Nouvelle méthode de connexion sociale utilisant l'API Google officielle
     * @param {string} provider - Le nom du fournisseur ('google', 'linkedin').
     */
   const socialLogin = async (provider: string) => {
     setLoading(true);
     setError(null);
 
-    // L'URL de redirection vers votre API Laravel pour initier le flux OAuth
-    // Assurez-vous que l'URL de votre API Laravel est correcte
-    const LARAVEL_SOCIAL_REDIRECT_URL = `http://192.168.1.11:8000/api/auth/${provider}/redirect`; // Utiliser l'IP locale pour le dev
-
     try {
-      const result = await WebBrowser.openAuthSessionAsync(
-        LARAVEL_SOCIAL_REDIRECT_URL,
-        REDIRECT_URI
-      );
+      if (provider === 'google') {
+        console.log('🚀 Démarrage de la connexion Google...');
+        
+        // Utiliser le service Google Auth
+        const googleResult = await googleAuth.signIn();
+        
+        console.log('✅ Connexion Google réussie, envoi au backend...');
+        
+        // Envoyer les informations au backend
+        const response = await apiRequest('/auth/google/token', {
+          method: 'POST',
+          body: {
+            idToken: googleResult.idToken,
+            accessToken: googleResult.accessToken,
+            user: googleResult.user
+          }
+        });
 
-      if (result.type === 'success' && result.url) {
-        const url = new URL(result.url);
-        const tokenFromUrl = url.searchParams.get('token');
-        const roleFromUrl = url.searchParams.get('role');
-        const errorFromUrl = url.searchParams.get('error');
-
-        if (errorFromUrl) {
-          setError(decodeURIComponent(errorFromUrl));
-          console.error(`AuthProvider: Erreur OAuth depuis l'API: ${decodeURIComponent(errorFromUrl)}`);
-        } else if (tokenFromUrl) {
-          const userFromApi = await apiFetchUserProfile(); // Récupérer l'utilisateur complet via le token
-
-          // Récupérer le profil intérimaire si nécessaire
+        if (response.success) {
+          const { user: userFromApi, token: tokenFromApi } = response;
+          
+          // D'abord sauvegarder le token et mettre à jour le contexte
+          await AsyncStorage.setItem('user_token', tokenFromApi);
+          setToken(tokenFromApi);
+          
+          // Puis récupérer le profil intérimaire si nécessaire (maintenant avec le token)
           if (userFromApi && userFromApi.role === 'interimaire') {
             const interimProfile = await getInterimProfile();
             if (interimProfile) {
@@ -443,23 +452,60 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
             }
           }
 
-          await AsyncStorage.setItem('user_token', tokenFromUrl);
           setUser(userFromApi);
-          setToken(tokenFromUrl);
+          
+          console.log('✅ Authentification Google complète');
           handleRedirect(true, userFromApi?.role, userFromApi?.is_otp_verified, userFromApi?.is_contract_active);
-
         } else {
-          setError('Token manquant dans la réponse OAuth.');
-          console.error('AuthProvider: Token manquant après Social Login.');
+          setError(response.message || 'Erreur lors de l\'authentification Google');
         }
-      } else if (result.type === 'cancel') {
-        setError('Connexion annulée par l\'utilisateur.');
+      } else if (provider === 'linkedin') {
+        console.log('🔗 Démarrage de la connexion LinkedIn...');
+        
+        // Utiliser le service LinkedIn Auth
+        const linkedinResult = await linkedinAuth.signIn();
+        
+        console.log('✅ Connexion LinkedIn réussie, envoi au backend...');
+        
+        // Envoyer les informations au backend
+        const response = await apiRequest('/auth/linkedin/token', {
+          method: 'POST',
+          body: {
+            code: linkedinResult.code,
+            state: linkedinResult.state,
+          }
+        });
+
+        if (response.success) {
+          const { user: userFromApi, token: tokenFromApi } = response;
+          
+          // D'abord sauvegarder le token et mettre à jour le contexte
+          await AsyncStorage.setItem('user_token', tokenFromApi);
+          setToken(tokenFromApi);
+          
+          // Puis récupérer le profil intérimaire si nécessaire (maintenant avec le token)
+          if (userFromApi && userFromApi.role === 'interimaire') {
+            const interimProfile = await getInterimProfile();
+            if (interimProfile) {
+              userFromApi.is_contract_active = interimProfile.is_contract_active;
+            } else {
+              userFromApi.is_contract_active = false;
+            }
+          }
+
+          setUser(userFromApi);
+          
+          console.log('✅ Authentification LinkedIn complète');
+          handleRedirect(true, userFromApi?.role, userFromApi?.is_otp_verified, userFromApi?.is_contract_active);
+        } else {
+          setError(response.message || 'Erreur lors de l\'authentification LinkedIn');
+        }
       } else {
-        setError('Échec de la connexion OAuth.');
+        setError(`Fournisseur ${provider} non supporté`);
       }
     } catch (err: any) {
-      console.error(`Échec de la connexion sociale via ${provider}:`, err.response?.data || err.message);
-      setError(err.response?.data?.message || `Échec de la connexion via ${provider}. Veuillez réessayer.`);
+      console.error(`Échec de la connexion sociale via ${provider}:`, err);
+      setError(err.message || `Échec de la connexion via ${provider}. Veuillez réessayer.`);
     } finally {
       setLoading(false);
     }

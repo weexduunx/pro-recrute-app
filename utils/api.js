@@ -1701,6 +1701,63 @@ export const recordUserActivity = async () => {
   }
 };
 
+// Fonctions pour le reset de mot de passe
+export const sendPasswordResetLink = async (email) => {
+  try {
+    console.log('Envoi du lien de réinitialisation pour:', email);
+    const response = await api.post('/password/email', { email });
+    console.log('Réponse sendPasswordResetLink:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('Erreur sendPasswordResetLink:', error.response?.data || error.message);
+    throw error;
+  }
+};
+
+export const resetPassword = async (email, password, passwordConfirmation, token) => {
+  try {
+    console.log('Réinitialisation du mot de passe pour:', email);
+    const response = await api.post('/password/reset', {
+      email,
+      password,
+      password_confirmation: passwordConfirmation,
+      token
+    });
+    console.log('Réponse resetPassword:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('Erreur resetPassword:', error.response?.data || error.message);
+    throw error;
+  }
+};
+
+// Fonction utilitaire pour faire des requêtes API génériques
+export const apiRequest = async (endpoint, options = {}) => {
+  try {
+    const { method = 'GET', body, headers } = options;
+    
+    const config = {
+      method,
+      url: endpoint,
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        ...headers,
+      },
+    };
+
+    if (body && (method === 'POST' || method === 'PUT' || method === 'PATCH')) {
+      config.data = body;
+    }
+
+    const response = await api(config);
+    return response.data;
+  } catch (error) {
+    console.error(`Erreur API ${endpoint}:`, error.response?.data || error.message);
+    throw error.response?.data || error;
+  }
+};
+
 // Note: Export des nouvelles APIs commenté pour éviter les cycles d'import
 // Uncomment seulement si les modules n'importent pas api.js
 // export * from './messaging-api';

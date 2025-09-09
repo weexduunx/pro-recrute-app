@@ -4,6 +4,7 @@
     "slug": "pro-recrute-gbg",
     "version": "1.0.0",
     "scheme": "prorecruteapp",
+    "schemes": ["prorecruteapp"],
     "owner": "weexduunx88",
     "description": "Pro Recrute GBG est une application de recrutement conçue pour mettre en relation les demandeurs d'emploi et les employeurs au Sénégal. Elle offre une plateforme permettant aux utilisateurs de rechercher des offres d'emploi, de postuler et de gérer leur profil.",
     "platforms": [
@@ -75,7 +76,13 @@
       ],
       "expo-web-browser",
       "expo-notifications",
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.259055828314-tsskg52hvujjphttin0t4fh6d5ri8tvf"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
