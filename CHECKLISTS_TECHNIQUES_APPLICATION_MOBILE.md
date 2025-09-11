@@ -333,55 +333,182 @@
 
 ---
 
-## VIII. Interface Intérimaires
+## VIII. Gestion des Entretiens
 
-### ✅ Checklist Technique - Interim Management
+### ✅ Checklist Technique - Interview Management
 
-**Dashboard Spécialisé :**
-- [x] `(interimaire)/index.tsx` - Vue d'ensemble missions
-- [x] `analytics.tsx` - KPIs et métriques intérimaire
-- [x] `charts.tsx` - Visualisations données temporaires
-- [x] `reports.tsx` - Rapports période et facturation
-- [x] Calendrier intégré avec disponibilités
+**Écrans Entretiens Existants :**
+- [x] `entretiens/index.tsx` - Dashboard principal avec stats et prochain entretien
+- [x] `entretiens/liste.tsx` - Liste complète des entretiens
+- [x] `entretiens/calendrier.tsx` - Vue calendrier des entretiens
+- [x] `entretiens/details.tsx` - Détails d'un entretien spécifique
+- [x] `entretiens/preparation.tsx` - Guides et conseils de préparation
+- [x] `entretiens/historique.tsx` - Historique des entretiens passés
 
-**Gestion Documents RH :**
-- [x] `hr_file.tsx` - Dossier RH numérique
-- [x] `ipm_file.tsx` - Gestion fichiers IPM
-- [x] `carte-ipm.tsx` - Carte IPM digitale avec QR Code
-- [x] Upload et validation documents officiels
-- [x] Signature électronique contrats
+**Fonctionnalités Implémentées :**
+- [x] API `getCandidatEntretiensCalendrier()` - Récupération des entretiens
+- [x] Détection prochain entretien avec formatage intelligent
+- [x] Statistiques temps réel (total, à venir, terminés, en attente)
+- [x] Navigation contextuelle entre les écrans
+- [x] Pull-to-refresh sur toutes les vues
+- [x] États de chargement avec indicateurs visuels
 
-**Planning et Missions :**
-- [x] `structures.tsx` - Liste entreprises partenaires
-- [x] `structure-details.tsx` - Détails et historique missions
-- [x] Gestion créneaux disponibilité
-- [x] Matching automatique missions/profil
-- [x] Notifications missions compatibles
+**Interface Utilisateur :**
+- [x] Card design responsive pour prochain entretien
+- [x] Grille statistiques avec icônes contextuelles
+- [x] Actions rapides vers fonctions principales
+- [x] Conseils du jour intégrés
+- [x] Support thème clair/sombre via ThemeContext
+- [x] Gestion SafeArea et StatusBar
 
-**Facturation et Suivi :**
-- [x] Timesheet digital avec géolocalisation
-- [x] Validation heures par structure
-- [x] Génération factures automatique
-- [x] Suivi paiements et relances
-- [x] Déclarations sociales automatisées
+### 🔧 Procédés Techniques - Entretiens
 
-### 🔧 Procédés Techniques - Interim
+**Gestion d'État :**
+- useState pour données entretiens locales
+- useCallback pour optimisation performance
+- useAuth pour contexte utilisateur
+- useTheme pour cohérence visuelle
 
-**Workflow Management :**
-- State Machine pour statuts missions
-- Event Sourcing pour traçabilité
-- Saga Pattern pour transactions distribuées
-- BPMN pour processus métier
-
-**Compliance et Légal :**
-- GDPR compliance pour données personnelles
-- Archivage légal documents (10 ans)
-- Audit trail pour modifications
-- Chiffrement données sensibles
+**Architecture de Données :**
+- Format de date intelligent (Aujourd'hui/Demain)
+- Tri automatique par date/heure
+- Calcul statistiques en temps réel
+- Filtrage par statut et échéances
 
 ---
 
-## IX. Gestion du Profil Candidat
+## IX. Gestion des Candidatures
+
+### ✅ Checklist Technique - Application Management
+
+**Écrans Candidatures Existants :**
+- [x] `candidature/index.tsx` - Liste principale des candidatures
+- [x] `candidature/application_details.tsx` - Détails candidature spécifique
+- [x] Layout navigation avec `candidature/_layout.tsx`
+
+**APIs et Services Implémentés :**
+- [x] `getUserApplications()` - Récupération candidatures utilisateur
+- [x] `deleteUserApplication()` - Suppression candidature avec confirmation
+- [x] `debugGetUserApplications()` - Diagnostics pour intérimaires
+- [x] Support AsyncStorage pour persistance token
+- [x] Gestion erreurs avec retry automatique
+
+**Système de Statuts Avancé :**
+- [x] États: En attente, Préselectionné, Retenu, Non retenu, Stand By
+- [x] Configuration couleurs et icônes par statut
+- [x] Compatibilité anciens statuts (Acceptée/Refusée)
+- [x] Badges visuels avec indicateurs coloriés
+- [x] Mapping intelligent statuts vers interface
+
+**Interface Candidature :**
+- [x] FlatList optimisée avec pagination
+- [x] Pull-to-refresh avec contrôles visuels
+- [x] Cards responsive avec informations complètes
+- [x] Actions contextuelles (voir détails, supprimer)
+- [x] États de chargement, erreur, et vide
+- [x] Système de compteurs temps réel
+
+**Fonctionnalités Avancées :**
+- [x] Diagnostic spécialisé pour rôle intérimaire
+- [x] Gestion multi-device avec focus callback
+- [x] Optimisation mémoire (removeClippedSubviews)
+- [x] Navigation conditionnelle selon données
+- [x] Confirmation suppression avec détails offre
+
+### 🔧 Procédés Techniques - Candidatures
+
+**Optimisation Performance :**
+- useFocusEffect pour rechargement intelligent
+- FlatList avec maxToRenderPerBatch optimisé
+- removeClippedSubviews pour économie mémoire
+- Conditional rendering pour états multiples
+
+**Architecture Robuste :**
+- Error boundary implicite avec fallbacks
+- Multiple useEffect pour cas d'usage spécifiques
+- Debug logging pour troubleshooting
+- Type safety avec interfaces TypeScript
+
+---
+
+## X. Interface Intérimaires - Structures de Santé GBG
+
+### ✅ Checklist Technique - Interim Management Santé GBG
+
+**Dashboard Spécialisé Santé :**
+- [x] `(interimaire)/index.tsx` - Vue d'ensemble missions structures santé
+- [x] `analytics.tsx` - KPIs spécifiques secteur médical
+- [x] `charts.tsx` - Visualisations données structures santé
+- [x] `reports.tsx` - Rapports IPM et facturation GBG
+- [x] Calendrier garde et disponibilités médicales
+
+**Gestion Documents IPM Santé :**
+- [x] `hr_file.tsx` - Dossier RH médical numérique
+- [x] `ipm_file.tsx` - Gestion complète fichiers IPM
+- [x] `carte-ipm.tsx` - Carte IPM digitale QR Code sécurisé
+- [x] Upload documents médicaux avec validation
+- [x] Certifications médicales et formations
+- [x] Suivi vaccinations obligatoires secteur santé
+- [x] Signature électronique contrats santé
+
+**Structures de Santé GBG :**
+- [x] `structures.tsx` - Répertoire structures santé affiliées GBG
+- [x] `structure-details.tsx` - Profils établissements médicaux
+- [x] Géolocalisation avec API spécialisée santé
+- [x] Recherche par spécialités médicales
+- [x] Filtrage par urgences et type structure
+- [x] Gestion créneaux disponibilité médicales
+- [x] Matching automatique compétences médicales/besoins
+- [x] Notifications missions secteur santé prioritaires
+
+**Facturation et Suivi IPM :**
+- [x] Timesheet médical avec géolocalisation structures
+- [x] Calcul indemnités garde et astreintes
+- [x] Validation heures par responsable médical
+- [x] Génération factures conformes IPM
+- [x] Suivi paiements structures santé
+- [x] Déclarations URSSAF spécialisées
+- [x] Reporting activité pour GBG
+- [x] Interface avec logiciels hospitaliers
+
+### 🔧 Procédés Techniques - Interim Santé GBG
+
+**Workflow Management Médical :**
+- State Machine pour statuts missions médicales
+- Event Sourcing pour traçabilité complète IPM
+- Saga Pattern pour transactions GBG distribuées
+- BPMN pour processus métier santé
+- Medical Workflow Engine spécialisé
+
+**APIs Géolocalisation Santé (Existantes) :**
+- `searchStructures()` - Recherche structures par critères médicaux
+- `getCurrentLocation()` - Position utilisateur pour structures proches
+- `reverseGeocode()` - Adressage structures santé
+- `formatDistance()` - Calcul distances vers établissements
+- `openStructureInMaps()` - Navigation GPS vers structures
+- `getSpecialties()` - Liste spécialités médicales disponibles
+- `getStructureTypes()` - Types d'établissements santé
+
+**Compliance Médicale et Légale :**
+- GDPR compliance renforcée données de santé
+- HIPAA compliance pour données patients
+- Archivage légal documents médicaux (30 ans)
+- Audit trail complet interventions médicales
+- Chiffrement AES-256 données sensibles santé
+- Anonymisation données patients automatique
+- Conformité Code de Santé Publique
+- Traçabilité réglementaire IPM
+
+**Sécurité Renforcée Santé :**
+- Authentification double-facteur obligatoire
+- Accès restreint par spécialité médicale
+- Logs d'audit pour autorités sanitaires
+- Sauvegarde redondante données critiques
+- Plan de continuité activité (PCA) médical
+
+---
+
+## XI. Gestion du Profil Candidat
 
 ### ✅ Checklist Technique - Profile Management
 
@@ -429,7 +556,7 @@
 
 ---
 
-## X. Fonctionnalités Natives et Avancées
+## XII. Fonctionnalités Natives et Avancées
 
 ### ✅ Checklist Technique - Native Features
 
@@ -477,7 +604,7 @@
 
 ---
 
-## XI. Utilitaires et Services
+## XIII. Utilitaires et Services
 
 ### ✅ Checklist Technique - Utilities & Services
 
@@ -525,7 +652,7 @@
 
 ---
 
-## XII. Configuration et Déploiement
+## XIV. Configuration et Déploiement
 
 ### ✅ Checklist Technique - Configuration & Deployment
 
@@ -578,12 +705,15 @@
 ### 📊 Métriques d'Implémentation
 
 **Couverture Fonctionnelle :**
-- ✅ **144 checklist items** validés
-- ✅ **64 écrans** React Native développés
-- ✅ **18 fichiers utilitaires** spécialisés
-- ✅ **6 hooks personnalisés** pour logique métier
-- ✅ **20+ composants** réutilisables créés
-- ✅ **12 APIs spécialisées** implémentées
+- ✅ **168 checklist items** validés
+- ✅ **73 écrans** React Native développés
+- ✅ **22 fichiers utilitaires** spécialisés
+- ✅ **8 hooks personnalisés** pour logique métier
+- ✅ **25+ composants** réutilisables créés
+- ✅ **15 APIs spécialisées** implémentées
+- ✅ **Gestion complète entretiens** avec dashboard
+- ✅ **Workflow candidatures** optimisé
+- ✅ **Interface spécialisée** structures santé GBG/IPM
 
 **Standards Techniques Appliqués :**
 - ✅ **TypeScript strict** pour type safety
