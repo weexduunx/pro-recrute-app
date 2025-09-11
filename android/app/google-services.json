@@ -20,6 +20,10 @@
             "package_name": "com.weexduunx88.prorecrutegbg",
             "certificate_hash": "6f2b748f0a018c4343a234661eb6a6af0187a6b6"
           }
+        },
+        {
+          "client_id": "259055828314-omrmlv78nkn2vlcsvuod15tgnusun8ik.apps.googleusercontent.com",
+          "client_type": 3
         }
       ],
       "api_key": [
@@ -29,7 +33,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "259055828314-omrmlv78nkn2vlcsvuod15tgnusun8ik.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

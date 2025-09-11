@@ -1,0 +1,31 @@
+@startuml C4_Context_Simple
+title Diagramme de Contexte - Système Pro-Recrute Mobile
+
+!define Person(alias, label, descr) rectangle "==label\n\n descr" as alias
+!define System(alias, label, descr) rectangle "==label\n\n descr" <<System>> as alias  
+!define System_Ext(alias, label, descr) rectangle "==label\n\n descr" <<External System>> as alias
+
+' Acteurs
+Person(candidat, "Candidat", "Chercheur d'emploi utilisant l'app")
+Person(recruteur, "Recruteur", "Professionnel RH")
+Person(interimaire, "Intérimaire", "Travailleur temporaire")
+
+' Système principal
+System(pro_recrute, "Pro-Recrute Mobile", "App React Native avec IA")
+
+' Systèmes externes
+System_Ext(oauth, "OAuth Providers", "Google, LinkedIn")
+System_Ext(notif, "Notifications Push", "Expo Push Service")
+System_Ext(maps, "Maps API", "Géolocalisation")
+System_Ext(video, "Infrastructure Vidéo", "WebRTC")
+
+candidat --> pro_recrute : "Recherche emplois,\npasse tests"
+recruteur --> pro_recrute : "Publie offres,\névalue candidats"  
+interimaire --> pro_recrute : "Gère missions,\ndocuments"
+
+pro_recrute --> oauth : "Authentification\nsociale"
+pro_recrute --> notif : "Notifications\nciblées"
+pro_recrute --> maps : "Géolocalisation\noffres"
+pro_recrute --> video : "Entretiens\nvidéo"
+
+@enduml

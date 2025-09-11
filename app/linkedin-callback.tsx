@@ -43,7 +43,7 @@ export default function LinkedInCallback() {
       const { code, state, error, error_description } = params;
 
       if (error) {
-        console.error('LinkedIn error:', error, error_description);
+        // console.error('LinkedIn error:', error, error_description);
         setStatus('error');
         setMessage(`Erreur LinkedIn: ${error} - ${error_description}`);
         
@@ -61,7 +61,7 @@ export default function LinkedInCallback() {
       }
 
       if (!code) {
-        console.error('No authorization code received');
+        // console.error('No authorization code received');
         setStatus('error');
         setMessage('Code d\'autorisation manquant');
         
@@ -199,7 +199,7 @@ export default function LinkedInCallback() {
       }
 
     } catch (error: any) {
-      console.error('LinkedIn callback error:', error);
+      // console.error('LinkedIn callback error:', error);
       
       // Marquer le code comme échoué si on a un code
       if (code) {

@@ -1,0 +1,81 @@
+@startuml Cas_Utilisation_IA_Recommandations
+title Diagramme de Cas d'Utilisation - Système de Recommandations IA
+
+left to right direction
+
+actor "Candidat" as candidat
+actor "Machine Learning Engine" as ml
+actor "Data Analyst" as analyst
+actor "Système de Profiling" as profiling
+
+package "Intelligence Artificielle et Recommandations" {
+  usecase "Configurer préférences" as UC1
+  usecase "Recevoir recommandations" as UC2
+  usecase "Évaluer recommandations" as UC3
+  usecase "Affiner algorithme" as UC4
+  usecase "Analyser profil candidat" as UC5
+  usecase "Calculer scores compatibilité" as UC6
+  usecase "Apprentissage continu" as UC7
+  usecase "Génerer insights" as UC8
+  usecase "Optimiser modèles" as UC9
+  usecase "A/B Testing" as UC10
+  usecase "Feedback Analysis" as UC11
+  usecase "Prédire tendances" as UC12
+}
+
+' Relations Candidat
+candidat --> UC1 : "Définir critères"
+candidat --> UC2 : "Consulter suggestions"
+candidat --> UC3 : "Noter pertinence"
+candidat --> UC5 : "Mettre à jour profil"
+
+' Relations Machine Learning
+ml --> UC2 : "Générer recommandations"
+ml --> UC6 : "Scorer compatibilité"
+ml --> UC7 : "Améliorer via feedback"
+ml --> UC8 : "Créer rapports insights"
+ml --> UC12 : "Analyser tendances marché"
+
+' Relations Data Analyst
+analyst --> UC9 : "Tuner hyperparamètres"
+analyst --> UC10 : "Tester variantes"
+analyst --> UC11 : "Analyser retours utilisateur"
+analyst --> UC4 : "Optimiser algorithme"
+
+' Relations Système Profiling
+profiling --> UC5 : "Extraire features"
+profiling --> UC6 : "Fournir données profil"
+
+' Inclusions et Extensions
+UC2 ..> UC6 : "<<include>>"
+UC2 ..> UC5 : "<<include>>"
+UC3 ..> UC7 : "<<include>>"
+UC4 ..> UC9 : "<<include>>"
+UC7 ..> UC11 : "<<include>>"
+UC10 ..> UC9 : "<<extend>>"
+
+note right of UC6
+  Cosine Similarity
+  TF-IDF Analysis
+  Neural Networks
+  Collaborative Filtering
+  Content-Based Filtering
+end note
+
+note bottom of UC7
+  Reinforcement Learning
+  Online Learning
+  Gradient Descent
+  Backpropagation
+  Feature Engineering
+end note
+
+note right of UC2
+  Top-K Recommendations
+  Diversity Optimization
+  Serendipity Factor
+  Real-time Scoring
+  Personalization
+end note
+
+@enduml

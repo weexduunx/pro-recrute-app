@@ -73,7 +73,7 @@ export class LinkedInAuthService {
       }
 
     } catch (error: any) {
-      console.error('❌ Erreur LinkedIn Auth:', error);
+      // console.error('❌ Erreur LinkedIn Auth:', error);
       throw new Error(`Erreur LinkedIn: ${error.message}`);
     }
   }
@@ -153,7 +153,7 @@ export class LinkedInAuthService {
       // La révocation des tokens sera gérée côté backend
       console.log('✅ Déconnexion LinkedIn réussie');
     } catch (error) {
-      console.error('❌ Erreur lors de la déconnexion LinkedIn:', error);
+      // console.error('❌ Erreur lors de la déconnexion LinkedIn:', error);
       throw error;
     }
   }

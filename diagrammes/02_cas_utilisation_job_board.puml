@@ -1,0 +1,79 @@
+@startuml Cas_Utilisation_Job_Board
+title Diagramme de Cas d'Utilisation - Gestion des Offres d'Emploi
+
+left to right direction
+
+actor "Candidat" as candidat
+actor "Recruteur" as recruteur
+actor "Système IA" as ia
+actor "Géolocalisation" as geo
+
+package "Job Board et Recherche" {
+  usecase "Consulter offres" as UC1
+  usecase "Rechercher emplois" as UC2
+  usecase "Filtrer résultats" as UC3
+  usecase "Voir détails offre" as UC4
+  usecase "Ajouter aux favoris" as UC5
+  usecase "Postuler à l'offre" as UC6
+  usecase "Partager offre" as UC7
+  usecase "Recevoir notifications" as UC8
+  usecase "Consulter historique" as UC9
+  usecase "Gérer candidatures" as UC10
+  usecase "Publier offre" as UC11
+  usecase "Modifier offre" as UC12
+  usecase "Recherche géolocalisée" as UC13
+  usecase "Recommandations IA" as UC14
+}
+
+' Relations Candidat
+candidat --> UC1 : "Parcourir offres"
+candidat --> UC2 : "Recherche par mots-clés"
+candidat --> UC3 : "Appliquer filtres"
+candidat --> UC4 : "Consulter détails"
+candidat --> UC5 : "Marquer favoris"
+candidat --> UC6 : "Envoyer candidature"
+candidat --> UC7 : "Partager sur réseaux"
+candidat --> UC8 : "Alertes nouvelles offres"
+candidat --> UC9 : "Voir recherches précédentes"
+candidat --> UC10 : "Suivre candidatures"
+candidat --> UC13 : "Offres à proximité"
+
+' Relations Recruteur
+recruteur --> UC11 : "Créer offre"
+recruteur --> UC12 : "Éditer offre"
+recruteur --> UC1 : "Voir offres publiées"
+recruteur --> UC10 : "Gérer candidatures reçues"
+
+' Relations Système IA
+ia --> UC14 : "Suggérer offres pertinentes"
+ia --> UC2 : "Améliorer résultats"
+
+' Relations Géolocalisation
+geo --> UC13 : "Fournir position"
+geo --> UC3 : "Filtrer par distance"
+
+' Inclusions et Extensions
+UC1 ..> UC3 : "<<include>>"
+UC4 ..> UC5 : "<<extend>>"
+UC4 ..> UC6 : "<<extend>>"
+UC4 ..> UC7 : "<<extend>>"
+UC2 ..> UC14 : "<<extend>>"
+UC3 ..> UC13 : "<<extend>>"
+UC6 ..> UC10 : "<<include>>"
+
+note right of UC3
+  Type de contrat
+  Localisation
+  Niveau d'expérience
+  Fourchette salariale
+  Date de publication
+end note
+
+note right of UC14
+  Machine Learning
+  Analyse du profil
+  Historique candidatures
+  Scoring compatibilité
+end note
+
+@enduml

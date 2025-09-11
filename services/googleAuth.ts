@@ -19,6 +19,7 @@ export class GoogleAuthService {
     if (this.initialized) return;
 
     try {
+      console.log('🔧 Configuration Google Sign-In avec webClientId:', GOOGLE_WEB_CLIENT_ID);
       await GoogleSignin.configure({
         webClientId: GOOGLE_WEB_CLIENT_ID,
         offlineAccess: true,
@@ -46,10 +47,13 @@ export class GoogleAuthService {
   }> {
     try {
       // S'assurer que Google Sign-In est initialisé
+      console.log('🔧 Initialisation Google Sign-In...');
       await this.initialize();
 
       // Vérifier si Google Play Services est disponible (Android uniquement)
-      await GoogleSignin.hasPlayServices();
+      console.log('🔧 Vérification Google Play Services...');
+      const playServicesResult = await GoogleSignin.hasPlayServices();
+      console.log('✅ Google Play Services disponible:', playServicesResult);
 
       // Effectuer la connexion
       const userInfo = await GoogleSignin.signIn();
@@ -84,11 +88,20 @@ export class GoogleAuthService {
 
     } catch (error: any) {
       console.error('❌ Erreur lors de la connexion Google:', error);
+      console.error('❌ Code d\'erreur:', error.code);
+      console.error('❌ Message:', error.message);
       
       if (error.code === statusCodes.SIGN_IN_CANCELLED) {
         throw new Error('Connexion Google annulée par l\'utilisateur');
       } else if (error.code === statusCodes.IN_PROGRESS) {
         throw new Error('Connexion Google déjà en cours');
+      } else if (error.message?.includes('DEVELOPER_ERROR')) {
+        console.error('❌ DEVELOPER_ERROR détecté. Problèmes possibles:');
+        console.error('1. SHA-1 fingerprint non configuré dans Firebase Console');
+        console.error('2. Package name incorrect dans google-services.json');  
+        console.error('3. Client ID Web manquant ou incorrect');
+        console.error('4. Build avec un certificat différent');
+        throw new Error('Erreur de configuration Google Sign-In. Vérifiez la console Firebase.');
       } else if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
         throw new Error('Google Play Services non disponible');
       } else {

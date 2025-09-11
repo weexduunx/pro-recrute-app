@@ -477,14 +477,14 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           // qui gérera l'échange du code et l'authentification
           
         } catch (error: any) {
-          console.error('Erreur LinkedIn Auth:', error);
+          // console.error('Erreur LinkedIn Auth:', error);
           throw error;
         }
       } else {
         setError(`Fournisseur ${provider} non supporté`);
       }
     } catch (err: any) {
-      console.error(`Échec de la connexion sociale via ${provider}:`, err);
+      // console.error(`Échec de la connexion sociale via ${provider}:`, err);
       setError(err.message || `Échec de la connexion via ${provider}. Veuillez réessayer.`);
     } finally {
       setLoading(false);

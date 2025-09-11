@@ -1,0 +1,13 @@
+@startuml Test_Simple
+title Test de Compatibilité PlantUML
+
+actor Utilisateur
+participant "App Mobile" as app
+participant "Backend API" as api
+
+Utilisateur -> app : Lancer app
+app -> api : Authentification
+api --> app : Token JWT  
+app --> Utilisateur : Dashboard
+
+@enduml

@@ -1,0 +1,75 @@
+@startuml Sequence_Authentification_Biometrique
+title Diagramme de Séquence - Authentification Biométrique
+
+actor "Utilisateur" as user
+participant "App Mobile" as app
+participant "BiometricAuth Hook" as hook
+participant "Expo LocalAuth" as expo
+participant "Secure Store" as store
+participant "Auth API" as api
+participant "JWT Manager" as jwt
+
+== Phase d'Initialisation ==
+user -> app: Lancer application
+app -> hook: useBiometricAuth()
+hook -> expo: isAvailableAsync()
+expo --> hook: {available: true, type: 'fingerprint'}
+hook -> store: getItemAsync('biometric_enabled')
+store --> hook: 'true'
+
+== Tentative d'Authentification ==
+user -> app: Toucher "Se connecter"
+app -> hook: authenticateWithBiometry()
+
+alt Biométrie disponible et activée
+    hook -> expo: authenticateAsync({
+    note right: {
+      promptMessage: 'Authentifiez-vous',
+      cancelLabel: 'Annuler',
+      fallbackLabel: 'Mot de passe'
+    }
+    expo -> user: Afficher prompt biométrique
+    user -> expo: Scanner biométrie
+    
+    alt Succès biométrique
+        expo --> hook: {success: true}
+        hook -> store: getItemAsync('stored_token')
+        store --> hook: encrypted_token
+        hook -> jwt: validateToken(token)
+        jwt -> api: POST /auth/validate
+        api --> jwt: {valid: true, user: {...}}
+        jwt --> hook: user_data
+        hook --> app: {success: true, user}
+        app -> app: Navigate to Dashboard
+        
+    else Échec biométrique
+        expo --> hook: {success: false, error: 'biometric_failed'}
+        hook --> app: {success: false, fallback: true}
+        app -> app: Afficher formulaire login
+        
+    else Annulation utilisateur
+        expo --> hook: {success: false, error: 'user_cancel'}
+        hook --> app: {success: false, cancelled: true}
+        app -> app: Rester sur écran login
+    end
+    
+else Biométrie non disponible
+    hook --> app: {success: false, unavailable: true}
+    app -> app: Afficher login traditionnel
+end
+
+== Gestion des Erreurs ==
+alt Token expiré
+    jwt --> hook: {valid: false, expired: true}
+    hook -> api: POST /auth/refresh
+    api --> hook: new_token
+    hook -> store: setItemAsync('stored_token', new_token)
+    hook --> app: {success: true, user}
+else Token invalide
+    jwt --> hook: {valid: false}
+    hook -> store: deleteItemAsync('stored_token')
+    hook --> app: {success: false, login_required: true}
+    app -> app: Rediriger vers login
+end
+
+@enduml

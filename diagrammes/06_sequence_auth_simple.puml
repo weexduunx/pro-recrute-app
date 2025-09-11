@@ -1,0 +1,49 @@
+@startuml Sequence_Auth_Simple
+title Authentification Biométrique - Flux Simplifié
+
+actor User
+participant "App Mobile" as app
+participant "Biometric Hook" as hook
+participant "Expo Auth" as expo
+participant "Secure Store" as store
+participant "Auth API" as api
+
+== Initialisation ==
+User -> app : Lancer app
+app -> hook : useBiometricAuth()
+hook -> expo : isAvailableAsync()
+expo --> hook : biometry_available
+hook -> store : getToken()
+store --> hook : existing_token
+
+== Authentification ==
+User -> app : "Se connecter"
+app -> hook : authenticateWithBiometry()
+
+alt Biométrie OK
+    hook -> expo : authenticateAsync()
+    expo -> User : Prompt biométrique
+    User -> expo : Scanner empreinte/face
+    expo --> hook : success
+    
+    hook -> store : getStoredToken()
+    store --> hook : encrypted_token
+    hook -> api : validateToken(token)
+    api --> hook : user_data
+    hook --> app : auth_success
+    app -> app : Navigate to Dashboard
+    
+else Biométrie échec
+    expo --> hook : auth_failed
+    hook --> app : show_password_form
+    app -> app : Afficher login classique
+    
+else Token expiré  
+    api --> hook : token_expired
+    hook -> api : refreshToken()
+    api --> hook : new_token
+    hook -> store : storeToken(new_token)
+    hook --> app : auth_success
+end
+
+@enduml

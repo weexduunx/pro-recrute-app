@@ -1,0 +1,84 @@
+@startuml C4_Container_Diagram
+!define C4PlantUML https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master
+!includeurl C4PlantUML/C4_Container.puml
+
+title Diagramme de Conteneurs C4 - Architecture Pro-Recrute Mobile
+
+' Acteurs
+Person(user, "Utilisateur Mobile", "Candidat, Intérimaire, ou Recruteur")
+
+' Conteneurs Mobile App
+System_Boundary(mobile_app, "Application Mobile Pro-Recrute") {
+    Container(react_native_app, "App React Native", "React Native 0.79, TypeScript", "Interface utilisateur mobile cross-platform")
+    Container(expo_runtime, "Expo Runtime", "Expo SDK 53", "Runtime natif et APIs système")
+    Container(offline_storage, "Stockage Local", "SQLite, AsyncStorage", "Cache et données hors-ligne")
+    Container(websocket_client, "Client WebSocket", "Socket.IO Client", "Communication temps réel")
+}
+
+' Services Backend
+System_Boundary(backend_services, "Services Backend") {
+    Container(api_gateway, "API Gateway", "Express.js/Fastify", "Point d'entrée unifié pour toutes les APIs")
+    Container(auth_service, "Service Auth", "Node.js, JWT", "Authentification et autorisation")
+    Container(job_service, "Service Emplois", "Node.js, MongoDB", "Gestion offres et candidatures")
+    Container(messaging_service, "Service Messages", "Node.js, Socket.IO", "Chat temps réel et notifications")
+    Container(skills_service, "Service Compétences", "Python, PostgreSQL", "Évaluations et certifications")
+    Container(ai_service, "Service IA", "Python, TensorFlow", "Recommandations et matching")
+    Container(file_service, "Service Fichiers", "Node.js, S3", "Upload/parsing CV et documents")
+    Container(analytics_service, "Service Analytics", "Python, InfluxDB", "Métriques et rapports")
+}
+
+' Bases de données
+System_Boundary(data_layer, "Couche de Données") {
+    ContainerDb(user_db, "Base Utilisateurs", "PostgreSQL", "Profils, préférences, historique")
+    ContainerDb(jobs_db, "Base Emplois", "MongoDB", "Offres, candidatures, favoris")
+    ContainerDb(messages_db, "Base Messages", "Redis, MongoDB", "Chat, notifications, sessions")
+    ContainerDb(skills_db, "Base Compétences", "PostgreSQL", "Tests, résultats, certifications")
+    ContainerDb(analytics_db, "Base Analytics", "InfluxDB, ClickHouse", "Métriques, événements, KPIs")
+    ContainerDb(files_storage, "Stockage Fichiers", "AWS S3, CloudFront", "CV, documents, médias")
+}
+
+' Services externes
+System_Ext(oauth_providers, "OAuth Providers", "Google, LinkedIn")
+System_Ext(push_service, "Expo Push", "Notifications push")
+System_Ext(maps_api, "Maps API", "Géolocalisation")
+System_Ext(video_infrastructure, "Infrastructure Vidéo", "WebRTC")
+
+' Relations Mobile App
+Rel(user, react_native_app, "Utilise", "Interactions tactiles, gestures")
+Rel(react_native_app, expo_runtime, "Utilise", "APIs natives (camera, location, biométrie)")
+Rel(react_native_app, offline_storage, "Stocke/Récupère", "Données locales, cache")
+Rel(react_native_app, websocket_client, "Connecte", "Communication temps réel")
+
+' Relations vers Backend
+Rel(react_native_app, api_gateway, "Appelle", "HTTPS REST API")
+Rel(websocket_client, messaging_service, "Connecte", "WebSocket secure")
+
+' Relations Backend Services
+Rel(api_gateway, auth_service, "Route", "Authentification")
+Rel(api_gateway, job_service, "Route", "Gestion emplois")
+Rel(api_gateway, skills_service, "Route", "Évaluations")
+Rel(api_gateway, ai_service, "Route", "Recommandations")
+Rel(api_gateway, file_service, "Route", "Upload fichiers")
+Rel(api_gateway, analytics_service, "Route", "Métriques")
+
+' Relations Services -> Données
+Rel(auth_service, user_db, "Lit/Écrit", "Comptes utilisateurs")
+Rel(job_service, jobs_db, "Lit/Écrit", "Offres et candidatures")
+Rel(messaging_service, messages_db, "Lit/Écrit", "Messages et sessions")
+Rel(skills_service, skills_db, "Lit/Écrit", "Tests et résultats")
+Rel(ai_service, user_db, "Lit", "Profils pour IA")
+Rel(ai_service, jobs_db, "Lit", "Offres pour matching")
+Rel(analytics_service, analytics_db, "Écrit", "Événements et métriques")
+Rel(file_service, files_storage, "Lit/Écrit", "Documents et médias")
+
+' Relations Services Externes
+Rel(auth_service, oauth_providers, "Utilise", "OAuth 2.0")
+Rel(messaging_service, push_service, "Envoie", "Notifications push")
+Rel(react_native_app, maps_api, "Appelle", "Géolocalisation")
+Rel(react_native_app, video_infrastructure, "Connecte", "Entretiens vidéo")
+
+' Flux de données critiques
+Rel_Back(messaging_service, websocket_client, "Diffuse", "Messages temps réel")
+Rel_Back(ai_service, react_native_app, "Recommande", "Offres personnalisées")
+
+@enduml
