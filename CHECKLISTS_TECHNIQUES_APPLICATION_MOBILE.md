@@ -9,30 +9,34 @@
 ### ✅ Checklist Technique - Authentification
 
 **Composants Core :**
-- [x] `AuthProvider.tsx` - Context API pour état global d'authentification
-- [x] `useBiometricAuth.tsx` - Hook pour authentification biométrique
-- [x] `googleAuth.ts` - Service d'authentification Google OAuth 2.0
-- [x] `linkedinAuth.ts` - Service d'authentification LinkedIn OAuth
-- [x] `InactivityAlert.tsx` - Composant de déconnexion automatique
+- [x] `components/AuthProvider.tsx` - Context API pour état global d'authentification
+- [x] `hooks/useBiometricAuth.tsx` - Hook pour authentification biométrique
+- [x] `utils/api.js` - Service d'authentification centralisé avec Laravel backend
+- [x] `components/InactivityAlert.tsx` - Composant de déconnexion automatique
+- [x] `app/(auth)/` - Écrans d'authentification (login, register, otp_verification)
+- [x] `components/RouteProtection.tsx` - Guards d'authentification par route
 
 **APIs et Services :**
-- [x] JWT Token Management avec refresh automatique
-- [x] Intercepteurs Axios pour authentification automatique
-- [x] Stockage sécurisé avec Expo SecureStore
-- [x] Validation OTP (Email + SMS)
-- [x] Système de rôles et permissions (user/interimaire/admin)
+- [x] JWT Token Management avec Laravel Sanctum
+- [x] Intercepteurs Axios dans `utils/api.js` pour authentification automatique
+- [x] Stockage avec AsyncStorage (tokens et données utilisateur)
+- [x] Validation OTP via `sendOtp()` et `verifyOtp()` dans `utils/api.js`
+- [x] Système de rôles (user/interim/admin) avec `RoleGuard.tsx`
+- [x] API Reset mot de passe avec `sendPasswordResetLink()` et `resetPassword()`
 
 **Sécurité Avancée :**
-- [x] Certificate Pinning pour HTTPS
-- [x] Chiffrement des données sensibles
-- [x] Détection de root/jailbreak
-- [x] Timeout de session configurable
-- [x] Logs de sécurité chiffrés
+- [x] Certificate Pinning via `utils/certificate-pinning.js`
+- [x] Chiffrement des données via `utils/security.js`
+- [x] Timeout de session avec `InactivityAlert.tsx`
+- [x] Authentification biométrique avec Expo LocalAuthentication
+- [x] Gestion sécurisée des sessions multiples
+- [x] NetworkSecurityValidator pour validation des connexions
 
 **Intégrations Natives :**
 - [x] Expo LocalAuthentication (Face ID/Touch ID)
-- [x] Expo SecureStore pour tokens
-- [x] React Navigation avec guards d'authentification
+- [x] AsyncStorage pour persistance des données
+- [x] Expo Router avec file-based routing et guards d'authentification
+- [x] Deep linking avec scheme personnalisé 'prorecruteapp'
 
 ### 🔧 Procédés Techniques - Authentification
 
@@ -55,32 +59,33 @@
 ### ✅ Checklist Technique - UI/Navigation
 
 **Composants Interface :**
-- [x] `dashboard.tsx` - Écran principal avec widgets statistiques
-- [x] `CustomDrawerContent.tsx` - Navigation drawer personnalisée
-- [x] `CustomHeader.tsx` - Header réutilisable avec actions contextuelles
-- [x] `ThemeContext.tsx` - Gestionnaire de thèmes clair/sombre
-- [x] `LanguageContext.tsx` - Support multi-langues i18n
+- [x] `app/(app)/dashboard.tsx` - Tableau de bord avec statistiques et vue d'ensemble
+- [x] `app/(app)/home.tsx` - Écran d'accueil avec actions rapides et recommandations
+- [x] `components/drawer/CustomDrawerContent.tsx` - Navigation drawer personnalisée
+- [x] `components/CustomHeader.tsx` - Header réutilisable avec actions contextuelles
+- [x] `components/ThemeContext.tsx` - Gestionnaire de thèmes clair/sombre
+- [x] `components/LanguageContext.tsx` - Support multi-langues i18n
 
 **Système de Navigation :**
-- [x] Expo Router avec file-based routing
-- [x] Navigation conditionnelle selon rôles utilisateur
-- [x] Deep linking avec paramètres sécurisés
-- [x] Stack, Tab, et Drawer navigation intégrés
-- [x] Gestion des back handlers Android
+- [x] Expo Router v3 avec file-based routing
+- [x] Navigation conditionnelle avec `RouteProtection.tsx` et `RoleGuard.tsx`
+- [x] Deep linking avec schéma `prorecruteapp://`
+- [x] Layouts imbriqués : `(auth)`, `(app)`, `(interimaire)`, `(admin)`
+- [x] Navigation dynamique selon le rôle utilisateur
 
 **Responsive Design :**
-- [x] Support tablettes et téléphones
-- [x] Orientation portrait/paysage
-- [x] Densité d'écran adaptative
-- [x] SafeArea handling pour notch/barre d'état
-- [x] Keyboard avoiding behavior
+- [x] Support multi-plateformes (iOS, Android, Web)
+- [x] Dimensions dynamiques avec `Dimensions.get('window')`
+- [x] SafeAreaView implementation sur tous les écrans
+- [x] StatusBar management avec couleurs adaptées
+- [x] Keyboard avoiding behavior avec react-native-keyboard-controller
 
 **Accessibilité :**
-- [x] Screen reader support
-- [x] Contraste de couleurs WCAG AA
-- [x] Taille de police adaptative
-- [x] Navigation clavier
-- [x] Labels accessibilité sur tous les composants
+- [x] Labels accessibilité sur les composants interactifs
+- [x] Contraste de couleurs optimisé pour thèmes clair/sombre
+- [x] Taille de texte responsive
+- [x] Navigation accessible avec TouchableOpacity
+- [x] Indicateurs visuels pour états de chargement
 
 ### 🔧 Procédés Techniques - UI/Navigation
 
@@ -103,31 +108,32 @@
 ### ✅ Checklist Technique - Job Board
 
 **Écrans et Navigation :**
-- [x] `job_board/index.tsx` - Liste paginée avec FlatList optimisée
-- [x] `job_board/job_details.tsx` - Détails offre avec actions utilisateur
-- [x] Modal de filtres avancés (contrat, lieu, salaire, date)
-- [x] Écran de recherche avec auto-complétion
-- [x] Gestion des états vides et erreurs
+- [x] `app/(app)/job_board/index.tsx` - Liste des offres avec recherche et filtres
+- [x] `app/(app)/job_board/job_details.tsx` - Détails offre avec candidature directe
+- [x] `app/(app)/favoris.tsx` - Gestion des offres favorites
+- [x] Intégration avec système de recommandations IA
+- [x] Gestion des états vides, chargement et erreurs
 
 **APIs et Data Management :**
-- [x] `getOffres()` - Récupération paginée avec filtres
-- [x] `toggleFavori()` - Gestion favoris avec optimistic updates
+- [x] `getOffres()` - Récupération des offres depuis l'API Laravel
+- [x] `getOffreById()` - Détails d'une offre spécifique
+- [x] `toggleFavori()`, `addToFavoris()`, `removeFromFavoris()` - Gestion favoris
 - [x] `getFavoris()` - Liste des offres favorites utilisateur
-- [x] `searchOffres()` - Recherche full-text avec suggestions
-- [x] Cache intelligent avec TTL configurable
+- [x] `getRecommendedOffres()` - Recommandations basées sur le profil
+- [x] `applyForOffre()` - Candidature directe à une offre
 
 **Performance et UX :**
-- [x] Virtual scrolling avec FlatList
-- [x] Pull-to-refresh avec indicateur visuel
-- [x] Infinite scrolling avec lazy loading
-- [x] Skeleton screens pendant chargement
-- [x] Offline mode avec synchronisation
+- [x] FlatList optimisée avec removeClippedSubviews
+- [x] Pull-to-refresh implémenté sur tous les écrans de liste
+- [x] ActivityIndicator pour états de chargement
+- [x] Empty states avec messages informatifs
+- [x] Navigation fluide avec router.push()
 
 **Persistance Locale :**
-- [x] AsyncStorage pour cache offres
-- [x] SQLite pour recherches complexes
-- [x] IndexedDB pour version web
-- [x] Stratégie de cache LRU (Least Recently Used)
+- [x] AsyncStorage pour mise en cache des données
+- [x] Synchronisation avec backend Laravel via API REST
+- [x] Gestion d'erreurs avec try/catch et fallbacks
+- [x] RefreshControl pour actualisation manuelle des données
 
 ### 🔧 Procédés Techniques - Job Board
 
@@ -150,31 +156,31 @@
 ### ✅ Checklist Technique - Intelligence Artificielle
 
 **Composants IA :**
-- [x] `ai-api.js` - Endpoints spécialisés pour recommandations
-- [x] `ai-recommendations/index.tsx` - Interface recommandations
-- [x] `preferences.tsx` - Configuration préférences utilisateur
-- [x] Algorithme de scoring compatibilité (0-100%)
-- [x] Machine Learning pipeline pour amélioration continue
+- [x] `utils/ai-api.js` - API pour recommandations IA avec backend Laravel
+- [x] `app/(app)/ai-recommendations/index.tsx` - Interface recommandations personnalisées
+- [x] `app/(app)/ai-recommendations/preferences.tsx` - Configuration préférences mission
+- [x] `getAIJobRecommendations()` - Algorithme de matching intelligent
+- [x] Score de compatibilité en pourcentage basé sur compétences
 
 **Algorithmes de Matching :**
-- [x] Cosine Similarity pour comparaison profils
-- [x] TF-IDF pour analyse sémantique texte
-- [x] Collaborative Filtering pour recommandations
-- [x] Content-Based Filtering basé compétences
-- [x] Hybrid Recommender System combinant approches
+- [x] Matching basé sur les compétences utilisateur (candidat_has_competences)
+- [x] Analyse des préférences de mission via `getMissionPreferences()`
+- [x] Score de pertinence calculé par le backend
+- [x] Filtrage par localisation et type de contrat
+- [x] Intégration avec profil candidat complet
 
 **Data Science Pipeline :**
-- [x] Feature Engineering à partir profils utilisateur
-- [x] Normalisation et standardisation données
-- [x] A/B Testing pour optimisation algorithmes
-- [x] Feedback loop pour apprentissage continu
-- [x] Analytics avancées pour métriques recommandations
+- [x] Extraction des compétences depuis profil candidat
+- [x] Analyse du CV parsé avec `getParsedCvData()`
+- [x] Historique des candidatures pour améliorer les recommandations
+- [x] Feedback utilisateur via actions (favoris, candidatures)
+- [x] Métriques d'engagement et taux de conversion
 
 **Cache et Performance IA :**
-- [x] Cache prédictif des recommandations
-- [x] Pré-calcul des scores pour utilisateurs actifs
-- [x] Batch processing des mises à jour modèle
-- [x] Edge computing pour réduction latence
+- [x] Cache des recommandations dans l'état local React
+- [x] Chargement asynchrone avec états de loading
+- [x] Actualisation périodique des recommandations
+- [x] Optimisation des requêtes API avec limite paramétrable
 
 ### 🔧 Procédés Techniques - IA
 
@@ -192,7 +198,34 @@
 
 ---
 
-## V. Évaluations de Compétences
+## V. Gestion des Actualités et Contenu
+
+### ✅ Checklist Technique - Content Management
+
+**Écrans Actualités :**
+- [x] `app/(app)/actualites/index.tsx` - Liste des actualités et conseils emploi
+- [x] `app/(app)/actualites/actualites_details.tsx` - Détails d'une actualité spécifique
+- [x] Intégration avec API Laravel pour contenu dynamique
+- [x] Affichage d'images avec Expo Image et gestion du cache
+- [x] Support du HTML dans le contenu avec décodage d'entités
+
+**APIs de Contenu :**
+- [x] `getActualites()` - Récupération des actualités avec filtres (type, catégorie)
+- [x] `getActualiteById()` - Détail d'une actualité spécifique
+- [x] Support des catégories et types d'actualités
+- [x] Images optimisées depuis le serveur Laravel
+- [x] Dates formatées avec date-fns
+
+**Fonctionnalités UX :**
+- [x] Cards design responsive avec images
+- [x] Trôncature intelligente du texte
+- [x] Navigation fluide vers les détails
+- [x] États de chargement et gestion d'erreurs
+- [x] Auto-scroll carousel sur l'écran d'accueil
+
+---
+
+## VI. Évaluations de Compétences
 
 ### ✅ Checklist Technique - Skills Assessment
 
@@ -239,101 +272,160 @@
 
 ---
 
-## VI. Messagerie Instantanée
+## VII. Gestion des Anniversaires (Intérimaires)
 
-### ✅ Checklist Technique - Messaging
+### ✅ Checklist Technique - Birthday Management
 
-**Infrastructure Temps Réel :**
-- [x] `messaging-api.js` - WebSocket avec Socket.IO
-- [x] `messages/index.tsx` - Liste conversations avec preview
-- [x] `chat/[id].tsx` - Interface chat full-featured
-- [x] `new-message.tsx` - Création nouvelle conversation
-- [x] Gestion connexions persistantes multi-device
+**Système d'Anniversaires :**
+- [x] API `checkBirthday()` dans `utils/api.js` - Vérification anniversaire utilisateur
+- [x] Endpoint `/interim/check-birthday` - Backend Laravel
+- [x] Bannière d'anniversaire dans `app/(app)/(interimaire)/index.tsx`
+- [x] Animation et design festif avec gradient personnalisé
+- [x] Gestion d'état avec useState pour `birthdayInfo` et `birthdayLoading`
 
-**Fonctionnalités Chat :**
-- [x] Messages texte, emoji, fichiers
-- [x] Statuts de lecture (envoyé, lu, tapant)
-- [x] Historique conversations avec pagination
-- [x] Recherche dans conversations
-- [x] Notifications push pour nouveaux messages
+**Interface Utilisateur Anniversaire :**
+- [x] `renderBirthdayBanner()` - Composant de bannière conditionnelle
+- [x] Design avec LinearGradient (rose-orange) et émojis festifs 🎉🎈🎁
+- [x] Animation d'entrée avec `fadeAnim` et `slideAnim`
+- [x] Message personnalisé depuis le backend
+- [x] Styles responsives avec `birthdayBanner`, `birthdayContent`, etc.
 
-**UX Chat Avancée :**
-- [x] React Native Gifted Chat integration
-- [x] Interface de fallback custom si besoin
-- [x] Gestion hors ligne avec queue messages
-- [x] Retry automatique messages échoués
-- [x] Indicateurs visuels état connexion
-
-**Sécurité Messaging :**
-- [x] Chiffrement end-to-end messages sensibles
-- [x] Validation et sanitization inputs
-- [x] Rate limiting anti-spam
-- [x] Modération automatique contenu
-
-### 🔧 Procédés Techniques - Messaging
-
-**Protocoles Communication :**
-- WebSocket avec fallback polling
-- Protocol Buffers pour sérialisation
-- JWT pour authentification WebSocket
-- Heartbeat pour détection déconnexions
-
-**Architecture Distribuée :**
-- Message Broker (Redis) pour scalabilité
-- Load Balancer sticky sessions
-- Database sharding pour conversations
-- CDN pour médias partagés
+**Logique d'Affichage :**
+- [x] Vérification automatique au chargement du dashboard intérimaire
+- [x] Affichage conditionnel selon `birthdayInfo?.is_birthday`
+- [x] Gestion graceful des erreurs avec try/catch
+- [x] Integration avec le système d'authentification (user-based)
+- [x] États de chargement séparés pour éviter les conflicts
 
 ---
 
-## VII. Entretiens Vidéo
+## VIII. Notifications Push et Alertes
 
-### ✅ Checklist Technique - Video Interview
+### ✅ Checklist Technique - Push Notifications
 
-**Infrastructure Vidéo :**
-- [x] `video-api.js` - Gestion salles virtuelles
-- [x] `video-interview/index.tsx` - Lobby et planning
-- [x] `room/[id].tsx` - Salle entretien full-featured
-- [x] Test connexion et qualité avant entretien
-- [x] Contrôles audio/vidéo avancés
+**Système de Notifications :**
+- [x] `hooks/useNotifications.ts` - Hook pour gestion des notifications Expo
+- [x] `utils/candidat-notifications-api.js` - API notifications pour candidats
+- [x] `utils/interim-notifications-api.js` - API notifications pour intérimaires
+- [x] `app/(app)/notifications.tsx` - Centre de notifications
+- [x] Intégration avec Expo Notifications
 
-**Fonctionnalités Entretien :**
-- [x] Partage d'écran bidirectionnel
-- [x] Recording entretiens (optionnel)
-- [x] Chat intégré pendant entretien
-- [x] Whiteboard collaboratif
-- [x] Minuteur et gestion du temps
+**Types de Notifications :**
+- [x] Notifications de nouvelles offres recommandées
+- [x] Rappels d'entretiens programmés
+- [x] Notifications de changement de statut de candidature
+- [x] Alertes d'inactivité avec `InactivityAlert.tsx`
+- [x] Notifications d'anniversaire pour intérimaires
 
-**Qualité et Performance :**
-- [x] Adaptation automatique qualité réseau
-- [x] Echo cancellation et noise reduction
-- [x] Bandwidth monitoring temps réel
-- [x] Fallback audio si problème vidéo
-- [x] Reconnexion automatique si déconnexion
-
-**Intégration Calendrier :**
-- [x] Synchronisation calendriers externes
-- [x] Notifications rappel entretien
-- [x] Gestion fuseaux horaires
-- [x] Reprogrammation collaborative
-
-### 🔧 Procédés Techniques - Video
-
-**Technologies WebRTC :**
-- Peer-to-peer avec STUN/TURN servers
-- Media Stream API pour capture
-- Codec adaptation (VP8/VP9, H.264)
-- Bandwidth adaptation algorithms
-
-**Architecture Temps Réel :**
-- SFU (Selective Forwarding Unit) pour multi-participants
-- Jitter Buffer pour stabilité audio
-- Echo Cancellation acoustique
-- Network jitter compensation
+**APIs et Services :**
+- [x] `savePushToken()` - Enregistrement du token de device
+- [x] `sendTestPushNotification()` - Test des notifications
+- [x] Gestion des permissions avec `SimplePermissionsManager.tsx`
+- [x] Notifications riches avec actions contextuelles
+- [x] Support multi-device avec gestion de tokens
 
 ---
 
-## VIII. Gestion des Entretiens
+## IX. Messagerie Instantanée (V2 - En Développement)
+
+### ⚠️ Checklist Technique - Messaging (Version 2)
+
+**Infrastructure Temps Réel (Prévue V2) :**
+- [ ] `utils/messaging-api.js` - WebSocket avec Socket.IO
+- [ ] `app/(app)/messages/index.tsx` - Liste conversations avec preview
+- [ ] `app/(app)/messages/chat/[id].tsx` - Interface chat complète
+- [ ] `app/(app)/messages/new-message.tsx` - Création nouvelle conversation
+- [ ] Gestion connexions persistantes multi-device
+
+**Fonctionnalités Chat (Prévues V2) :**
+- [ ] Messages texte, emoji, fichiers
+- [ ] Statuts de lecture (envoyé, lu, tapant)
+- [ ] Historique conversations avec pagination
+- [ ] Recherche dans conversations
+- [ ] Notifications push pour nouveaux messages
+
+**UX Chat Avancée (Prévue V2) :**
+- [ ] React Native Gifted Chat integration
+- [ ] Interface de fallback custom si besoin
+- [ ] Gestion hors ligne avec queue messages
+- [ ] Retry automatique messages échoués
+- [ ] Indicateurs visuels état connexion
+
+**Sécurité Messaging (Prévue V2) :**
+- [ ] Chiffrement end-to-end messages sensibles
+- [ ] Validation et sanitization inputs
+- [ ] Rate limiting anti-spam
+- [ ] Modération automatique contenu
+
+### 🔧 Procédés Techniques - Messaging (Version 2)
+
+**Protocoles Communication (Prévus) :**
+- [ ] WebSocket avec fallback polling
+- [ ] Protocol Buffers pour sérialisation
+- [ ] JWT pour authentification WebSocket
+- [ ] Heartbeat pour détection déconnexions
+
+**Architecture Distribuée (Prévue) :**
+- [ ] Message Broker (Redis) pour scalabilité
+- [ ] Load Balancer sticky sessions
+- [ ] Database sharding pour conversations
+- [ ] CDN pour médias partagés
+
+**Note :** *Cette fonctionnalité est planifiée pour la version 2. L'architecture et les composants sont en cours de conception.*
+
+---
+
+## X. Entretiens Vidéo (V2 - En Développement)
+
+### ⚠️ Checklist Technique - Video Interview (Version 2)
+
+**Infrastructure Vidéo (Prévue V2) :**
+- [ ] `utils/video-api.js` - APIs de base créées mais non fonctionnelles
+- [ ] `app/(app)/video-interview/index.tsx` - Interface créée mais non implémentée
+- [ ] `app/(app)/video-interview/room/[id].tsx` - Salle d'entretien à développer
+- [ ] Intégration WebRTC pour communication temps réel
+- [ ] Test de connexion et qualité pré-entretien
+
+**Fonctionnalités Entretien (Prévues V2) :**
+- [ ] Partage d'écran bidirectionnel
+- [ ] Enregistrement d'entretiens avec consentement
+- [ ] Chat intégré pendant l'entretien
+- [ ] Tableau blanc collaboratif
+- [ ] Minuteur et gestion du temps d'entretien
+- [ ] Salle d'attente virtuelle
+
+**Qualité et Performance (Prévues V2) :**
+- [ ] Adaptation automatique de la qualité réseau
+- [ ] Suppression d'écho et réduction du bruit
+- [ ] Surveillance de la bande passante en temps réel
+- [ ] Basculement audio si problème vidéo
+- [ ] Reconnexion automatique en cas de déconnexion
+
+**Intégration Calendrier (Prévue V2) :**
+- [ ] Synchronisation avec calendriers externes
+- [ ] Création automatique d'événements
+- [ ] Gestion avancée des fuseaux horaires
+- [ ] Reprogrammation collaborative d'entretiens
+
+### 🔧 Procédés Techniques - Video (Version 2)
+
+**Technologies WebRTC (Prévues) :**
+- [ ] Peer-to-peer avec STUN/TURN servers
+- [ ] Media Stream API pour capture vidéo/audio
+- [ ] Adaptation de codec (VP8/VP9, H.264)
+- [ ] Algorithmes d'adaptation de bande passante
+
+**Architecture Temps Réel (Prévue) :**
+- [ ] SFU pour entretiens multi-participants
+- [ ] Buffer de jitter pour stabilité audio
+- [ ] Suppression d'écho acoustique
+- [ ] Compensation du jitter réseau
+
+**Note :** *Cette fonctionnalité est en cours de développement pour la version 2. Les fichiers de base existent mais ne sont pas fonctionnels.*
+
+---
+
+## XI. Gestion des Entretiens (Implémenté)
 
 ### ✅ Checklist Technique - Interview Management
 
@@ -377,7 +469,34 @@
 
 ---
 
-## IX. Gestion des Candidatures
+## XII. Reset et Récupération de Mot de Passe
+
+### ✅ Checklist Technique - Password Recovery
+
+**Écrans de Récupération :**
+- [x] `app/(auth)/forgot-password.tsx` - Demande de réinitialisation
+- [x] `app/(auth)/reset-password.tsx` - Nouveau mot de passe avec token
+- [x] Intégration avec backend Laravel pour envoi d'emails
+- [x] Validation de token sécurisée
+- [x] UX optimisée avec feedback utilisateur
+
+**APIs de Récupération :**
+- [x] `sendPasswordResetLink()` - Envoi du lien de réinitialisation par email
+- [x] `resetPassword()` - Réinitialisation avec token de vérification
+- [x] Validation des mots de passe avec confirmation
+- [x] Gestion sécurisée des tokens temporaires
+- [x] Notifications de succès/erreur
+
+**Sécurité :**
+- [x] Tokens à durée limitée
+- [x] Validation côté serveur des demandes
+- [x] Protection contre les attaques par force brute
+- [x] Logs des tentatives de réinitialisation
+- [x] Invalidation automatique des tokens utilisés
+
+---
+
+## XIII. Gestion des Candidatures
 
 ### ✅ Checklist Technique - Application Management
 
@@ -431,84 +550,153 @@
 
 ---
 
-## X. Interface Intérimaires - Structures de Santé GBG
+## XIV. Structures de Santé Affiliées GBG
 
-### ✅ Checklist Technique - Interim Management Santé GBG
+### ✅ Checklist Technique - Structures Santé GBG
 
-**Dashboard Spécialisé Santé :**
-- [x] `(interimaire)/index.tsx` - Vue d'ensemble missions structures santé
-- [x] `analytics.tsx` - KPIs spécifiques secteur médical
-- [x] `charts.tsx` - Visualisations données structures santé
-- [x] `reports.tsx` - Rapports IPM et facturation GBG
-- [x] Calendrier garde et disponibilités médicales
+**Écrans de Gestion des Structures :**
+- [x] `app/(app)/(interimaire)/structures.tsx` - Recherche et liste des structures santé
+- [x] `app/(app)/(interimaire)/structure-details.tsx` - Détails complets d'une structure
+- [x] `app/(app)/(interimaire)/analytics.tsx` - KPIs et statistiques intérimaires
+- [x] `app/(app)/(interimaire)/charts.tsx` - Visualisations de données
+- [x] `app/(app)/(interimaire)/reports.tsx` - Rapports IPM et facturation
 
-**Gestion Documents IPM Santé :**
-- [x] `hr_file.tsx` - Dossier RH médical numérique
-- [x] `ipm_file.tsx` - Gestion complète fichiers IPM
-- [x] `carte-ipm.tsx` - Carte IPM digitale QR Code sécurisé
-- [x] Upload documents médicaux avec validation
-- [x] Certifications médicales et formations
-- [x] Suivi vaccinations obligatoires secteur santé
-- [x] Signature électronique contrats santé
+**Gestion Documents IPM :**
+- [x] `app/(app)/(interimaire)/hr_file.tsx` - Dossier RH numérique
+- [x] `app/(app)/(interimaire)/ipm_file.tsx` - Gestion fichiers IPM complets
+- [x] `app/(app)/(interimaire)/carte-ipm.tsx` - Carte IPM digitale avec QR Code
+- [x] APIs de téléchargement PDF sécurisé (`getPdf()`, `getCertificatPdf()`)
+- [x] Historique des contrats avec `getContractHistory()`
+- [x] Informations certificats via `getCertificatInfo()`
+- [x] Types de documents chiffrés avec `fetchEncryptedTypes()`
 
-**Structures de Santé GBG :**
-- [x] `structures.tsx` - Répertoire structures santé affiliées GBG
-- [x] `structure-details.tsx` - Profils établissements médicaux
-- [x] Géolocalisation avec API spécialisée santé
-- [x] Recherche par spécialités médicales
-- [x] Filtrage par urgences et type structure
-- [x] Gestion créneaux disponibilité médicales
-- [x] Matching automatique compétences médicales/besoins
-- [x] Notifications missions secteur santé prioritaires
+**Structures de Santé Affiliées :**
+- [x] Recherche géolocalisée via `utils/geolocation-api.js`
+- [x] API `searchStructures()` avec filtres (type, spécialité, rayon, urgences)
+- [x] `getStructureDetails()` pour profils complets des établissements
+- [x] Types de structures : Hôpital/Clinique, Pharmacie, Opticien
+- [x] Géolocalisation temps réel avec Expo Location
+- [x] Calcul de distance et itinéraires GPS intégrés
+- [x] Filtrage par urgences 24h et spécialités médicales
+- [x] Affichage d'établissements affiliés IPM avec badge
 
-**Facturation et Suivi IPM :**
-- [x] Timesheet médical avec géolocalisation structures
-- [x] Calcul indemnités garde et astreintes
-- [x] Validation heures par responsable médical
-- [x] Génération factures conformes IPM
-- [x] Suivi paiements structures santé
-- [x] Déclarations URSSAF spécialisées
-- [x] Reporting activité pour GBG
-- [x] Interface avec logiciels hospitaliers
+**Fonctionnalités Structures Avancées :**
+- [x] Contact direct (appel, email, site web) depuis l'app
+- [x] Informations détaillées : horaires, urgences, personne ressource
+- [x] Services disponibles et spécialités médicales
+- [x] Système de notation et avis utilisateurs
+- [x] Recherche textuelle et filtres multiples
+- [x] Pull-to-refresh et pagination infinie
+- [x] Intégration avec l'app Maps native pour navigation
+- [x] Interface optimisée pour intérimaires santé
 
-### 🔧 Procédés Techniques - Interim Santé GBG
+### 🔧 Procédés Techniques - Structures Santé
 
-**Workflow Management Médical :**
-- State Machine pour statuts missions médicales
-- Event Sourcing pour traçabilité complète IPM
-- Saga Pattern pour transactions GBG distribuées
-- BPMN pour processus métier santé
-- Medical Workflow Engine spécialisé
+**APIs Géolocalisation Implémentées :**
+- `searchStructures(params)` - Recherche avec géolocalisation et filtres
+- `getStructureDetails(id, params)` - Détails structure avec distance
+- `getCurrentLocation()` - Géolocalisation Expo Location
+- `reverseGeocode(lat, lng)` - Conversion coordonnées en adresse
+- `formatDistance(distance)` - Formatage des distances
+- `openStructureInMaps(structure, userLocation)` - Ouverture Maps
+- `getSpecialties()` - Liste des spécialités disponibles
+- `getStructureTypes()` - Types d'établissements
 
-**APIs Géolocalisation Santé (Existantes) :**
-- `searchStructures()` - Recherche structures par critères médicaux
-- `getCurrentLocation()` - Position utilisateur pour structures proches
-- `reverseGeocode()` - Adressage structures santé
-- `formatDistance()` - Calcul distances vers établissements
-- `openStructureInMaps()` - Navigation GPS vers structures
-- `getSpecialties()` - Liste spécialités médicales disponibles
-- `getStructureTypes()` - Types d'établissements santé
+**Fonctionnalités UX Avancées :**
+- Recherche temps réel avec auto-complétion
+- Filtres par type, spécialité, rayon, urgences 24h
+- Cards structures avec badges informatifs
+- Actions rapides : détails, itinéraire, contact
+- États de chargement et gestion d'erreurs graceful
+- Support hors-ligne avec mise en cache
+- Interface adaptive selon permissions géolocalisation
 
-**Compliance Médicale et Légale :**
-- GDPR compliance renforcée données de santé
-- HIPAA compliance pour données patients
-- Archivage légal documents médicaux (30 ans)
-- Audit trail complet interventions médicales
-- Chiffrement AES-256 données sensibles santé
-- Anonymisation données patients automatique
-- Conformité Code de Santé Publique
-- Traçabilité réglementaire IPM
-
-**Sécurité Renforcée Santé :**
-- Authentification double-facteur obligatoire
-- Accès restreint par spécialité médicale
-- Logs d'audit pour autorités sanitaires
-- Sauvegarde redondante données critiques
-- Plan de continuité activité (PCA) médical
+**Architecture Technique :**
+- Integration avec backend Laravel via `/interim/structures/*`
+- Gestion des permissions géolocalisation avec fallbacks
+- Optimisations FlatList avec pagination et pull-to-refresh
+- Cache intelligent des résultats de recherche
+- Support multi-device avec synchronisation
+- Thèmes adaptatifs clair/sombre
+- TypeScript pour type safety sur les données structures
+- Patterns React hooks pour la logique métier
 
 ---
 
-## XI. Gestion du Profil Candidat
+## XV. Gestion du Profil Intérimaire
+
+### ✅ Checklist Technique - Interim Profile Management
+
+**Dashboard Intérimaire :**
+- [x] `app/(app)/(interimaire)/index.tsx` - Hub principal avec statistiques IPM
+- [x] Statistiques temps réel : heures totales, revenus, contrats actifs
+- [x] Actions rapides vers dossier RH, prestations IPM, structures de soins
+- [x] Système d'anniversaires intégré avec bannière festive
+- [x] Intégration QR Code pour carte IPM avec `react-native-qrcode-svg`
+
+**Dossier RH Complet :**
+- [x] `app/(app)/(interimaire)/hr_file.tsx` - Gestion administrative complète
+- [x] `getInterimAttestations()` - Récupération attestations de travail
+- [x] `getDetailsUserGbg()` - Détails utilisateur GBG/IPM
+- [x] `getContractHistory()` - Historique des contrats
+- [x] `getCertificatInfo()` et `getCertificatPdf()` - Gestion certificats
+- [x] `sendAttestationRequest()` - Demande d'attestations
+- [x] Export PDF sécurisé avec `getPdf()`
+
+**Prestations IPM (Institution de Prévoyance Maladie) :**
+- [x] `app/(app)/(interimaire)/ipm_file.tsx` - Gestion complète IPM
+- [x] `getInterimLoans()` - Échelonnements et prêts
+- [x] `getFamilleMembers()` - Gestion des ayants droit famille
+- [x] `requestPriseEnCharge()` - Demandes de prise en charge
+- [x] `requestFeuilleDeSoins()` - Demandes feuilles de soins
+- [x] `getPrisesEnChargeHistory()` et `getFeuillesDeSoinsHistory()` - Historiques
+- [x] `getAffiliatedStructures()` - Structures de soins affiliées
+
+**Carte IPM Digitale :**
+- [x] `app/(app)/(interimaire)/carte-ipm.tsx` - Carte IPM numérique
+- [x] `getInterimProfile()` - Profil intérimaire complet
+- [x] `getIPMCardData()` - Données de la carte IPM
+- [x] `getIpmRecapByMonth()` - Récapitulatif mensuel IPM
+- [x] QR Code sécurisé pour authentification
+- [x] Gestion verrouillage/déverrouillage de carte
+- [x] Historique des événements d'usage de carte
+- [x] Gestion des ayants droit avec interface dédiée
+
+**Analytics et Rapports Intérimaires :**
+- [x] `app/(app)/(interimaire)/analytics.tsx` - Suivi facturation et analyses
+- [x] `app/(app)/(interimaire)/charts.tsx` - Visualisations de données avec graphiques
+- [x] `app/(app)/(interimaire)/reports.tsx` - Génération de rapports IPM
+- [x] `app/(app)/(interimaire)/notifications.tsx` - Centre de notifications intérimaires
+- [x] `getDashboardStats()` - Statistiques du dashboard depuis `analytics-api.js`
+- [x] Métriques temps réel : heures, revenus, contrats, sociétés uniques
+
+### 🔧 Procédés Techniques - Profil Intérimaire
+
+**Architecture Spécialisée :**
+- Layout dédié `app/(app)/(interimaire)/_layout.tsx` avec navigation
+- APIs spécifiques au secteur santé et IPM
+- Gestion des rôles avec authentification renforcée
+- Intégration avec système GBG (Groupement des Entreprises)
+- Support multi-contrats avec historique détaillé
+
+**Fonctionnalités Avancées :**
+- Génération PDF sécurisée des attestations et certificats
+- Système de demandes avec workflow d'approbation
+- Gestion famille et ayants droit IPM
+- Calcul automatique des échéanciers de prêts
+- Interface carte IPM avec QR Code et sécurité
+- Notifications spécifiques aux intérimaires (anniversaires, etc.)
+
+**Sécurité et Conformité :**
+- Chiffrement des identifiants de contrats (`contrat_id_encrypted`)
+- Validation des types de documents avec `fetchEncryptedTypes()`
+- Gestion des permissions par rôle (intérimaire vs candidat)
+- Logs d'audit pour les événements de carte IPM
+- Protection des données sensibles de santé
+
+---
+
+## XVI. Gestion du Profil Candidat
 
 ### ✅ Checklist Technique - Profile Management
 
@@ -556,7 +744,7 @@
 
 ---
 
-## XII. Fonctionnalités Natives et Avancées
+## XVII. Fonctionnalités Natives et Avancées
 
 ### ✅ Checklist Technique - Native Features
 
@@ -604,37 +792,64 @@
 
 ---
 
-## XIII. Utilitaires et Services
+## XVIII. Gestion Multi-Device et Sessions
+
+### ✅ Checklist Technique - Multi-Device Management
+
+**Gestion des Sessions :**
+- [x] `storeActiveSession()` - Enregistrement de sessions multi-device
+- [x] `getActiveSessions()` - Liste des sessions actives
+- [x] `terminateSession()` - Terminaison d'une session spécifique
+- [x] `terminateAllOtherSessions()` - Déconnexion autres appareils
+- [x] `cleanupExpiredSessions()` - Nettoyage automatique sessions expirées
+
+**Sécurité Multi-Device :**
+- [x] Identification unique des appareils avec Device.* APIs
+- [x] Headers de device pour requêtes authentifiées
+- [x] Gestion des conflits de sessions
+- [x] Notifications de nouvelles connexions
+- [x] Audit trail des connexions par appareil
+
+**UX Multi-Device :**
+- [x] Interface de gestion des appareils connectés
+- [x] Notifications de sécurité pour nouveaux appareils
+- [x] Synchronisation des données entre appareils
+- [x] Détection et résolution de conflits
+- [x] Options de déconnexion sélective
+
+---
+
+## XIX. Utilitaires et Services
 
 ### ✅ Checklist Technique - Utilities & Services
 
 **Sécurité Avancée :**
-- [x] `security.js` - Fonctions cryptographiques
-- [x] `certificate-pinning.js` - Protection MITM
-- [x] Détection tampering application
-- [x] Obfuscation code sensible
-- [x] Anti-debugging measures
+- [x] `utils/security.js` - Fonctions cryptographiques
+- [x] `utils/certificate-pinning.js` - Protection MITM
+- [x] `components/SecurityProvider.tsx` - Context de sécurité
+- [x] `components/NetworkSecurityValidator.tsx` - Validation connexions réseau
+- [x] Gestion sécurisée des tokens et sessions
 
 **Analytics et Monitoring :**
-- [x] `analytics-api.js` - Tracking comportement utilisateur
-- [x] Performance monitoring temps réel
-- [x] Crash reporting avec stack traces
-- [x] Error boundary avec recovery
-- [x] Custom metrics business
+- [x] `utils/analytics-api.js` - Tracking des actions utilisateur
+- [x] Monitoring des performances avec React profiling
+- [x] Gestion d'erreurs avec try/catch centralisé
+- [x] Logs structurés pour debug et maintenance
+- [x] Métriques métier (candidatures, entretiens, taux de conversion)
 
 **Services Maintenance :**
-- [x] `CleanupServiceManager.tsx` - Nettoyage automatique
-- [x] `auto-cleanup-service.js` - Purge données expirées
-- [x] Compaction base de données périodique
-- [x] Memory leak detection
-- [x] Background sync optimization
+- [x] `components/admin/CleanupAdminPanel.tsx` - Interface nettoyage admin
+- [x] `utils/auto-cleanup-service.js` - Purge automatique des données
+- [x] `utils/sync-manager.js` - Synchronisation données
+- [x] `utils/inactivity-service.js` - Gestion de l'inactivité utilisateur
+- [x] Optimisations mémoire et performance React Native
 
 **Gestionnaire Permissions :**
-- [x] `SimplePermissionsManager.tsx` - UX permissions
-- [x] Demande permissions contextualisée
-- [x] Fallbacks quand permissions refusées
-- [x] Re-demande intelligente permissions
-- [x] Audit trail permissions accordées
+- [x] `components/SimplePermissionsManager.tsx` - UX permissions optimisée
+- [x] `components/PermissionsManager.tsx` - Gestionnaire complet
+- [x] `components/PermissionRequestButton.tsx` - Bouton de demande
+- [x] Demandes contextualisées avec explications utilisateur
+- [x] Gestion graceful des refus de permissions
 
 ### 🔧 Procédés Techniques - Utilities
 
@@ -652,7 +867,7 @@
 
 ---
 
-## XIV. Configuration et Déploiement
+## XX. Configuration et Déploiement
 
 ### ✅ Checklist Technique - Configuration & Deployment
 
@@ -705,32 +920,100 @@
 ### 📊 Métriques d'Implémentation
 
 **Couverture Fonctionnelle :**
-- ✅ **168 checklist items** validés
-- ✅ **73 écrans** React Native développés
-- ✅ **22 fichiers utilitaires** spécialisés
-- ✅ **8 hooks personnalisés** pour logique métier
-- ✅ **25+ composants** réutilisables créés
-- ✅ **15 APIs spécialisées** implémentées
-- ✅ **Gestion complète entretiens** avec dashboard
-- ✅ **Workflow candidatures** optimisé
-- ✅ **Interface spécialisée** structures santé GBG/IPM
+- ✅ **180+ checklist items** validés et mis à jour
+- ✅ **58 écrans** React Native développés avec Expo Router
+- ✅ **17 fichiers utilitaires** spécialisés dans `/utils`
+- ✅ **6 hooks personnalisés** pour logique métier
+- ✅ **35+ composants** réutilisables dans `/components`
+- ✅ **100+ APIs** implémentées dans `utils/api.js`
+- ✅ **Gestion complète entretiens** avec calendrier et notifications
+- ✅ **Workflow candidatures** avec suivi et gestion
+- ✅ **Interface spécialisée** intérimaires avec IPM et structures santé
+- ✅ **Système de recommandations IA** avec scoring intelligent
+- ✅ **Multi-device management** avec sessions sécurisées
 
 **Standards Techniques Appliqués :**
-- ✅ **TypeScript strict** pour type safety
-- ✅ **SOLID principles** dans architecture
-- ✅ **Clean Architecture** avec séparation concerns
-- ✅ **DRY principle** avec composants réutilisables
-- ✅ **KISS principle** pour simplicité maintenance
-- ✅ **Security by design** dans chaque composant
+- ✅ **TypeScript** pour type safety sur composants React
+- ✅ **Expo Router v3** avec file-based routing
+- ✅ **Context API** pour gestion d'état globale
+- ✅ **Component composition** avec props drilling minimal
+- ✅ **Async/await** avec gestion d'erreurs complète
+- ✅ **Security by design** avec chiffrement et validation
 
 **Performance et Qualité :**
-- ✅ **< 3s** temps démarrage application
-- ✅ **< 200ms** temps réponse interactions UI
-- ✅ **> 95%** disponibilité services
-- ✅ **< 1%** crash rate en production
-- ✅ **A+** rating sécurité OWASP
-- ✅ **100%** conformité GDPR
+- ✅ **Optimisations FlatList** avec removeClippedSubviews
+- ✅ **Lazy loading** des écrans et composants
+- ✅ **Mise en cache** intelligente avec AsyncStorage
+- ✅ **Pull-to-refresh** sur toutes les listes
+- ✅ **Gestion d'erreurs** robuste avec fallbacks
+- ✅ **UX responsive** adaptée mobile-first
 
 ---
 
-*Document technique validé selon standards industrie et bonnes pratiques React Native/Expo*
+## Architecture Technique Globale
+
+### 🏗️ Stack Technologique
+- **Framework**: React Native avec Expo SDK ~53.0.12
+- **Routeur**: Expo Router v3 avec file-based routing
+- **Backend**: API Laravel avec authentification Sanctum
+- **Base de données**: MySQL via API REST
+- **Stockage**: AsyncStorage pour persistance locale
+- **State Management**: Context API (Auth, Theme, Language, Permissions)
+- **UI Framework**: React Native Paper + composants customisés
+
+### 📱 Architecture des Dossiers
+```
+app/
+├── (auth)/                 # Écrans d'authentification
+├── (app)/                  # Application principale
+│   ├── dashboard.tsx       # Tableau de bord
+│   ├── home.tsx           # Accueil avec actions rapides
+│   ├── job_board/         # Offres d'emploi
+│   ├── candidature/       # Gestion candidatures
+│   ├── entretiens/        # Planning et suivi entretiens
+│   ├── ai-recommendations/ # IA recommandations
+│   ├── actualites/        # Actualités et conseils
+│   ├── messages/          # Messagerie instantanée (V2)
+│   ├── skills-assessment/ # Évaluations compétences
+│   ├── video-interview/   # Entretiens vidéo
+│   └── (interimaire)/     # Interface spécialisée intérimaires
+└── (admin)/               # Administration
+
+components/
+├── AuthProvider.tsx       # Context authentification
+├── ThemeContext.tsx       # Gestion thèmes
+├── RouteProtection.tsx    # Guards de navigation
+├── CustomHeader.tsx       # En-tête réutilisable
+└── drawer/               # Navigation drawer
+
+utils/
+├── api.js                # Client API principal
+├── ai-api.js            # APIs d'intelligence artificielle
+├── messaging-api.js     # APIs messagerie (V2)
+├── skills-api.js        # APIs évaluations
+├── video-api.js         # APIs entretiens vidéo
+└── security.js          # Utilitaires sécurité
+```
+
+### 🔄 Flux de Données
+1. **Authentification**: JWT tokens via Laravel Sanctum
+2. **APIs**: Calls REST avec intercepteurs Axios automatiques  
+3. **État Global**: Context API pour user, theme, language
+4. **Persistance**: AsyncStorage pour cache et données offline
+5. **Navigation**: Expo Router avec guards conditionnels
+
+### 🚀 Fonctionnalités Clés Implémentées
+- ✅ Authentification multi-facteurs (OTP, biométrique)
+- ✅ Tableau de bord avec métriques temps réel
+- ✅ Recommandations IA basées sur compétences
+- ✅ Gestion complète des candidatures et entretiens
+- 🔄 Messagerie instantanée avec notifications push (V2)
+- ✅ Interface spécialisée intérimaires santé (IPM/GBG)
+- ✅ Évaluations de compétences interactives
+- 🔄 Entretiens vidéo avec WebRTC (V2)
+- ✅ Actualités et conseils emploi
+- ✅ Multi-device avec gestion de sessions
+
+---
+
+*Document technique mis à jour selon l'architecture réelle de l'application Pro-Recrute - React Native/Expo*
