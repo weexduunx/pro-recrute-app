@@ -753,7 +753,7 @@ export default function CarteIPMScreen() {
                   if (user?.photo_profil) {
                     finalImageUrl = user.photo_profil.startsWith('http')
                       ? user.photo_profil
-                      : `http://192.168.1.11:8000/storage/${user.photo_profil}`;
+                      : `http://192.168.1.47:8000/storage/${user.photo_profil}`;
                   }
 
                   console.log('=== IMAGE DISPLAY ===');

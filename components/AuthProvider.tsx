@@ -31,7 +31,7 @@ let Device;
 try {
   Device = require('expo-device');
 } catch (error) {
-  console.warn('expo-device non disponible:', error.message);
+  console.warn('expo-device not available:', (error as Error).message);
   Device = { deviceName: 'UnknownDevice' };
 }
 

@@ -11,7 +11,7 @@ import { StatusBar } from 'expo-status-bar';
 import UserAvatar from 'react-native-user-avatar';
 
 // Configuration de l'URL de base (doit correspondre à utils/api.js)
-const API_BASE_URL = 'http://192.168.1.11:8000';
+const API_BASE_URL = 'http://192.168.1.47:8000';
 
 /**
  * Composant CustomHeader:

@@ -182,7 +182,7 @@ export default function ProfileDetailsScreen() {
     if (user?.photo_profil && !currentPhotoUrl) {
       const photoUrl = user.photo_profil.startsWith('http') 
         ? user.photo_profil 
-        : `http://192.168.1.11:8000/storage/${user.photo_profil}`;
+        : `http://192.168.1.47:8000/storage/${user.photo_profil}`;
 
       console.log('=== PHOTO URL SYNCHRONISATION ===');
       console.log('user.photo_profil:', user.photo_profil);
@@ -1000,7 +1000,7 @@ export default function ProfileDetailsScreen() {
         // S'assurer que l'URL est au bon format complet
         const fullPhotoUrl = uploadResult.photo_path.startsWith('http') 
           ? uploadResult.photo_path 
-          : `http://192.168.1.11:8000${uploadResult.photo_path}`;
+          : `http://192.168.1.47:8000${uploadResult.photo_path}`;
         console.log('fullPhotoUrl calculée:', fullPhotoUrl);
         setCurrentPhotoUrl(fullPhotoUrl);
         console.log('currentPhotoUrl mise à jour avec:', fullPhotoUrl);
@@ -1366,7 +1366,7 @@ export default function ProfileDetailsScreen() {
                 } else if (user?.photo_profil) {
                   finalImageUrl = user.photo_profil.startsWith('http')
                     ? user.photo_profil
-                    : `http://192.168.1.11:8000/storage/${user.photo_profil}`;
+                    : `http://192.168.1.47:8000/storage/${user.photo_profil}`;
                 }
                 
                 console.log('=== IMAGE DISPLAY ===');

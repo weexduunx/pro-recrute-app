@@ -7,7 +7,7 @@ import { Alert, TouchableOpacity, Text } from 'react-native';
 import * as Device from 'expo-device';
 
 // **IMPORTANT: Mettez à jour cette URL avec l'adresse IP et le port du  backend Laravel**
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.11:8000/api'; //Variable d'environnement en priorité
+const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.47:8000/api'; //Variable d'environnement en priorité
 
 // Variable pour éviter la suppression immédiate du token après connexion
 let recentTokenSet = false;

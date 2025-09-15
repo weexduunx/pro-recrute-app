@@ -62,7 +62,7 @@ export class GoogleAuthService {
       
       // Vérifier la structure des données (les données sont dans userInfo.data)
       const userData = userInfo.data || userInfo;
-      if (!userData || !userData.user) {
+      if (!userData || !('user' in userData)) {
         throw new Error('Données utilisateur Google invalides');
       }
 
