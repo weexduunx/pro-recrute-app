@@ -198,15 +198,18 @@ export default function DashboardScreen() {
       setLoadingEntretiens(true);
       try {
         console.log('Calling getCandidatEntretiensCalendrier...');
-        const fetchedEntretiens = await getCandidatEntretiensCalendrier();
-        console.log('Entretiens récupérés:', fetchedEntretiens);
-        console.log('Type des entretiens:', typeof fetchedEntretiens);
-        console.log('Length des entretiens:', fetchedEntretiens?.length);
-        setEntretiens(fetchedEntretiens || []);
+        const response = await getCandidatEntretiensCalendrier();
+
+        // Gérer la suggestion de création de profil candidat
+        if (response.needsProfileCreation) {
+          console.log('Info Dashboard:', response.message);
+          setEntretiens([]); // Pas d'entretiens sans profil candidat
+        } else {
+          console.log('Entretiens récupérés:', response.entretiens?.length || 0);
+          setEntretiens(response.entretiens || []);
+        }
       } catch (error: any) {
-        console.error("Erreur de chargement des entretiens:", error);
-        console.error("Error details:", error.response?.data);
-        // En cas d'erreur, on met un tableau vide pour éviter les bugs d'affichage
+        console.log("Info: Aucun entretien disponible pour le dashboard");
         setEntretiens([]);
       } finally {
         setLoadingEntretiens(false);

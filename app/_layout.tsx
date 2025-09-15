@@ -24,9 +24,9 @@ import * as Linking from 'expo-linking';
 export default function RootLayout() {
   return (
     <SafeAreaProvider>
-      <PermissionsProvider>
-        <AuthProvider>
-          <LanguageProvider>
+      <LanguageProvider>
+        <PermissionsProvider>
+          <AuthProvider>
             <ThemeProvider>
               <AuthPermissionsManager>
                 <CleanupServiceManager>
@@ -35,9 +35,9 @@ export default function RootLayout() {
                 <Toast />
               </AuthPermissionsManager>
             </ThemeProvider>
-          </LanguageProvider>
-        </AuthProvider>
-      </PermissionsProvider>
+          </AuthProvider>
+        </PermissionsProvider>
+      </LanguageProvider>
     </SafeAreaProvider>
   );
 }

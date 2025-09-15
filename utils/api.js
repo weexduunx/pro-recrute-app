@@ -13,6 +13,17 @@ const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.47:8000/api
 let recentTokenSet = false;
 let tokenSetTimestamp = 0;
 
+// Fonction utilitaire pour vérifier si l'utilisateur est authentifié
+export const isUserAuthenticated = async () => {
+  try {
+    const token = await AsyncStorage.getItem('user_token');
+    return !!token;
+  } catch (error) {
+    console.error('Erreur lors de la vérification du token:', error);
+    return false;
+  }
+};
+
 // Fonction pour marquer qu'un token a été récemment défini
 export const markTokenAsRecentlySet = () => {
   recentTokenSet = true;
@@ -61,17 +72,26 @@ api.interceptors.response.use(
     // Si c'est une erreur 401 (Non authentifié) et que la requête n'a pas déjà été retentée
     if (error.response?.status === 401 && !error.config._retry) {
       error.config._retry = true; // Marque la requête comme retentée pour éviter les boucles infinies
-      console.warn("API Interceptor: Jeton d'authentification expiré ou invalide (401).");
-      
-      // Vérifier si un token vient d'être défini récemment (dans les 5 dernières secondes)
-      const now = Date.now();
-      if (recentTokenSet && (now - tokenSetTimestamp) < 5000) {
-        console.log("API Interceptor: Token récent détecté, pas de suppression automatique");
-        // Ne pas supprimer le token s'il vient d'être défini
+
+      // Vérifier s'il y a encore un token avant de logguer
+      const currentToken = await AsyncStorage.getItem('user_token');
+
+      if (currentToken) {
+        console.warn("API Interceptor: Jeton d'authentification expiré ou invalide (401).");
+
+        // Vérifier si un token vient d'être défini récemment (dans les 5 dernières secondes)
+        const now = Date.now();
+        if (recentTokenSet && (now - tokenSetTimestamp) < 5000) {
+          console.log("API Interceptor: Token récent détecté, pas de suppression automatique");
+          // Ne pas supprimer le token s'il vient d'être défini
+        } else {
+          await AsyncStorage.removeItem('user_token'); // Nettoie le token invalide localement
+          console.log("API Interceptor: Token supprimé en raison d'une erreur 401");
+          // L'AuthProvider devrait gérer la redirection vers l'écran de connexion
+        }
       } else {
-        await AsyncStorage.removeItem('user_token'); // Nettoie le token invalide localement
-        console.log("API Interceptor: Token supprimé en raison d'une erreur 401");
-        // L'AuthProvider devrait gérer la redirection vers l'écran de connexion
+        // 401 sans token = probablement après déconnexion, pas de log
+        console.log("API Interceptor: 401 sans token, probablement après déconnexion");
       }
     } else {
       // Loggue les autres erreurs API comme des erreurs (y compris les 500)
@@ -1099,10 +1119,17 @@ export const getAffiliatedStructures = async (page = 1, perPage = 10) => {
  */
 export const storeActiveSession = async (sessionData, deviceHeaders = {}) => {
   try {
+    // Vérifier si un token existe avant de faire l'appel
+    const token = await AsyncStorage.getItem('user_token');
+    if (!token) {
+      console.warn('storeActiveSession: Pas de token disponible, appel ignoré');
+      return { success: false, message: 'No token available' };
+    }
+
     console.log('=== storeActiveSession API Call ===');
     console.log('Session Data:', sessionData);
     console.log('Device Headers:', deviceHeaders);
-    
+
     // Construire la configuration de la requête avec les headers personnalisés
     const requestConfig = {
       headers: {
@@ -1110,14 +1137,21 @@ export const storeActiveSession = async (sessionData, deviceHeaders = {}) => {
         ...deviceHeaders // Ajouter les headers de device
       }
     };
-    
+
     console.log('Request Config:', requestConfig);
-    
+
     const response = await api.post('/sessions', sessionData, requestConfig);
-    
+
     console.log('Response storeActiveSession:', response.data);
     return response.data;
   } catch (error) {
+    // Ne pas logguer l'erreur si c'est un 401 et qu'on n'a plus de token
+    const token = await AsyncStorage.getItem('user_token');
+    if (error.response?.status === 401 && !token) {
+      console.log('storeActiveSession: 401 sans token, probablement après déconnexion - ignoré');
+      return { success: false, message: 'Unauthenticated after logout' };
+    }
+
     console.error("Échec de l'appel API storeActiveSession:", error.response?.data || error.message);
     console.error("Full error:", error);
     throw error;
@@ -1130,9 +1164,16 @@ export const storeActiveSession = async (sessionData, deviceHeaders = {}) => {
  */
 export const getActiveSessions = async (deviceHeaders = {}) => {
   try {
+    // Vérifier si un token existe avant de faire l'appel
+    const token = await AsyncStorage.getItem('user_token');
+    if (!token) {
+      console.warn('getActiveSessions: Pas de token disponible, appel ignoré');
+      return { success: false, sessions: [], message: 'No token available' };
+    }
+
     console.log('=== getActiveSessions API Call ===');
     console.log('Device Headers:', deviceHeaders);
-    
+
     // Construire la configuration de la requête avec les headers personnalisés
     const requestConfig = {
       headers: {
@@ -1140,14 +1181,21 @@ export const getActiveSessions = async (deviceHeaders = {}) => {
         ...deviceHeaders // Ajouter les headers de device pour identification
       }
     };
-    
+
     console.log('Request Config:', requestConfig);
-    
+
     const response = await api.get('/sessions', requestConfig);
-    
+
     console.log('Response getActiveSessions:', response.data);
     return response.data;
   } catch (error) {
+    // Ne pas logguer l'erreur si c'est un 401 et qu'on n'a plus de token
+    const token = await AsyncStorage.getItem('user_token');
+    if (error.response?.status === 401 && !token) {
+      console.log('getActiveSessions: 401 sans token, probablement après déconnexion - ignoré');
+      return { success: false, sessions: [], message: 'Unauthenticated after logout' };
+    }
+
     console.error("Échec de l'appel API getActiveSessions:", error.response?.data || error.message);
     throw error;
   }
@@ -1235,30 +1283,75 @@ export const getCandidatEntretiens = async () => {
   try {
     console.log('=== API CALL: getCandidatEntretiens (tous les entretiens) ===');
     const response = await api.get('/candidat/entretiens');
+
+    // Gérer le cas où l'utilisateur n'a pas de profil candidat
+    if (response.data.needs_profile_creation || response.data.suggestion) {
+      console.log('Info: Profil candidat non trouvé -', response.data.message);
+      return {
+        entretiens: [],
+        needsProfileCreation: true,
+        message: response.data.message,
+        suggestion: response.data.suggestion
+      };
+    }
+
     console.log('API Response getCandidatEntretiens:', response.data);
-    return response.data.entretiens || [];
+    return {
+      entretiens: response.data.entretiens || [],
+      needsProfileCreation: false
+    };
   } catch (error) {
-    console.error("Échec de l'appel API getCandidatEntretiens:", error.response?.data || error.message);
-    return []; // Retour tableau vide en cas d'erreur
+    // Gestion silencieuse des erreurs 404 pour profil manquant
+    if (error.response?.status === 404 && error.response?.data?.message?.includes('candidat non trouvé')) {
+      console.log('Info: Profil candidat non trouvé - suggestion de création');
+      return {
+        entretiens: [],
+        needsProfileCreation: true,
+        message: 'Aucun profil candidat trouvé',
+        suggestion: 'Créez votre profil candidat pour accéder aux entretiens'
+      };
+    }
+    console.error("Erreur appel API getCandidatEntretiens:", error.response?.data || error.message);
+    return { entretiens: [], needsProfileCreation: false };
   }
 };
 
 export const getCandidatEntretiensCalendrier = async () => {
   try {
     console.log('=== API CALL: getCandidatEntretiensCalendrier ===');
-    
+
     const response = await api.get('/candidat/entretiens-calendrier');
+
+    // Gérer le cas où l'utilisateur n'a pas de profil candidat
+    if (response.data.suggestion) {
+      console.log('Info: Profil candidat non trouvé pour calendrier -', response.data.message || 'Aucun profil candidat');
+      return {
+        entretiens: [],
+        needsProfileCreation: true,
+        message: response.data.message || 'Aucun profil candidat trouvé',
+        suggestion: response.data.suggestion || 'Créez votre profil candidat'
+      };
+    }
+
     console.log('API Response status:', response.status);
-    console.log('API Response data:', response.data);
-    console.log('API Response entretiens:', response.data.entretiens);
-    return response.data.entretiens || [];
+    console.log('API Response entretiens count:', response.data.entretiens?.length || 0);
+    return {
+      entretiens: response.data.entretiens || [],
+      needsProfileCreation: false
+    };
   } catch (error) {
-    console.error("=== API ERROR: getCandidatEntretiensCalendrier ===");
-    console.error("Error:", error);
-    console.error("Error response:", error.response?.data);
-    console.error("Error status:", error.response?.status);
-    // Retourner un tableau vide en cas d'erreur pour éviter de casser l'interface
-    return [];
+    // Gestion silencieuse des erreurs liées au profil candidat manquant
+    if (error.response?.status === 404 && error.response?.data?.message?.includes('candidat')) {
+      console.log('Info: Aucun profil candidat trouvé pour le calendrier');
+      return {
+        entretiens: [],
+        needsProfileCreation: true,
+        message: 'Aucun profil candidat trouvé',
+        suggestion: 'Créez votre profil candidat pour voir vos entretiens'
+      };
+    }
+    console.log("Info: Aucun entretien disponible -", error.response?.data?.message || 'Erreur de connexion');
+    return { entretiens: [], needsProfileCreation: false };
   }
 };
 

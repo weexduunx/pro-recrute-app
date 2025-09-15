@@ -32,19 +32,26 @@ import * as Sharing from 'expo-sharing';
 import * as Network from 'expo-network';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { 
-  savePushToken, 
+import {
+  savePushToken,
   sendTestPushNotification,
   terminateSession,
   storeActiveSession,
   getActiveSessions,
-  changePassword
+  changePassword,
+  isUserAuthenticated
 } from '../../utils/api';
 import { useTheme } from '../../components/ThemeContext';
 import { useLanguage } from '../../components/LanguageContext';
 import { useSimplePermissions } from '../../components/SimplePermissionsManager';
 import { useLocationBasedJobs } from '../../hooks/useLocationBasedJobs';
+import { useBiometricAuth } from '../../hooks/useBiometricAuth';
 import UnifiedModal, { ModalSection, ModalText } from '../../components/UnifiedModal';
+
+// Déclaration TypeScript pour les variables globales
+declare global {
+  var triggerPushNotificationRegistration: (() => void) | undefined;
+}
 
 // Configuration pour les notifications en arrière-plan (headless)
 Notifications.setNotificationHandler({
@@ -824,26 +831,39 @@ const useActiveSessions = () => {
   };
 
   useEffect(() => {
-    console.log('=== useEffect useActiveSessions ===');
-    console.log('Network loading:', networkInfo.loading);
-    console.log('Device Info:', deviceInfo);
-    console.log('Network Info:', networkInfo);
-    
-    // Conditions plus strictes : attendre que toutes les données soient disponibles
-    const hasDeviceData = deviceInfo.device && deviceInfo.device !== 'Appareil inconnu';
-    const hasNetworkData = !networkInfo.loading && networkInfo.location !== 'Localisation inconnue';
-    
-    console.log('Has device data:', hasDeviceData);
-    console.log('Has network data:', hasNetworkData);
-    
-    if (hasDeviceData && hasNetworkData) {
-      console.log('✅ Toutes les conditions remplies, démarrage fetchSessions...');
-      fetchSessions();
-    } else {
-      console.log('⏳ En attente des données complètes...');
-      console.log('  - Device ready:', hasDeviceData);
-      console.log('  - Network ready:', hasNetworkData);
-    }
+    const checkAuthAndFetch = async () => {
+      // Vérifier d'abord si l'utilisateur est authentifié
+      const isAuthenticated = await isUserAuthenticated();
+      if (!isAuthenticated) {
+        console.log('useActiveSessions: Utilisateur non authentifié - arrêt du hook');
+        setLoading(false);
+        setSessions([]);
+        return;
+      }
+
+      console.log('=== useEffect useActiveSessions ===');
+      console.log('Network loading:', networkInfo.loading);
+      console.log('Device Info:', deviceInfo);
+      console.log('Network Info:', networkInfo);
+
+      // Conditions plus strictes : attendre que toutes les données soient disponibles
+      const hasDeviceData = deviceInfo.device && deviceInfo.device !== 'Appareil inconnu';
+      const hasNetworkData = !networkInfo.loading && networkInfo.location !== 'Localisation inconnue';
+
+      console.log('Has device data:', hasDeviceData);
+      console.log('Has network data:', hasNetworkData);
+
+      if (hasDeviceData && hasNetworkData) {
+        console.log('✅ Toutes les conditions remplies, démarrage fetchSessions...');
+        fetchSessions();
+      } else {
+        console.log('⏳ En attente des données complètes...');
+        console.log('  - Device ready:', hasDeviceData);
+        console.log('  - Network ready:', hasNetworkData);
+      }
+    };
+
+    checkAuthAndFetch();
   }, [deviceInfo, networkInfo]);
 
   // Fonction pour terminer une session
@@ -1355,7 +1375,7 @@ const StorageManagementModal: React.FC<{
             <TouchableOpacity
               style={{ backgroundColor: colors.error, padding: 12, borderRadius: 8, alignItems: 'center', marginTop: 20 }}
               onPress={() => {
-                Alert.alert('Cache vidé', 'Le cache a été vidé avec succès');
+                Alert.alert(t('Cache vidé'), t('Le cache a été vidé avec succès'));
                 onClose();
               }}
             >
@@ -1553,6 +1573,16 @@ export default function ParametresScreen() {
   const { user, logout, loading: authLoading } = useAuth();
   const { isDarkMode, toggleDarkMode, colors } = useTheme();
   const { language, setLanguage, t } = useLanguage();
+  const {
+    isAvailable: biometricAvailable,
+    isEnabled: biometricEnabled,
+    hasStoredCredentials: biometricHasCredentials,
+    enableBiometricAuth,
+    setupBiometricWithCredentials,
+    clearStoredCredentials,
+    getBiometricType,
+    checkBiometricStatus
+  } = useBiometricAuth();
 
   // Fonction utilitaire pour vérifier la connectivité selon les préférences utilisateur
   const checkNetworkConnectivity = async () => {
@@ -1575,14 +1605,17 @@ export default function ParametresScreen() {
   };
 
   // États pour les différents switches et modals
-  const [notificationEnabled, setNotificationEnabled] = useState(false); // Désactivé par défaut
+  const [notificationEnabled, setNotificationEnabled] = useState<boolean | null>(null); // null = pas encore initialisé
   const [emailNotificationEnabled, setEmailNotificationEnabled] = useState(true);
-  const [biometricEnabled, setBiometricEnabled] = useState(false);
   const [autoSyncEnabled, setAutoSyncEnabled] = useState(true);
   const [registeringToken, setRegisteringToken] = useState(false);
   const [changePasswordModalVisible, setChangePasswordModalVisible] = useState(false);
   const [activeSessionsModalVisible, setActiveSessionsModalVisible] = useState(false);
-  const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const [biometricSetupModalVisible, setBiometricSetupModalVisible] = useState(false);
+  const [biometricEmail, setBiometricEmail] = useState('');
+  const [biometricPassword, setBiometricPassword] = useState('');
+  const [showBiometricPassword, setShowBiometricPassword] = useState(false);
+  const [biometricSetupLoading, setBiometricSetupLoading] = useState(false);
   
   // Nouveaux états pour les fonctionnalités ajoutées
   const [offlineModeEnabled, setOfflineModeEnabled] = useState(false);
@@ -1613,25 +1646,97 @@ export default function ParametresScreen() {
   const [appVersion] = useState(__DEV__ ? '1.0.0-dev' : '1.0.0');
   const [buildNumber] = useState(__DEV__ ? 'dev' : '100');
 
+  // Effect pour initialiser le statut biométrique
+  useEffect(() => {
+    const initBiometricStatus = async () => {
+      try {
+        await checkBiometricStatus();
+      } catch (error) {
+        console.error('Erreur lors de l\'initialisation du statut biométrique:', error);
+      }
+    };
+
+    initBiometricStatus();
+  }, [checkBiometricStatus]);
+
+  // Fonction globale pour déclencher l'enregistrement des notifications push depuis SimplePermissionsManager
+  useEffect(() => {
+    const handlePushRegistration = () => {
+      console.log('🔔 Settings: Déclenchement global de l\'enregistrement push');
+      setNotificationEnabled(true);
+      // Déclencher l'enregistrement après un petit délai (sans alerte de succès)
+      setTimeout(() => {
+        registerForPushNotificationsAsync(false);
+      }, 100);
+    };
+
+    // Enregistrer la fonction globalement
+    global.triggerPushNotificationRegistration = handlePushRegistration;
+
+    // Nettoyer au démontage
+    return () => {
+      if (global.triggerPushNotificationRegistration === handlePushRegistration) {
+        global.triggerPushNotificationRegistration = undefined;
+      }
+    };
+  }, []);
+
   useEffect(() => {
     async function getInitialNotificationStatus() {
       try {
-        // Vérifier d'abord les préférences utilisateur sauvegardées
+        console.log('🔔 Initialisation du statut des notifications...');
+
+        // 1. Vérifier les permissions système d'abord
+        const { status } = await Notifications.getPermissionsAsync();
+        const systemPermissionGranted = status === 'granted';
+        console.log('🔔 Permissions système:', status, 'Accordées:', systemPermissionGranted);
+
+        // 2. Vérifier les préférences utilisateur sauvegardées
         const savedNotificationEnabled = await AsyncStorage.getItem('notifications_enabled');
-        
+        console.log('🔔 Préférences sauvegardées:', savedNotificationEnabled);
+
+        let finalState: boolean;
+
         if (savedNotificationEnabled !== null) {
-          // Utiliser les préférences sauvegardées
-          const isEnabled = savedNotificationEnabled === 'true';
-          setNotificationEnabled(isEnabled);
+          // Si des préférences existent, les utiliser MAIS les synchroniser avec les permissions système
+          const savedEnabled = savedNotificationEnabled === 'true';
+
+          if (savedEnabled && !systemPermissionGranted) {
+            // L'utilisateur avait activé les notifications mais les permissions système ont été révoquées
+            console.log('🔔 Permissions révoquées, désactivation des notifications');
+            finalState = false;
+            await AsyncStorage.setItem('notifications_enabled', 'false');
+          } else if (!savedEnabled && systemPermissionGranted) {
+            // L'utilisateur n'avait pas activé les notifications mais les permissions système sont accordées
+            // Cela peut arriver après l'onboarding - activer automatiquement les notifications push
+            console.log('🔔 Permissions accordées mais notifications désactivées, activation automatique');
+            finalState = true;
+            await AsyncStorage.setItem('notifications_enabled', 'true');
+            // Déclencher l'enregistrement du token push (sans alerte de succès)
+            setTimeout(() => {
+              registerForPushNotificationsAsync(false);
+            }, 1000);
+          } else {
+            // États cohérents
+            finalState = savedEnabled;
+          }
         } else {
-          // Fallback - vérifier les permissions système
-          const { status } = await Notifications.getPermissionsAsync();
-          const isGranted = status === 'granted';
-          setNotificationEnabled(isGranted);
-          
-          // Sauvegarder l'état initial
-          await AsyncStorage.setItem('notifications_enabled', isGranted.toString());
+          // Première initialisation - utiliser les permissions système
+          finalState = systemPermissionGranted;
+          await AsyncStorage.setItem('notifications_enabled', systemPermissionGranted.toString());
+
+          if (systemPermissionGranted) {
+            console.log('🔔 Première initialisation avec permissions accordées, activation des notifications push');
+            // Déclencher l'enregistrement du token push après un délai (sans alerte de succès)
+            setTimeout(() => {
+              registerForPushNotificationsAsync(false);
+            }, 1000);
+          }
         }
+
+        console.log('🔔 État final des notifications:', finalState);
+        setNotificationEnabled(finalState);
+
       } catch (error) {
         console.error('Erreur chargement statut notifications:', error);
         setNotificationEnabled(false);
@@ -1664,8 +1769,7 @@ export default function ParametresScreen() {
           AsyncStorage.getItem('@app_crash_reporting'),
           AsyncStorage.getItem('@app_auto_lock'),
           AsyncStorage.getItem('@app_auto_backup'),
-          AsyncStorage.getItem('@app_font_size'),
-          AsyncStorage.getItem('@app_biometric_enabled')
+          AsyncStorage.getItem('@app_font_size')
         ]);
 
         if (savedOfflineMode !== null) setOfflineModeEnabled(savedOfflineMode === 'true');
@@ -1716,9 +1820,11 @@ export default function ParametresScreen() {
     };
   }, []);
 
-  const registerForPushNotificationsAsync = async () => {
+  const registerForPushNotificationsAsync = async (showSuccessAlert = true) => {
     setRegisteringToken(true);
     try {
+      console.log('🔔 registerForPushNotificationsAsync: Démarrage de l\'enregistrement');
+
       if (Platform.OS === 'android') {
         Notifications.setNotificationChannelAsync('default', {
           name: 'default',
@@ -1735,29 +1841,39 @@ export default function ParametresScreen() {
       }
 
       const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      console.log('🔔 Permissions actuelles:', existingStatus);
       let finalStatus = existingStatus;
+
       if (existingStatus !== 'granted') {
+        console.log('🔔 Demande de nouvelles permissions...');
         const { status } = await Notifications.requestPermissionsAsync();
         finalStatus = status;
+        console.log('🔔 Nouvelles permissions:', finalStatus);
       }
 
       if (finalStatus !== 'granted') {
+        console.log('🔔 Permissions refusées, arrêt de l\'enregistrement');
         Alert.alert(t('Permission refusée'), t('Impossible d\'obtenir le push token pour la notification ! Vous pouvez l\'activer dans les paramètres de votre appareil.'));
         setNotificationEnabled(false);
         await AsyncStorage.setItem('notifications_enabled', 'false');
         return;
       }
 
+      console.log('🔔 Génération du token push...');
       const token = (await Notifications.getExpoPushTokenAsync()).data;
-      console.log('Expo Push Token:', token);
+      console.log('🔔 Expo Push Token généré:', token);
 
+      console.log('🔔 Sauvegarde du token...');
       await savePushToken(token);
-      
+
       // Synchroniser avec SimplePermissionsManager
       await AsyncStorage.setItem('notifications_requested', 'true');
       await AsyncStorage.setItem('notifications_enabled', 'true');
-      
-      Alert.alert(t('Succès'), t('Notifications activées !'));
+
+      console.log('🔔 Notifications push configurées avec succès');
+      if (showSuccessAlert) {
+        Alert.alert(t('Succès'), t('Notifications activées !'));
+      }
       setNotificationEnabled(true);
 
     } catch (error: any) {
@@ -1793,28 +1909,62 @@ export default function ParametresScreen() {
 
   const toggleBiometric = async (value: boolean) => {
     if (value) {
-      try {
-        const result = await LocalAuthentication.authenticateAsync({
-          promptMessage: t('Authentifiez-vous pour activer l\'authentification biométrique'),
-          fallbackLabel: t('Utiliser le mot de passe'),
-        });
-
-        if (result.success) {
-          setBiometricEnabled(true);
-          await AsyncStorage.setItem('@app_biometric_enabled', 'true');
-          Alert.alert(t('Succès'), t('Authentification biométrique activée'));
-        } else {
-          setBiometricEnabled(false);
-        }
-      } catch (error) {
-        console.error('Erreur authentification biométrique:', error);
-        setBiometricEnabled(false);
-        Alert.alert(t('Erreur'), t('Impossible d\'activer l\'authentification biométrique'));
-      }
+      // Si l'utilisateur active la biométrie, nous devons d'abord demander ses credentials
+      Alert.alert(
+        t('Configuration de l\'authentification biométrique'),
+        t('Pour configurer l\'authentification biométrique, veuillez saisir vos identifiants actuels.'),
+        [
+          { text: t('Annuler'), style: 'cancel' },
+          {
+            text: t('Configurer'),
+            onPress: () => {
+              // Afficher un modal pour saisir les credentials
+              showCredentialsModal();
+            }
+          }
+        ]
+      );
     } else {
-      setBiometricEnabled(false);
-      await AsyncStorage.setItem('@app_biometric_enabled', 'false');
-      Alert.alert(t('Désactivé'), t('Authentification biométrique désactivée'));
+      // Désactiver la biométrie et nettoyer les credentials
+      try {
+        await clearStoredCredentials();
+        Alert.alert(t('Désactivé'), t('Authentification biométrique désactivée et credentials supprimés'));
+      } catch (error) {
+        console.error('Erreur lors de la désactivation biométrique:', error);
+        Alert.alert(t('Erreur'), t('Erreur lors de la désactivation de l\'authentification biométrique'));
+      }
+    }
+  };
+
+  const showCredentialsModal = () => {
+    // Pré-remplir l'email avec l'email de l'utilisateur connecté si disponible
+    setBiometricEmail(user?.email || '');
+    setBiometricPassword('');
+    setShowBiometricPassword(false);
+    setBiometricSetupModalVisible(true);
+  };
+
+  const handleBiometricSetup = async () => {
+    if (!biometricEmail || !biometricPassword) {
+      Alert.alert(t('Erreur'), t('Veuillez saisir votre email et mot de passe'));
+      return;
+    }
+
+    setBiometricSetupLoading(true);
+    try {
+      const success = await setupBiometricWithCredentials(biometricEmail, biometricPassword);
+      if (success) {
+        await checkBiometricStatus(); // Rafraîchir le statut
+        setBiometricSetupModalVisible(false);
+        Alert.alert(t('Succès'), t('Authentification biométrique configurée avec succès'));
+      } else {
+        Alert.alert(t('Erreur'), t('Échec de la configuration de l\'authentification biométrique'));
+      }
+    } catch (error: any) {
+      console.error('Erreur configuration biométrique:', error);
+      Alert.alert(t('Erreur'), error.message || t('Erreur lors de la configuration'));
+    } finally {
+      setBiometricSetupLoading(false);
     }
   };
 
@@ -2395,8 +2545,9 @@ export default function ParametresScreen() {
               iconLibrary="Feather"
               iconColor="#F59E0B"
               hasSwitch
-              switchValue={notificationEnabled}
+              switchValue={notificationEnabled ?? false}
               onSwitchChange={toggleNotifications}
+              disabled={notificationEnabled === null}
             />
             <SettingItem
               title={t('Notifications par email')}
@@ -2538,7 +2689,15 @@ export default function ParametresScreen() {
           <View style={[styles.section, { backgroundColor: colors.cardBackground }]}>
             <SettingItem
               title={t('Authentification biométrique')}
-              subtitle={biometricAvailable ? t('Utiliser Face ID / Touch ID') : t('Non disponible sur cet appareil')}
+              subtitle={
+                !biometricAvailable
+                  ? t('Non disponible sur cet appareil')
+                  : biometricEnabled && biometricHasCredentials
+                    ? t('Configuré et prêt à utiliser')
+                    : biometricEnabled
+                      ? t('Activé - Credentials requis')
+                      : t('Utiliser Face ID / Touch ID')
+              }
               icon="fingerprint"
               iconLibrary="MaterialIcons"
               iconColor="#06B6D4"
@@ -2824,6 +2983,112 @@ export default function ParametresScreen() {
                     <Text style={[styles.modalButtonText, { color: '#FFFFFF' }]}>
                       {t('Sauvegarder')}
                     </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Modal de configuration biométrique */}
+        <Modal
+          visible={biometricSetupModalVisible}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setBiometricSetupModalVisible(false)}
+        >
+          <View style={[styles.modalOverlay, { backgroundColor: 'rgba(0,0,0,0.5)' }]}>
+            <View style={[styles.modalContent, { backgroundColor: colors.cardBackground }]}>
+              <View style={styles.modalHeader}>
+                <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>
+                  {t('Configuration biométrique')}
+                </Text>
+                <TouchableOpacity
+                  onPress={() => setBiometricSetupModalVisible(false)}
+                  style={styles.modalCloseButton}
+                >
+                  <Feather name="x" size={24} color={colors.textPrimary} />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.modalBody}>
+                <Text style={[styles.modalSubtitle, { color: colors.textSecondary }]}>
+                  {t('Saisissez vos identifiants pour configurer l\'authentification biométrique')}
+                </Text>
+
+                <View style={[styles.inputGroup, { marginTop: 20 }]}>
+                  <Text style={[styles.inputLabel, { color: colors.textPrimary }]}>
+                    {t('Email')}
+                  </Text>
+                  <TextInput
+                    style={[styles.modalInput, {
+                      backgroundColor: colors.background,
+                      color: colors.textPrimary,
+                      borderColor: colors.border
+                    }]}
+                    value={biometricEmail}
+                    onChangeText={setBiometricEmail}
+                    placeholder={t('Votre email')}
+                    placeholderTextColor={colors.textSecondary}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    editable={!biometricSetupLoading}
+                  />
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={[styles.inputLabel, { color: colors.textPrimary }]}>
+                    {t('Mot de passe')}
+                  </Text>
+                  <View style={[styles.passwordContainer, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                    <TextInput
+                      style={[styles.passwordInput, { color: colors.textPrimary }]}
+                      value={biometricPassword}
+                      onChangeText={setBiometricPassword}
+                      placeholder={t('Votre mot de passe')}
+                      placeholderTextColor={colors.textSecondary}
+                      secureTextEntry={!showBiometricPassword}
+                      editable={!biometricSetupLoading}
+                    />
+                    <TouchableOpacity
+                      onPress={() => setShowBiometricPassword(!showBiometricPassword)}
+                      style={styles.eyeButton}
+                    >
+                      <Feather
+                        name={showBiometricPassword ? "eye-off" : "eye"}
+                        size={20}
+                        color={colors.textSecondary}
+                      />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                <View style={styles.modalButtonContainer}>
+                  <TouchableOpacity
+                    style={[styles.modalButton, styles.modalButtonSecondary, { borderColor: colors.border }]}
+                    onPress={() => setBiometricSetupModalVisible(false)}
+                    disabled={biometricSetupLoading}
+                  >
+                    <Text style={[styles.modalButtonText, { color: colors.textPrimary }]}>
+                      {t('Annuler')}
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.modalButton, styles.modalButtonPrimary, {
+                      backgroundColor: colors.secondary,
+                      opacity: biometricSetupLoading ? 0.6 : 1
+                    }]}
+                    onPress={handleBiometricSetup}
+                    disabled={biometricSetupLoading || !biometricEmail || !biometricPassword}
+                  >
+                    {biometricSetupLoading ? (
+                      <ActivityIndicator color="#FFFFFF" size="small" />
+                    ) : (
+                      <Text style={[styles.modalButtonText, { color: '#FFFFFF' }]}>
+                        {t('Configurer')}
+                      </Text>
+                    )}
                   </TouchableOpacity>
                 </View>
               </View>
@@ -3198,5 +3463,37 @@ modalOverlay: {
   radiusOptionText: {
     fontSize: 14,
     fontWeight: '600',
+  },
+
+  // Styles pour le modal biométrique
+  inputGroup: {
+    marginBottom: 16,
+  },
+  inputLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  modalInput: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 14,
+    fontSize: 16,
+  },
+  passwordContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+  },
+  passwordInput: {
+    flex: 1,
+    paddingVertical: 14,
+    fontSize: 16,
+  },
+  eyeButton: {
+    padding: 8,
   },
 });

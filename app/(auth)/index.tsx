@@ -23,6 +23,7 @@ export default function LoginScreen() {
     hasStoredCredentials,
     authenticateWithBiometrics,
     storeCredentials,
+    setupBiometricWithCredentials,
     getBiometricType,
     checkBiometricStatus,
   } = useBiometricAuth();
@@ -211,15 +212,49 @@ export default function LoginScreen() {
             <TouchableOpacity
               style={[styles.biometricButton, biometricLoading && styles.buttonDisabled]}
               onPress={
-                biometricEnabled && hasStoredCredentials 
-                  ? handleBiometricLogin 
-                  : () => Alert.alert(
-                      'Authentification biométrique',
-                      biometricEnabled 
-                        ? 'Connectez-vous d\'abord avec votre email et mot de passe pour activer la connexion biométrique.'
-                        : 'Activez d\'abord l\'authentification biométrique dans les paramètres, puis connectez-vous une première fois.',
-                      [{ text: 'Compris' }]
-                    )
+                biometricEnabled && hasStoredCredentials
+                  ? handleBiometricLogin
+                  : () => {
+                      if (!biometricEnabled && email && password) {
+                        // Si l'utilisateur a saisi ses credentials, proposer de configurer la biométrie
+                        Alert.alert(
+                          'Configurer l\'authentification biométrique',
+                          'Souhaitez-vous configurer l\'authentification biométrique avec ces identifiants ?',
+                          [
+                            { text: 'Plus tard', style: 'cancel' },
+                            {
+                              text: 'Configurer',
+                              onPress: async () => {
+                                setBiometricLoading(true);
+                                try {
+                                  const success = await setupBiometricWithCredentials(email, password);
+                                  if (success) {
+                                    Alert.alert(t('Succès'), t('Authentification biométrique configurée avec succès !'));
+                                    await checkBiometricStatus(); // Rafraîchir le statut
+                                  } else {
+                                    Alert.alert(t('Erreur'), t('Échec de la configuration de l\'authentification biométrique.'));
+                                  }
+                                } catch (error: any) {
+                                  Alert.alert(t('Erreur'), error.message || t('Erreur lors de la configuration.'));
+                                } finally {
+                                  setBiometricLoading(false);
+                                }
+                              }
+                            }
+                          ]
+                        );
+                      } else {
+                        Alert.alert(
+                          'Authentification biométrique',
+                          biometricEnabled
+                            ? 'Connectez-vous d\'abord avec votre email et mot de passe pour activer la connexion biométrique.'
+                            : email && password
+                              ? 'Configurez l\'authentification biométrique en appuyant sur "Configurer".'
+                              : 'Saisissez vos identifiants puis appuyez sur ce bouton pour configurer l\'authentification biométrique.',
+                          [{ text: 'Compris' }]
+                        );
+                      }
+                    }
               }
               disabled={loading || biometricLoading}
             >
@@ -229,11 +264,13 @@ export default function LoginScreen() {
                 <View style={styles.biometricButtonContent}>
                   <MaterialIcons name="fingerprint" size={24} color="#3B82F6" />
                   <Text style={styles.biometricButtonText}>
-                    {biometricEnabled && hasStoredCredentials 
+                    {biometricEnabled && hasStoredCredentials
                       ? `Connexion avec ${biometricType}`
-                      : biometricEnabled 
+                      : !biometricEnabled && email && password
                         ? `Configurer ${biometricType}`
-                        : `Activer ${biometricType}`
+                        : biometricEnabled
+                          ? `Configurer ${biometricType}`
+                          : `Activer ${biometricType}`
                     }
                   </Text>
                 </View>

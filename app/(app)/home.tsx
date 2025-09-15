@@ -295,21 +295,23 @@ export default function HomeScreen() {
         console.warn('Erreur chargement candidatures:', error);
       }
 
-      // Statistiques des entretiens - essayer l'API puis fallback
+      // Statistiques des entretiens - nouvelle gestion améliorée
       try {
-        const entretiensList = await getCandidatEntretiens();
-        console.log('Données entretiens brutes:', entretiensList);
-        if (entretiensList && Array.isArray(entretiensList)) {
-          interviews = entretiensList.length;
+        const entretiensResponse = await getCandidatEntretiens();
+        console.log('Données entretiens depuis API:', entretiensResponse);
+
+        if (entretiensResponse.needsProfileCreation) {
+          console.log('Info Home: Profil candidat manquant pour entretiens');
+          interviews = 0; // Pas d'entretiens sans profil candidat
+        } else if (entretiensResponse.entretiens && Array.isArray(entretiensResponse.entretiens)) {
+          interviews = entretiensResponse.entretiens.length;
         } else {
-          throw new Error('Format de réponse incorrect');
+          interviews = 0;
         }
         console.log('Statistiques entretiens depuis API:', interviews);
       } catch (error) {
-        console.warn('API entretiens indisponible, utilisation de fallback:', error);
-        // Fallback simple: au moins 1 entretien si on a des réponses
-        interviews = responses > 0 ? 1 : 0;
-        console.log('Statistiques entretiens fallback:', interviews);
+        console.log('Info: Statistiques entretiens non disponibles');
+        interviews = 0; // Par défaut 0 entretiens
       }
 
       // Calcul du pourcentage de complétude du profil

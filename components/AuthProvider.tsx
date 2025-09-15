@@ -9,10 +9,11 @@ import React, {
 import {Platform, Alert} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SplashScreenExpo from 'expo-splash-screen';
-import { 
-  loginUser as apiLoginUser, 
-  fetchUserProfile as apiFetchUserProfile, 
-  logoutUser as apiLogoutUser, 
+import { useLanguage } from './LanguageContext';
+import {
+  loginUser as apiLoginUser,
+  fetchUserProfile as apiFetchUserProfile,
+  logoutUser as apiLogoutUser,
   registerUser as apiRegisterUser,
   socialLoginCallback,
   getInterimProfile,
@@ -125,6 +126,7 @@ interface AuthProviderProps {
 }
 
 export const AuthProvider = ({ children }: AuthProviderProps) => {
+  const { t } = useLanguage();
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -141,17 +143,22 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const fetchUser = useCallback(async () => {
     try {
       const fetchedUser = await apiFetchUserProfile();
-      if (fetchedUser && fetchedUser.role === 'interimaire') { 
-        const interimProfile = await getInterimProfile();
-        if (interimProfile) {
-          fetchedUser.is_contract_active = interimProfile.is_contract_active;
-        } else {
+      if (fetchedUser && fetchedUser.role === 'interimaire') {
+        try {
+          const interimProfile = await getInterimProfile();
+          if (interimProfile) {
+            fetchedUser.is_contract_active = interimProfile.is_contract_active;
+          } else {
+            fetchedUser.is_contract_active = false;
+          }
+        } catch (interimError: any) {
+          console.warn("AuthProvider: Erreur récupération profil intérimaire:", interimError.message);
           fetchedUser.is_contract_active = false;
         }
       }
       setUser(fetchedUser);
       return fetchedUser;
-    } catch (e: any) { 
+    } catch (e: any) {
       if (e.response?.status === 401) {
         console.warn("AuthProvider: Jeton non valide détecté (401), utilisateur sera déconnecté.");
       } else {
@@ -160,7 +167,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       await AsyncStorage.removeItem(STORAGE_KEYS.USER_TOKEN);
       setUser(null);
       setToken(null);
-      throw e; 
+      throw e;
     }
   }, []);
 
@@ -168,11 +175,16 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     try {
       console.log('Rechargement du profil utilisateur avec toutes les relations...');
       const fetchedUser = await apiFetchUserProfile();
-      if (fetchedUser && fetchedUser.role === 'interimaire') { 
-        const interimProfile = await getInterimProfile();
-        if (interimProfile) {
-          fetchedUser.is_contract_active = interimProfile.is_contract_active;
-        } else {
+      if (fetchedUser && fetchedUser.role === 'interimaire') {
+        try {
+          const interimProfile = await getInterimProfile();
+          if (interimProfile) {
+            fetchedUser.is_contract_active = interimProfile.is_contract_active;
+          } else {
+            fetchedUser.is_contract_active = false;
+          }
+        } catch (interimError: any) {
+          console.warn("AuthProvider: Erreur récupération profil intérimaire lors du refresh:", interimError.message);
           fetchedUser.is_contract_active = false;
         }
       }
@@ -185,9 +197,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       });
       setUser(fetchedUser);
       return fetchedUser;
-    } catch (e: any) { 
+    } catch (e: any) {
       console.error("AuthProvider: Échec de refreshUserProfile:", e);
-      throw e; 
+      throw e;
     }
   }, []);
 
@@ -449,10 +461,15 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           
           // Puis récupérer le profil intérimaire si nécessaire (maintenant avec le token)
           if (userFromApi && userFromApi.role === 'interimaire') {
-            const interimProfile = await getInterimProfile();
-            if (interimProfile) {
-              userFromApi.is_contract_active = interimProfile.is_contract_active;
-            } else {
+            try {
+              const interimProfile = await getInterimProfile();
+              if (interimProfile) {
+                userFromApi.is_contract_active = interimProfile.is_contract_active;
+              } else {
+                userFromApi.is_contract_active = false;
+              }
+            } catch (interimError: any) {
+              console.warn("AuthProvider: Erreur récupération profil intérimaire lors du social login:", interimError.message);
               userFromApi.is_contract_active = false;
             }
           }
@@ -496,10 +513,10 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     setError(null);
     try {
       await apiSendOtp(email);
-      Alert.alert('Succès', 'Un nouveau code OTP a été envoyé à votre email.');
+      Alert.alert(t('Succès'), t('Un nouveau code OTP a été envoyé à votre email.'));
     } catch (err: any) {
       console.error('Send OTP failed:', err.response?.data || err.message);
-      setError(err.response?.data?.message || 'Échec de l\'envoi du code OTP.');
+      setError(err.response?.data?.message || t('Échec de l\'envoi du code OTP.'));
       throw err;
     } finally {
       setLoading(false);
