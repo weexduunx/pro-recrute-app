@@ -53,7 +53,7 @@ export default function AppDrawerLayout() {
 }
 
 
-// Traductions personnalisées si besoin
+// Clés de traduction pour les routes du drawer
 function getDrawerLabel(route: string): string {
   const labels: Record<string, string> = {
     home: 'Accueil',

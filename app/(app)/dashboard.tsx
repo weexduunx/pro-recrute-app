@@ -383,7 +383,7 @@ export default function DashboardScreen() {
                 <FontAwesome5 name="check-circle" size={16} color="#10B981" />
               </View>
               <Text style={styles.statNumber}>
-                {applications.filter(app => app.etat === 'Acceptée').length}
+                {Array.isArray(applications) ? applications.filter(app => app.etat === 'Acceptée').length : 0}
               </Text>
               <Text style={styles.statLabel}>Acceptées</Text>
             </View>
@@ -477,7 +477,7 @@ export default function DashboardScreen() {
               <FontAwesome5 name="percentage" size={16} color="#8B5CF6" />
               <Text style={styles.activityText}>
                 <Text style={styles.activityNumber}>
-                  {applications.length > 0 
+                  {Array.isArray(applications) && applications.length > 0
                     ? Math.round((applications.filter(app => app.etat === 'Acceptée').length / applications.length) * 100)
                     : 0}%
                 </Text> taux d'acceptation

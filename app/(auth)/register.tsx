@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator,
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useAuth } from '../../components/AuthProvider';
+import { useLanguage } from '../../components/LanguageContext';
 import { Picker } from '@react-native-picker/picker';
 import { Ionicons , Feather } from '@expo/vector-icons';
 
@@ -22,6 +23,7 @@ export default function RegisterScreen() {
   const [showPasswordConfirmation, setShowPasswordConfirmation] = useState(false);
 
   const { register, error: authError, clearError } = useAuth();
+  const { t } = useLanguage();
 
   useEffect(() => {
     clearError();
@@ -43,7 +45,7 @@ export default function RegisterScreen() {
 
   const passwordStrength = getPasswordStrength(password);
   const strengthColors = ['#EF4444', '#F59E0B', '#EAB308', '#22C55E', '#16A34A'];
-  const strengthLabels = ['Très faible', 'Faible', 'Moyen', 'Fort', 'Très fort'];
+  const strengthLabels = [t('Très faible'), t('Faible'), t('Moyen'), t('Fort'), t('Très fort')];
 
   // AJOUTÉ : Validation email simple
   const isValidEmail = (email: string) => {
@@ -76,7 +78,7 @@ export default function RegisterScreen() {
     }
 
     if (password !== passwordConfirmation) {
-      setError('Les mots de passe ne correspondent pas.');
+      setError(t('Les mots de passe ne correspondent pas'));
       setLoading(false);
       return;
     }
@@ -125,7 +127,7 @@ export default function RegisterScreen() {
           <View style={styles.inputContainer}>
             <TextInput
               style={styles.input}
-              placeholder="Nom complet"
+              placeholder={t("Nom complet")}
               placeholderTextColor="#9CA3AF"
               value={name}
               onChangeText={setName}
@@ -141,7 +143,7 @@ export default function RegisterScreen() {
                 styles.input,
                 email && !isValidEmail(email) && styles.inputError
               ]}
-              placeholder="Adresse email"
+              placeholder={t("Adresse email")}
               placeholderTextColor="#9CA3AF"
               value={email}
               onChangeText={setEmail}
@@ -166,7 +168,7 @@ export default function RegisterScreen() {
           <View style={styles.inputContainer}>
             <TextInput
               style={[styles.input, { paddingRight: 50 }]}
-              placeholder="Mot de passe"
+              placeholder={t("Mot de passe")}
               placeholderTextColor="#9CA3AF"
               value={password}
               onChangeText={setPassword}
@@ -224,7 +226,7 @@ export default function RegisterScreen() {
                 { paddingRight: 50 },
                 passwordConfirmation && password !== passwordConfirmation && styles.inputError
               ]}
-              placeholder="Confirmer le mot de passe"
+              placeholder={t("Confirmer le mot de passe")}
               placeholderTextColor="#9CA3AF"
               value={passwordConfirmation}
               onChangeText={setPasswordConfirmation}
@@ -258,8 +260,8 @@ export default function RegisterScreen() {
                   { color: password === passwordConfirmation ? "#22C55E" : "#EF4444" }
                 ]}>
                   {password === passwordConfirmation
-                    ? "Les mots de passe correspondent"
-                    : "Les mots de passe ne correspondent pas"}
+                    ? t("Les mots de passe correspondent")
+                    : t("Les mots de passe ne correspondent pas")}
                 </Text>
               </View>
             )}
@@ -274,8 +276,8 @@ export default function RegisterScreen() {
               style={styles.picker}
               itemStyle={styles.pickerItem}
             >
-              <Picker.Item label="Candidat" value="user" />
-              <Picker.Item label="Intérimaire" value="interimaire" />
+              <Picker.Item label={t("Candidat")} value="user" />
+              <Picker.Item label={t("Intérimaire")} value="interimaire" />
             </Picker>
             {/* <Ionicons name="chevron-down" size={20} color="#6B7280" style={styles.pickerIcon} /> */}
           </View>
@@ -288,7 +290,7 @@ export default function RegisterScreen() {
             {loading ? (
               <ActivityIndicator color="#FFFFFF" size="small" />
             ) : (
-              <Text style={styles.primaryButtonText}>Créer mon compte</Text>
+              <Text style={styles.primaryButtonText}>{t("Créer mon compte")}</Text>
             )}
           </TouchableOpacity>
 

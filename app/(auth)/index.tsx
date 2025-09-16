@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator,
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useAuth } from '../../components/AuthProvider';
+import { useLanguage } from '../../components/LanguageContext';
 import { FontAwesome5, Feather, MaterialIcons } from '@expo/vector-icons';
 import { Platform } from 'react-native';
 import { useBiometricAuth } from '../../hooks/useBiometricAuth';
@@ -17,6 +18,7 @@ export default function LoginScreen() {
   const [biometricType, setBiometricType] = useState<string>('Empreinte digitale');
 
   const { login, socialLogin, error: authError, clearError } = useAuth();
+  const { t } = useLanguage();
   const {
     isAvailable: biometricAvailable,
     isEnabled: biometricEnabled,
@@ -133,7 +135,7 @@ export default function LoginScreen() {
           <View style={styles.inputContainer}>
             <TextInput
               style={styles.input}
-              placeholder="Adresse email"
+              placeholder={t("Adresse email")}
               placeholderTextColor="#9CA3AF"
               value={email}
               onChangeText={setEmail}
@@ -148,7 +150,7 @@ export default function LoginScreen() {
           {/* <View style={styles.inputContainer}>
             <TextInput
               style={styles.input}
-              placeholder="Mot de passe"
+              placeholder={t("Mot de passe")}
               placeholderTextColor="#9CA3AF"
               value={password}
               onChangeText={setPassword}

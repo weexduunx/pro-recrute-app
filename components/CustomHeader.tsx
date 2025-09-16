@@ -5,6 +5,7 @@ import { FontAwesome5, Ionicons } from '@expo/vector-icons';
 import { useNavigation, DrawerActions } from '@react-navigation/native';
 import { router } from 'expo-router';
 import { useAuth } from './AuthProvider';
+import { useLanguage } from './LanguageContext';
 import { useNotifications } from '../hooks/useNotifications';
 import { StatusBar } from 'expo-status-bar';
 // @ts-ignore
@@ -33,6 +34,7 @@ export interface CustomHeaderProps {
 export default function CustomHeader({ title, user: propUser, showBackButton = false, onBackPress, rightComponent, showNotificationIcon = false }: CustomHeaderProps) {
   const navigation = useNavigation();
   const { logout, user: contextUser } = useAuth();
+  const { t } = useLanguage();
   const { unreadCount } = useNotifications();
   const [isAvatarDropdownVisible, setAvatarDropdownVisible] = useState(false);
   
@@ -81,11 +83,11 @@ export default function CustomHeader({ title, user: propUser, showBackButton = f
 const handleDropdownLogout = () => {
   closeAvatarDropdown();
   Alert.alert(
-    "Déconnexion",
-    "Êtes-vous sûr de vouloir vous déconnecter ?",
+    t("Confirmation"),
+    t("Êtes-vous sûr de vouloir vous déconnecter ?"),
     [
-      { text: "Annuler", style: "cancel" },
-      { text: "Oui", onPress: () => {
+      { text: t("Annuler"), style: "cancel" },
+      { text: t("Confirmer"), onPress: () => {
         setTimeout(() => {
           logout();
         }, 200); // petit délai aussi ici
@@ -174,14 +176,14 @@ const handleDropdownLogout = () => {
               <TouchableOpacity style={styles.dropdownItem} onPress={handleDropdownProfile}>
                 <View style={styles.dropdownItemContent}>
                   <Ionicons name="person-outline" size={22} color="#091e60" />
-                  <Text style={styles.dropdownItemText}>Voir le profil</Text>
+                  <Text style={styles.dropdownItemText}>{t("Mon Profil")}</Text>
                 </View>
               </TouchableOpacity>
 
               <TouchableOpacity style={styles.dropdownItem} onPress={handleDropdownLogout}>
                 <View style={styles.dropdownItemContent}>
                   <Ionicons name="log-out-outline" size={22} color="#ef4444" />
-                  <Text style={styles.dropdownItemTextDecon}>Déconnexion</Text>
+                  <Text style={styles.dropdownItemTextDecon}>{t("Déconnexion")}</Text>
                 </View>
               </TouchableOpacity>
 

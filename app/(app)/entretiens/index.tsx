@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView, ActivityIndicator, StatusBar, RefreshControl } from 'react-native';
 import { useAuth } from '../../../components/AuthProvider';
 import { FontAwesome5 } from '@expo/vector-icons';
-import { getCandidatEntretiensCalendrier } from '../../../utils/api';
+import { getCandidatEntretiensCalendrier, getCandidatEntretiens } from '../../../utils/api';
 import { router } from 'expo-router';
 import CustomHeader from '../../../components/CustomHeader';
 import { useTheme } from '../../../components/ThemeContext';
@@ -12,6 +12,7 @@ export default function EntretiensMainScreen() {
   const { colors } = useTheme();
   
   const [entretiens, setEntretiens] = useState<any[]>([]);
+  const [tousEntretiens, setTousEntretiens] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -19,16 +20,37 @@ export default function EntretiensMainScreen() {
     if (user) {
       setLoading(true);
       try {
+        // Charger les entretiens à venir pour le prochain entretien
         const fetchedEntretiens = await getCandidatEntretiensCalendrier();
-        setEntretiens(fetchedEntretiens);
+
+        if (fetchedEntretiens && fetchedEntretiens.entretiens) {
+          setEntretiens(fetchedEntretiens.entretiens);
+        } else if (Array.isArray(fetchedEntretiens)) {
+          setEntretiens(fetchedEntretiens);
+        } else {
+          setEntretiens([]);
+        }
+
+        // Charger tous les entretiens pour les statistiques
+        const tousEntretiensFetched = await getCandidatEntretiens();
+
+        if (tousEntretiensFetched && tousEntretiensFetched.entretiens) {
+          setTousEntretiens(tousEntretiensFetched.entretiens);
+        } else if (Array.isArray(tousEntretiensFetched)) {
+          setTousEntretiens(tousEntretiensFetched);
+        } else {
+          setTousEntretiens([]);
+        }
       } catch (error: any) {
         console.error("Erreur de chargement des entretiens:", error);
         setEntretiens([]);
+        setTousEntretiens([]);
       } finally {
         setLoading(false);
       }
     } else {
       setEntretiens([]);
+      setTousEntretiens([]);
       setLoading(false);
     }
   }, [user]);
@@ -49,29 +71,48 @@ export default function EntretiensMainScreen() {
   }, [loadEntretiens]);
 
   const getProchainEntretien = () => {
+    if (!entretiens || !Array.isArray(entretiens)) return null;
+
     const now = new Date();
     const futurs = entretiens.filter(e => {
-      const entretienDate = new Date(`${e.date_entretien}T${e.heure_entretien}`);
-      return entretienDate > now;
+      // Support both date formats from API
+      const dateField = e.date_entretien || e.date;
+      const heureField = e.heure_entretien || e.heure;
+
+      if (!dateField || !heureField) return false;
+
+      const entretienDate = new Date(`${dateField}T${heureField}`);
+      const isValid = !isNaN(entretienDate.getTime());
+      const isFuture = entretienDate > now;
+
+      return isValid && isFuture;
     }).sort((a, b) => {
-      const dateA = new Date(`${a.date_entretien}T${a.heure_entretien}`);
-      const dateB = new Date(`${b.date_entretien}T${b.heure_entretien}`);
+      const dateA = new Date(`${a.date_entretien || a.date}T${a.heure_entretien || a.heure}`);
+      const dateB = new Date(`${b.date_entretien || b.date}T${b.heure_entretien || b.heure}`);
       return dateA.getTime() - dateB.getTime();
     });
-    
+
     return futurs.length > 0 ? futurs[0] : null;
   };
 
   const getStatsEntretiens = () => {
+    if (!tousEntretiens || !Array.isArray(tousEntretiens)) {
+      return { total: 0, futurs: 0, termines: 0, enAttente: 0 };
+    }
+
     const now = new Date();
-    const total = entretiens.length;
-    const futurs = entretiens.filter(e => {
-      const entretienDate = new Date(`${e.date_entretien}T${e.heure_entretien}`);
-      return entretienDate > now;
+    const total = tousEntretiens.length;
+    const futurs = tousEntretiens.filter(e => {
+      const dateField = e.date_entretien || e.date;
+      const heureField = e.heure_entretien || e.heure;
+      if (!dateField || !heureField) return false;
+
+      const entretienDate = new Date(`${dateField}T${heureField}`);
+      return !isNaN(entretienDate.getTime()) && entretienDate > now;
     }).length;
-    const termines = entretiens.filter(e => e.decision && e.decision !== 0).length;
-    const enAttente = entretiens.filter(e => e.decision === 0).length;
-    
+    const termines = tousEntretiens.filter(e => e.decision && e.decision !== 0).length;
+    const enAttente = tousEntretiens.filter(e => e.decision === 0).length;
+
     return { total, futurs, termines, enAttente };
   };
 
@@ -133,10 +174,10 @@ export default function EntretiensMainScreen() {
                     <Text style={styles.prochainEntretienTitle}>Prochain entretien</Text>
                   </View>
                   <Text style={styles.prochainEntretienPoste} numberOfLines={2}>
-                    {prochainEntretien.offre?.titre || 'Titre non disponible'}
+                    {prochainEntretien.titre_offre || prochainEntretien.offre?.titre || 'Titre non disponible'}
                   </Text>
                   <Text style={styles.prochainEntretienEntreprise}>
-                    {prochainEntretien.offre?.entreprise_nom || 'Entreprise'}
+                    {prochainEntretien.entreprise_nom || prochainEntretien.offre?.entreprise_nom || 'Entreprise'}
                   </Text>
                   <View style={styles.prochainEntretienDateContainer}>
                     <Text style={styles.prochainEntretienDate}>

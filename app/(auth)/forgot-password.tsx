@@ -4,8 +4,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { apiRequest } from '../../utils/api';
+import { useLanguage } from '../../components/LanguageContext';
 
 export default function ForgotPasswordScreen() {
+  const { t } = useLanguage();
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
@@ -138,7 +140,7 @@ export default function ForgotPasswordScreen() {
           <View style={styles.inputContainer}>
             <TextInput
               style={styles.input}
-              placeholder="Adresse email"
+              placeholder={t("Adresse email")}
               placeholderTextColor="#9CA3AF"
               value={email}
               onChangeText={setEmail}

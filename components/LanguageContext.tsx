@@ -267,7 +267,7 @@ const translations: { [lang: string]: TranslationMap } = {
     'Trier': 'Trier',
     'Tout effacer': 'Tout effacer',
     'Aucun résultat': 'Aucun résultat',
-    'Chargement...': 'Chargement...',
+    // Removed duplicate 'Chargement...' key since it was defined earlier
     'Réessayer': 'Réessayer',
     'Fermer': 'Fermer',
     'Ouvrir': 'Ouvrir',
@@ -298,6 +298,34 @@ const translations: { [lang: string]: TranslationMap } = {
     'Retiré des favoris': 'Retiré des favoris',
     'Historique': 'Historique',
     'Vider l\'historique': 'Vider l\'historique',
+
+    // Navigation drawer
+    'Offres d\'emploi': 'Offres d\'emploi',
+    'Tableau de bord': 'Tableau de bord',
+    'Espace Intérimaire': 'Espace Intérimaire',
+    'Mes entretiens': 'Mes entretiens',
+    'Recommandations IA': 'Recommandations IA',
+    'Évaluations': 'Évaluations',
+    'Dossier RH': 'Dossier RH',
+    'Dossier IPM': 'Dossier IPM',
+    'Messages': 'Messages',
+    'Welcome': 'Bienvenue',
+
+    // Authentification
+    'Nom complet': 'Nom complet',
+    'Adresse email': 'Adresse email',
+    'Mot de passe': 'Mot de passe',
+    'Confirmer le mot de passe': 'Confirmer le mot de passe',
+    'Créer mon compte': 'Créer mon compte',
+    'Candidat': 'Candidat',
+    'Intérimaire': 'Intérimaire',
+    'Les mots de passe correspondent': 'Les mots de passe correspondent',
+    'Les mots de passe ne correspondent pas': 'Les mots de passe ne correspondent pas',
+    'Très faible': 'Très faible',
+    'Faible': 'Faible',
+    'Moyen': 'Moyen',
+    'Fort': 'Fort',
+    'Très fort': 'Très fort',
   },
   en: {
     // General
@@ -560,7 +588,7 @@ const translations: { [lang: string]: TranslationMap } = {
     'Trier': 'Sort',
     'Tout effacer': 'Clear all',
     'Aucun résultat': 'No results',
-    'Chargement...': 'Loading...',
+// Remove duplicate 'Chargement...' key since it was defined earlier
     'Réessayer': 'Retry',
     'Fermer': 'Close',
     'Ouvrir': 'Open',
@@ -591,6 +619,34 @@ const translations: { [lang: string]: TranslationMap } = {
     'Retiré des favoris': 'Removed from favorites',
     'Historique': 'History',
     'Vider l\'historique': 'Clear history',
+
+    // Navigation drawer
+    'Offres d\'emploi': 'Job Offers',
+    'Tableau de bord': 'Dashboard',
+    'Espace Intérimaire': 'Temp Space',
+    'Mes entretiens': 'My Interviews',
+    'Recommandations IA': 'AI Recommendations',
+    'Évaluations': 'Assessments',
+    'Dossier RH': 'HR File',
+    'Dossier IPM': 'IPM File',
+    'Messages': 'Messages',
+    'Welcome': 'Welcome',
+
+    // Authentication
+    'Nom complet': 'Full name',
+    'Adresse email': 'Email address',
+    'Mot de passe': 'Password',
+    'Confirmer le mot de passe': 'Confirm password',
+    'Créer mon compte': 'Create my account',
+    'Candidat': 'Candidate',
+    'Intérimaire': 'Temp Worker',
+    'Les mots de passe correspondent': 'Passwords match',
+    'Les mots de passe ne correspondent pas': 'Passwords do not match',
+    'Très faible': 'Very weak',
+    'Faible': 'Weak',
+    'Moyen': 'Medium',
+    'Fort': 'Strong',
+    'Très fort': 'Very strong',
   },
   ar: {
     // General (Arabic, RTL support might need more adjustments)
@@ -853,7 +909,7 @@ const translations: { [lang: string]: TranslationMap } = {
     'Trier': 'ترتيب',
     'Tout effacer': 'مسح الكل',
     'Aucun résultat': 'لا توجد نتائج',
-    'Chargement...': 'جاري التحميل...',
+    'Loading...': 'جاري التحميل...',
     'Réessayer': 'إعادة المحاولة',
     'Fermer': 'إغلاق',
     'Ouvrir': 'فتح',
@@ -884,6 +940,34 @@ const translations: { [lang: string]: TranslationMap } = {
     'Retiré des favoris': 'أزيل من المفضلة',
     'Historique': 'التاريخ',
     'Vider l\'historique': 'مسح التاريخ',
+
+    // Navigation drawer
+    'Offres d\'emploi': 'عروض العمل',
+    'Tableau de bord': 'لوحة المعلومات',
+    'Espace Intérimaire': 'مساحة العمل المؤقت',
+    'Mes entretiens': 'مقابلاتي',
+    'Recommandations IA': 'توصيات الذكاء الاصطناعي',
+    'Évaluations': 'التقييمات',
+    'Dossier RH': 'ملف الموارد البشرية',
+    'Dossier IPM': 'ملف IPM',
+    'Messages': 'الرسائل',
+    'Welcome': 'مرحباً',
+
+    // المصادقة
+    'Nom complet': 'الاسم الكامل',
+    'Adresse email': 'عنوان البريد الإلكتروني',
+    'Mot de passe': 'كلمة المرور',
+    'Confirmer le mot de passe': 'تأكيد كلمة المرور',
+    'Créer mon compte': 'إنشاء حسابي',
+    'Candidat': 'مرشح',
+    'Intérimaire': 'عامل مؤقت',
+    'Les mots de passe correspondent': 'كلمات المرور متطابقة',
+    'Les mots de passe ne correspondent pas': 'كلمات المرور غير متطابقة',
+    'Très faible': 'ضعيف جداً',
+    'Faible': 'ضعيف',
+    'Moyen': 'متوسط',
+    'Fort': 'قوي',
+    'Très fort': 'قوي جداً',
   },
 };
 

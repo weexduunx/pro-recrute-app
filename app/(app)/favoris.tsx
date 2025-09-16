@@ -16,6 +16,7 @@ import { getFavoris, removeFromFavoris } from '../../utils/api';
 import CustomHeader from '../../components/CustomHeader';
 import { useAuth } from '../../components/AuthProvider';
 import { useTheme } from '../../components/ThemeContext';
+import { useLanguage } from '../../components/LanguageContext';
 import AntDesign from '@expo/vector-icons/AntDesign';
 import EvilIcons from '@expo/vector-icons/EvilIcons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -34,6 +35,7 @@ interface FavoriItem {
 export default function FavorisScreen() {
   const { user } = useAuth();
   const { colors } = useTheme();
+  const { t } = useLanguage();
   const [favoris, setFavoris] = useState<FavoriItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -48,7 +50,7 @@ export default function FavorisScreen() {
       }
     } catch (error: any) {
       console.error('Erreur lors du chargement des favoris:', error);
-      Alert.alert('Erreur', 'Impossible de charger vos favoris');
+      Alert.alert(t('Erreur'), t('Impossible de charger vos candidatures.'));
     } finally {
       setLoading(false);
     }
@@ -66,21 +68,21 @@ export default function FavorisScreen() {
 
   const handleRemoveFavori = async (offreId: number) => {
     Alert.alert(
-      "Supprimer des favoris",
+      t("Supprimer"),
       "Êtes-vous sûr de vouloir supprimer cette offre de vos favoris ?",
       [
-        { text: "Annuler", style: "cancel" },
+        { text: t("Annuler"), style: "cancel" },
         { 
-          text: "Supprimer", 
+          text: t("Supprimer"), 
           style: "destructive",
           onPress: async () => {
             try {
               setRemovingFavori(offreId);
               await removeFromFavoris(offreId);
               setFavoris(favoris.filter(f => f.offre_id !== offreId));
-              Alert.alert("Succès", "Offre supprimée des favoris");
+              Alert.alert(t("Succès"), t("Retiré des favoris"));
             } catch (error: any) {
-              Alert.alert("Erreur", "Impossible de supprimer des favoris");
+              Alert.alert(t("Erreur"), t("Erreur"));
             } finally {
               setRemovingFavori(null);
             }
@@ -140,7 +142,7 @@ export default function FavorisScreen() {
           style={[styles.viewButton, { backgroundColor: colors.secondary }]}
           onPress={() => handleJobPress(item.offre_id)}
         >
-          <Text style={[styles.viewButtonText, { color: colors.textTertiary }]}>Voir détails</Text>
+          <Text style={[styles.viewButtonText, { color: colors.textTertiary }]}>{t("Voir tout")}</Text>
         </TouchableOpacity>
       </View>
     </TouchableOpacity>
@@ -149,7 +151,7 @@ export default function FavorisScreen() {
   const EmptyState = () => (
     <View style={styles.emptyContainer}>
       <AntDesign name="hearto" size={64} color={colors.textSecondary} />
-      <Text style={[styles.emptyTitle, { color: colors.primary }]}>Aucun favori</Text>
+      <Text style={[styles.emptyTitle, { color: colors.primary }]}>{t("Favoris")}</Text>
       <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
         Vous n'avez pas encore ajouté d'offres à vos favoris.{'\n'}
         Explorez les offres d'emploi pour commencer !
@@ -169,7 +171,7 @@ export default function FavorisScreen() {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
         <StatusBar barStyle="light-content" backgroundColor="#091e60" />
-        <CustomHeader title="Mes Favoris" showBackButton={true} />
+        <CustomHeader title={t("Mes Favoris")} showBackButton={true} />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.secondary} />
           <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
@@ -183,7 +185,7 @@ export default function FavorisScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar barStyle="light-content" backgroundColor="#091e60" />
-      <CustomHeader title="Mes Favoris" showBackButton={true} />
+      <CustomHeader title={t("Mes Favoris")} showBackButton={true} />
       
       <FlatList
         data={favoris}

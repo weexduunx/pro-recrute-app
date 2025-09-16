@@ -33,7 +33,18 @@ export default function EntretiensListeScreen() {
       setLoading(true);
       try {
         const fetchedEntretiens = await getCandidatEntretiens();
-        setEntretiens(fetchedEntretiens);
+        console.log('🔍 liste.tsx: Réponse API:', fetchedEntretiens);
+
+        if (fetchedEntretiens && fetchedEntretiens.entretiens) {
+          console.log('🔍 liste.tsx: Format API avec .entretiens, length:', fetchedEntretiens.entretiens.length);
+          setEntretiens(fetchedEntretiens.entretiens);
+        } else if (Array.isArray(fetchedEntretiens)) {
+          console.log('🔍 liste.tsx: Format API direct array, length:', fetchedEntretiens.length);
+          setEntretiens(fetchedEntretiens);
+        } else {
+          console.log('🔍 liste.tsx: Format API inattendu, utilisation tableau vide');
+          setEntretiens([]);
+        }
       } catch (error: any) {
         console.error("Erreur de chargement des entretiens:", error);
         setEntretiens([]);
@@ -111,8 +122,10 @@ export default function EntretiensListeScreen() {
   };
 
   const getFilteredEntretiens = () => {
+    if (!entretiens || !Array.isArray(entretiens)) return [];
+
     const now = new Date();
-    
+
     switch (filter) {
       case 'futurs':
         return entretiens.filter(e => !isEntretienExpired(e.date_entretien, e.heure_entretien));
@@ -295,10 +308,10 @@ export default function EntretiensListeScreen() {
 
         <View style={styles.filtersContainer}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filtersScroll}>
-            {renderFilterButton('tous', 'Tous', entretiens.length)}
-            {renderFilterButton('futurs', 'À venir', entretiens.filter(e => !isEntretienExpired(e.date_entretien, e.heure_entretien)).length)}
-            {renderFilterButton('passes', 'Passés', entretiens.filter(e => isEntretienExpired(e.date_entretien, e.heure_entretien)).length)}
-            {renderFilterButton('en_attente', 'En attente', entretiens.filter(e => e.decision === 0).length)}
+            {renderFilterButton('tous', 'Tous', Array.isArray(entretiens) ? entretiens.length : 0)}
+            {renderFilterButton('futurs', 'À venir', Array.isArray(entretiens) ? entretiens.filter(e => !isEntretienExpired(e.date_entretien, e.heure_entretien)).length : 0)}
+            {renderFilterButton('passes', 'Passés', Array.isArray(entretiens) ? entretiens.filter(e => isEntretienExpired(e.date_entretien, e.heure_entretien)).length : 0)}
+            {renderFilterButton('en_attente', 'En attente', Array.isArray(entretiens) ? entretiens.filter(e => e.decision === 0).length : 0)}
           </ScrollView>
         </View>
 
