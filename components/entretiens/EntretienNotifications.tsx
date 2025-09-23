@@ -44,21 +44,48 @@ export default function EntretienNotifications({ entretiens }: EntretienNotifica
 
       // Programmer de nouvelles notifications pour les entretiens futurs
       const newNotificationIds: string[] = [];
-      
+
       for (const entretien of entretiens) {
-        const entretienDate = new Date(`${entretien.date_entretien}T${entretien.heure_entretien}`);
+        // Récupérer les informations de l'entretien avec gestion des différentes structures de données
+        const dateEntretien = entretien.date_entretien || entretien.date;
+        const heureEntretien = entretien.heure_entretien || entretien.heure;
+
+        // Détails de l'offre avec gestion des différentes structures
+        const titreOffre = entretien.titre_offre ||
+                          entretien.offre?.titre ||
+                          entretien.offre?.poste?.titre_poste ||
+                          entretien.offre_details?.titre ||
+                          'Poste non spécifié';
+
+        const entrepriseNom = entretien.entreprise_nom ||
+                             entretien.offre?.entreprise_nom ||
+                             entretien.offre?.demande?.entreprise?.libelleE ||
+                             entretien.offre_details?.entreprise ||
+                             'Entreprise non spécifiée';
+
+        const lieuEntretien = entretien.lieux_entretien ||
+                             entretien.offre?.lieux ||
+                             entretien.offre_details?.lieux ||
+                             'Lieu non spécifié';
+
+        const entretienDate = new Date(`${dateEntretien}T${heureEntretien}`);
         const now = new Date();
-        
+
+        // Formatage de l'heure pour affichage (HH:MM)
+        const heureFormatee = heureEntretien ? heureEntretien.substring(0, 5) : 'Heure non spécifiée';
+
+        console.log(`📅 Notification setup pour entretien: ${titreOffre} le ${dateEntretien} à ${heureFormatee} chez ${entrepriseNom} - Lieu: ${lieuEntretien}`);
+
         // Ne programmer que pour les entretiens futurs
         if (entretienDate > now) {
           // Notification 24h avant
           const notification24h = new Date(entretienDate);
           notification24h.setHours(notification24h.getHours() - 24);
-          
+
           if (notification24h > now) {
             const id24h = await scheduleNotification(
               'Entretien demain',
-              `Votre entretien pour "${entretien.offre?.titre}" est prévu demain à ${entretien.heure_entretien.substring(0, 5)}`,
+              `Votre entretien pour "${titreOffre}" chez ${entrepriseNom} est prévu demain à ${heureFormatee}. Lieu: ${lieuEntretien}`,
               notification24h,
               entretien
             );
@@ -68,11 +95,11 @@ export default function EntretienNotifications({ entretiens }: EntretienNotifica
           // Notification 2h avant
           const notification2h = new Date(entretienDate);
           notification2h.setHours(notification2h.getHours() - 2);
-          
+
           if (notification2h > now) {
             const id2h = await scheduleNotification(
               'Entretien dans 2h',
-              `Votre entretien pour "${entretien.offre?.titre}" commence dans 2 heures. Préparez-vous !`,
+              `Votre entretien pour "${titreOffre}" commence dans 2 heures à ${heureFormatee}. Préparez-vous ! Lieu: ${lieuEntretien}`,
               notification2h,
               entretien
             );
@@ -82,11 +109,11 @@ export default function EntretienNotifications({ entretiens }: EntretienNotifica
           // Notification 15 minutes avant
           const notification15m = new Date(entretienDate);
           notification15m.setMinutes(notification15m.getMinutes() - 15);
-          
+
           if (notification15m > now) {
             const id15m = await scheduleNotification(
               'Entretien imminent',
-              `Votre entretien commence dans 15 minutes ! ${entretien.lien ? 'Cliquez pour rejoindre.' : ''}`,
+              `Votre entretien pour "${titreOffre}" commence dans 15 minutes ! ${entretien.lien ? 'Cliquez pour rejoindre.' : `Rendez-vous: ${lieuEntretien}`}`,
               notification15m,
               entretien,
               true // Notification urgente
@@ -99,10 +126,10 @@ export default function EntretienNotifications({ entretiens }: EntretienNotifica
           if (diffHours <= 48 && diffHours > 24) {
             const confirmationTime = new Date(now);
             confirmationTime.setMinutes(confirmationTime.getMinutes() + 5); // Dans 5 minutes
-            
+
             const confirmId = await scheduleNotification(
               'Confirmez votre présence',
-              `Confirmez votre présence à l'entretien de demain pour "${entretien.offre?.titre}"`,
+              `Confirmez votre présence à l'entretien de demain pour "${titreOffre}" chez ${entrepriseNom}`,
               confirmationTime,
               entretien
             );
@@ -129,20 +156,44 @@ export default function EntretienNotifications({ entretiens }: EntretienNotifica
     isUrgent: boolean = false
   ): Promise<string | null> => {
     try {
+      // Récupérer les données normalisées de l'entretien
+      const dateEntretien = entretien.date_entretien || entretien.date;
+      const heureEntretien = entretien.heure_entretien || entretien.heure;
+
+      const titreOffre = entretien.titre_offre ||
+                        entretien.offre?.titre ||
+                        entretien.offre?.poste?.titre_poste ||
+                        entretien.offre_details?.titre ||
+                        'Poste non spécifié';
+
+      const entrepriseNom = entretien.entreprise_nom ||
+                           entretien.offre?.entreprise_nom ||
+                           entretien.offre?.demande?.entreprise?.libelleE ||
+                           entretien.offre_details?.entreprise ||
+                           'Entreprise non spécifiée';
+
+      const lieuEntretien = entretien.lieux_entretien ||
+                           entretien.offre?.lieux ||
+                           entretien.offre_details?.lieux ||
+                           'Lieu non spécifié';
+
       const identifier = await Notifications.scheduleNotificationAsync({
         content: {
           title,
           body,
           data: {
-            entretienId: entretien.id,
+            entretienId: entretien.entretien_id || entretien.id,
             type: 'entretien_reminder',
             entretien: {
-              id: entretien.id,
-              titre: entretien.offre?.titre,
-              entreprise: entretien.offre?.entreprise_nom,
-              date: entretien.date_entretien,
-              heure: entretien.heure_entretien,
+              id: entretien.entretien_id || entretien.id,
+              titre: titreOffre,
+              entreprise: entrepriseNom,
+              date: dateEntretien,
+              heure: heureEntretien,
+              lieu: lieuEntretien,
               lien: entretien.lien,
+              type_entretien: entretien.type_entretien,
+              type_entretien_label: entretien.type_entretien_label
             }
           },
           sound: isUrgent ? 'default' : true,
@@ -151,12 +202,13 @@ export default function EntretienNotifications({ entretiens }: EntretienNotifica
         },
         trigger,
       });
-      
-      console.log(`Notification programmée: ${title} pour ${trigger.toLocaleString()}`);
+
+      console.log(`✅ Notification programmée: ${title} pour ${trigger.toLocaleString()}`);
+      console.log(`📋 Détails: ${titreOffre} chez ${entrepriseNom} - ${dateEntretien} ${heureEntretien} - ${lieuEntretien}`);
       return identifier;
-      
+
     } catch (error) {
-      console.error('Erreur lors de la programmation de la notification:', error);
+      console.error('❌ Erreur lors de la programmation de la notification:', error);
       return null;
     }
   };
@@ -318,5 +370,48 @@ export const EntretienNotificationUtils = {
       }
     }
     await AsyncStorage.removeItem('entretien_notifications');
+  },
+
+  /**
+   * Teste les notifications avec des données simulées
+   */
+  testNotificationWithSampleData: async () => {
+    try {
+      const testEntretien = {
+        id: 'test-123',
+        entretien_id: 'test-123',
+        date_entretien: new Date().toISOString().split('T')[0], // Aujourd'hui
+        heure_entretien: '10:30:00',
+        titre_offre: 'Développeur React Native',
+        entreprise_nom: 'TechCorp Inc.',
+        lieux_entretien: '123 Rue de la Tech, Casablanca',
+        type_entretien: 1,
+        type_entretien_label: 'Entretien Final',
+        lien: 'https://meet.google.com/abc-def-ghi'
+      };
+
+      const testTime = new Date();
+      testTime.setSeconds(testTime.getSeconds() + 10); // Dans 10 secondes
+
+      const testNotificationId = await Notifications.scheduleNotificationAsync({
+        content: {
+          title: '🧪 Test - Notification d\'entretien',
+          body: `Test: Entretien pour "${testEntretien.titre_offre}" chez ${testEntretien.entreprise_nom} à ${testEntretien.heure_entretien.substring(0,5)}. Lieu: ${testEntretien.lieux_entretien}`,
+          data: {
+            entretienId: testEntretien.id,
+            type: 'entretien_reminder_test',
+            entretien: testEntretien
+          },
+          sound: 'default',
+        },
+        trigger: testTime,
+      });
+
+      console.log('🧪 Notification de test programmée pour dans 10 secondes:', testNotificationId);
+      return testNotificationId;
+    } catch (error) {
+      console.error('❌ Erreur lors du test de notification:', error);
+      return null;
+    }
   }
 };

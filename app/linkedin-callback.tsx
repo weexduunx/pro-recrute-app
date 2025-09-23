@@ -15,7 +15,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 export default function LinkedInCallback() {
   const { colors } = useTheme();
   const { t } = useLanguage();
-  const { setUser, setToken, setError: setAuthError, setLoading: setAuthLoading } = useAuth();
+  const {
+    setUser,
+    setToken,
+    setError: setAuthError,
+    setLoading: setAuthLoading,
+    showPasswordSetupModalForProvider
+  } = useAuth();
   const params = useLocalSearchParams();
   
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
@@ -156,6 +162,21 @@ export default function LinkedInCallback() {
         }
         
         setUser(userFromApi);
+
+        // Vérifier si l'utilisateur doit configurer son mot de passe
+        if (response.requires_password_setup && tokenFromApi) {
+          // Afficher le modal automatiquement
+          showPasswordSetupModalForProvider('linkedin', tokenFromApi);
+
+          // Et aussi afficher le toast pour informer de l'email
+          Toast.show({
+            type: 'info',
+            text1: 'Configuration du mot de passe',
+            text2: 'Un email vous a été envoyé pour sécuriser votre compte',
+            visibilityTime: 6000,
+          });
+        }
+
         console.log('✅ Connexion LinkedIn réussie pour:', userFromApi.email);
         
         // Marquer le code comme réussi

@@ -73,36 +73,102 @@ export default function AuthenticatedJobBoardScreen() {
 
   // Fonction de filtrage et de recherche
   const applyFiltersAndSearch = (offres: any[], query: string, filters: { type_contrat: string, lieu_travail: string, secteur: string }) => {
+    console.log('🔍 Début filtrage:', {
+      totalOffres: offres.length,
+      query,
+      filters,
+      premierElement: offres[0]
+    });
+
     let result = offres;
 
     // Filtre par recherche
     if (query.trim()) {
-      result = result.filter(offre => 
+      const beforeCount = result.length;
+      result = result.filter(offre =>
         offre.poste?.titre_poste?.toLowerCase().includes(query.toLowerCase()) ||
+        offre.demande?.entreprise?.libelleE?.toLowerCase().includes(query.toLowerCase()) ||
         offre.entreprise?.libelleE?.toLowerCase().includes(query.toLowerCase()) ||
         offre.lieux?.toLowerCase().includes(query.toLowerCase())
       );
+      console.log(`📝 Filtre recherche "${query}": ${beforeCount} → ${result.length}`);
     }
 
     // Filtre par type de contrat
     if (filters.type_contrat) {
-      result = result.filter(offre => 
-        offre.poste?.type_contrat === filters.type_contrat
-      );
+      const beforeCount = result.length;
+      result = result.filter(offre => {
+        const typeContrat = offre.type_contrat?.libelle_type_contrat || offre.poste?.type_contrat;
+        const match = typeContrat?.toLowerCase().includes(filters.type_contrat.toLowerCase());
+        return match;
+      });
+      console.log(`💼 Filtre contrat "${filters.type_contrat}": ${beforeCount} → ${result.length}`);
     }
 
     // Filtre par lieu
     if (filters.lieu_travail) {
-      result = result.filter(offre =>  
-        offre.lieux?.toLowerCase().includes(filters.lieu_travail.toLowerCase())
-      );
+      const beforeCount = result.length;
+      console.log(`🔍 Debug lieux dans offres:`, result.slice(0, 3).map(o => `"${o.lieux || o.ville || o.lieu || 'Non défini'}"`));
+      result = result.filter(offre => {
+        // Récupérer toutes les variantes possibles de lieu
+        const offreLieux = (offre.lieux || offre.ville || offre.lieu || '').toLowerCase().trim();
+        const filterLieu = filters.lieu_travail.toLowerCase().trim();
+
+        // Correspondance directe ou partielle
+        let matches = false;
+
+        if (offreLieux && filterLieu) {
+          // Correspondance exacte
+          matches = offreLieux === filterLieu;
+
+          // Correspondance partielle (contient)
+          if (!matches) {
+            matches = offreLieux.includes(filterLieu) || filterLieu.includes(offreLieux);
+          }
+
+          // Correspondance avec normalisation (enlever accents, espaces, etc.)
+          if (!matches) {
+            const normalizeString = (str) => str
+              .normalize('NFD')
+              .replace(/[\u0300-\u036f]/g, '')
+              .replace(/[^\w]/g, '')
+              .toLowerCase();
+
+            const normalizedOffre = normalizeString(offreLieux);
+            const normalizedFilter = normalizeString(filterLieu);
+
+            matches = normalizedOffre.includes(normalizedFilter) || normalizedFilter.includes(normalizedOffre);
+          }
+        }
+
+        if (beforeCount <= 5) console.log(`  Offre "${offreLieux}" vs filtre "${filterLieu}": ${matches}`);
+        return matches;
+      });
+      console.log(`📍 Filtre lieu "${filters.lieu_travail}": ${beforeCount} → ${result.length}`);
     }
 
+    // Filtre par secteur
+    if (filters.secteur) {
+      const beforeCount = result.length;
+      result = result.filter(offre => {
+        const secteur = offre.secteur?.libelle_secteur || offre.poste?.secteur;
+        return secteur?.toLowerCase().includes(filters.secteur.toLowerCase());
+      });
+      console.log(`🏢 Filtre secteur "${filters.secteur}": ${beforeCount} → ${result.length}`);
+    }
+
+    console.log('✅ Résultat final du filtrage:', result.length);
     return result;
   };
 
+  // Déterminer si des filtres sont actifs
+  const hasActiveFilters = searchQuery.trim() !== '' ||
+    selectedFilters.type_contrat !== '' ||
+    selectedFilters.lieu_travail !== '' ||
+    selectedFilters.secteur !== '';
+
   // Calculs de pagination basés sur les offres filtrées
-  const workingOffres = filteredOffres.length > 0 ? filteredOffres : allOffres;
+  const workingOffres = hasActiveFilters ? filteredOffres : allOffres;
   const totalPages = Math.ceil(workingOffres.length / ITEMS_PER_PAGE);
   const hasMoreData = currentPage < totalPages;
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
@@ -123,7 +189,7 @@ export default function AuthenticatedJobBoardScreen() {
           
           if (favorisResponse.success && favorisResponse.data) {
             const favorisSet = new Set();
-            favorisResponse.data.forEach(favori => {
+            favorisResponse.data.forEach((favori: { offre_id: string | number }) => {
               favorisSet.add(favori.offre_id.toString());
             });
             setFavorisIds(favorisSet);
@@ -140,7 +206,7 @@ export default function AuthenticatedJobBoardScreen() {
       // Appliquer les filtres et recherche
       const filtered = applyFiltersAndSearch(fetchedOffres, searchQuery, selectedFilters);
       setFilteredOffres(filtered);
-      
+
       // Charger la première page
       const firstPageOffres = filtered.slice(0, ITEMS_PER_PAGE);
       setDisplayedOffres(firstPageOffres);
@@ -206,27 +272,31 @@ export default function AuthenticatedJobBoardScreen() {
 
   // Fonction pour appliquer la recherche
   const handleSearch = (query: string) => {
+    console.log('🔎 Recherche lancée:', query);
     setSearchQuery(query);
     const filtered = applyFiltersAndSearch(allOffres, query, selectedFilters);
     setFilteredOffres(filtered);
-    
+
     // Réinitialiser la pagination
     setCurrentPage(1);
     const firstPage = filtered.slice(0, ITEMS_PER_PAGE);
     setDisplayedOffres(firstPage);
+    console.log(' Mise à jour affichage:', firstPage.length);
   };
 
   // Fonction pour appliquer les filtres
-  const applyFilters = (filters) => {
+  const applyFilters = (filters: { type_contrat: string, lieu_travail: string, secteur: string }) => {
+    console.log('Filtres appliqués:', filters);
     setSelectedFilters(filters);
     const filtered = applyFiltersAndSearch(allOffres, searchQuery, filters);
     setFilteredOffres(filtered);
-    
+
     // Réinitialiser la pagination
     setCurrentPage(1);
     const firstPage = filtered.slice(0, ITEMS_PER_PAGE);
     setDisplayedOffres(firstPage);
     setShowFilterModal(false);
+    console.log(' Mise à jour affichage (filtres):', firstPage.length);
   };
 
   // Fonction pour réinitialiser les filtres
@@ -262,45 +332,69 @@ export default function AuthenticatedJobBoardScreen() {
       return;
     }
 
+    const wasInFavoris = favorisIds.has(offreId);
+    console.log(`🔄 Toggle favori pour offre ${offreId}, était en favoris: ${wasInFavoris}`);
+
     try {
       setTogglingFavori(offreId);
-      const response = await toggleFavori(offreId);
-      
-      console.log('Réponse toggle favori:', response); // Debug
-      
-      // Mettre à jour l'état local des favoris
+
+      // Mise à jour optimiste de l'UI
       const newFavorisIds = new Set(favorisIds);
-      const wasInFavoris = favorisIds.has(offreId);
-      
-      // Vérifier différentes structures de réponse possibles
-      let isFavorited = false;
-      if (response.data && response.data.is_favorite !== undefined) {
-        isFavorited = response.data.is_favorite;
-      } else if (response.is_favorite !== undefined) {
-        isFavorited = response.is_favorite;
-      } else if (response.is_favorited !== undefined) {
-        isFavorited = response.is_favorited;
-      } else if (response.favorited !== undefined) {
-        isFavorited = response.favorited;
-      } else if (response.success !== undefined) {
-        // Si pas d'indicateur explicite, inverser l'état actuel
-        isFavorited = !wasInFavoris;
-      } else {
-        // Fallback: inverser l'état actuel
-        isFavorited = !wasInFavoris;
-      }
-      
-      if (isFavorited) {
-        newFavorisIds.add(offreId);
-        Alert.alert("Succès", "Offre ajoutée aux favoris !");
-      } else {
+      if (wasInFavoris) {
         newFavorisIds.delete(offreId);
-        Alert.alert("Succès", "Offre supprimée des favoris !");
+      } else {
+        newFavorisIds.add(offreId);
       }
       setFavorisIds(newFavorisIds);
-      
+
+      const response = await toggleFavori(offreId);
+      console.log('✅ Réponse toggle favori complète:', JSON.stringify(response, null, 2));
+
+      // Vérifier si l'API a retourné un état différent de ce qu'on attend
+      let apiStatus = null;
+      if (response.data && response.data.is_favorite !== undefined) {
+        apiStatus = response.data.is_favorite;
+      } else if (response.is_favorite !== undefined) {
+        apiStatus = response.is_favorite;
+      } else if (response.is_favorited !== undefined) {
+        apiStatus = response.is_favorited;
+      } else if (response.favorited !== undefined) {
+        apiStatus = response.favorited;
+      }
+
+      // Si l'API retourne un état différent de notre prédiction, corriger
+      if (apiStatus !== null) {
+        const currentState = newFavorisIds.has(offreId);
+        if (apiStatus !== currentState) {
+          console.log(`🔧 Correction nécessaire: API dit ${apiStatus}, UI dit ${currentState}`);
+          if (apiStatus) {
+            newFavorisIds.add(offreId);
+          } else {
+            newFavorisIds.delete(offreId);
+          }
+          setFavorisIds(new Set(newFavorisIds));
+        }
+      }
+
+      // Afficher le message de succès
+      if (!wasInFavoris) {
+        Alert.alert("Succès", "Offre ajoutée aux favoris !");
+      } else {
+        Alert.alert("Succès", "Offre supprimée des favoris !");
+      }
+
     } catch (error: any) {
-      console.error('Erreur lors du toggle favori:', error);
+      console.error('❌ Erreur lors du toggle favori:', error);
+
+      // En cas d'erreur, revenir à l'état initial
+      const revertedFavorisIds = new Set(favorisIds);
+      if (wasInFavoris) {
+        revertedFavorisIds.add(offreId);
+      } else {
+        revertedFavorisIds.delete(offreId);
+      }
+      setFavorisIds(revertedFavorisIds);
+
       Alert.alert("Erreur", "Impossible de modifier les favoris. Veuillez réessayer.");
     } finally {
       setTogglingFavori(null);
@@ -647,6 +741,21 @@ export default function AuthenticatedJobBoardScreen() {
                 />
               </View>
             </View>
+
+            {/* Filtre Secteur */}
+            <View style={styles.filterGroup}>
+              <Text style={styles.filterLabel}>Secteur d'activité</Text>
+              <View style={styles.locationInputContainer}>
+                <Ionicons name="business" size={20} color="#6B7280" style={styles.locationIcon} />
+                <TextInput
+                  style={styles.locationInput}
+                  placeholder="Informatique, Commerce..."
+                  placeholderTextColor="#9CA3AF"
+                  value={selectedFilters.secteur}
+                  onChangeText={(text) => setSelectedFilters(prev => ({ ...prev, secteur: text }))}
+                />
+              </View>
+            </View>
           </ScrollView>
 
           <View style={styles.modalActions}>
@@ -677,6 +786,15 @@ export default function AuthenticatedJobBoardScreen() {
         showNotificationIcon={true}
         onMenuPress={handleMenuPress}
         onAvatarPress={handleAvatarPress}
+        rightComponent={
+          <TouchableOpacity
+            style={styles.favoriteHeaderButton}
+            onPress={() => router.push('/job_board/favoris')}
+          >
+            <Ionicons name="heart" size={24} color="#FFFFFF" />
+            <Text style={styles.favoriteHeaderText}>Favoris</Text>
+          </TouchableOpacity>
+        }
       />
 
       {loadingOffres ? renderLoadingState() : 
@@ -1291,6 +1409,21 @@ const styles = StyleSheet.create({
   applyButtonText: {
     fontSize: 16,
     color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  // Styles pour le bouton favoris dans l'en-tête
+  favoriteHeaderButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    gap: 6,
+  },
+  favoriteHeaderText: {
+    color: '#FFFFFF',
+    fontSize: 14,
     fontWeight: '600',
   },
 });

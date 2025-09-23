@@ -26,6 +26,7 @@ import * as WebBrowser from 'expo-web-browser';
 import * as AuthSession from 'expo-auth-session';
 import { googleAuth } from '../services/googleAuth';
 import { linkedinAuth } from '../services/linkedinAuth';
+import { PasswordSetupModal } from './PasswordSetupModal';
 
 // Import conditionnel pour Device
 let Device;
@@ -97,6 +98,13 @@ interface AuthContextType {
   verifyOtp: (email: string, otpCode: string, deviceName: string) => Promise<void>;
   clearError: () => void;
   isAppReady: boolean;
+  showPasswordSetupModal: boolean;
+  hidePasswordSetupModal: () => void;
+  showPasswordSetupModalForProvider: (provider: 'google' | 'linkedin', token: string) => void;
+  pendingPasswordSetup: {
+    provider: 'google' | 'linkedin' | null;
+    token: string;
+  } | null;
   fetchUser: () => Promise<void>;
   refreshUserProfile: () => Promise<void>;
   completeOnboarding: () => Promise<void>;
@@ -134,6 +142,11 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [isAppReady, setIsAppReady] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [hasSeenOnboarding, setHasSeenOnboarding] = useState(false);
+  const [showPasswordSetupModal, setShowPasswordSetupModal] = useState(false);
+  const [pendingPasswordSetup, setPendingPasswordSetup] = useState<{
+    provider: 'google' | 'linkedin' | null;
+    token: string;
+  } | null>(null);
 
   const segments = useSegments();
   const inAuthGroup = segments[0] === '(auth)';
@@ -475,7 +488,12 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           }
 
           setUser(userFromApi);
-          
+
+          // Vérifier si l'utilisateur doit configurer son mot de passe
+          if (response.requires_password_setup && response.token) {
+            showPasswordSetupModalForProvider('google', response.token);
+          }
+
           console.log('✅ Authentification Google complète');
           handleRedirect(true, userFromApi?.role, userFromApi?.is_otp_verified, userFromApi?.is_contract_active);
         } else {
@@ -547,6 +565,16 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const clearError = () => setError(null);
 
+  const hidePasswordSetupModal = () => {
+    setShowPasswordSetupModal(false);
+    setPendingPasswordSetup(null);
+  };
+
+  const showPasswordSetupModalForProvider = (provider: 'google' | 'linkedin', token: string) => {
+    setPendingPasswordSetup({ provider, token });
+    setShowPasswordSetupModal(true);
+  };
+
   const authContextValue = {
     user,
     token,
@@ -562,6 +590,10 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     verifyOtp,
     clearError,
     isAppReady,
+    showPasswordSetupModal,
+    hidePasswordSetupModal,
+    showPasswordSetupModalForProvider,
+    pendingPasswordSetup,
     fetchUser,
     refreshUserProfile,
     completeOnboarding,

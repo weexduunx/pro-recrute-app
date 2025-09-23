@@ -13,6 +13,7 @@ import { StatusBar } from 'react-native';
 import Toast from 'react-native-toast-message';
 import CleanupServiceManager from '../services/CleanupServiceManager';
 import * as Linking from 'expo-linking';
+import { PasswordSetupModal } from '../components/PasswordSetupModal';
 
 /**
  * Composant Layout Racine :
@@ -48,7 +49,15 @@ export default function RootLayout() {
  * en utilisant le ThemeContext.
  */
 function RootLayoutContent() {
-  const { isAuthenticated, isAppReady } = useAuth();
+  const {
+    isAuthenticated,
+    isAppReady,
+    showPasswordSetupModal,
+    hidePasswordSetupModal,
+    pendingPasswordSetup,
+    user,
+    token
+  } = useAuth();
   const { isDarkMode, colors } = useTheme();
   const { t } = useLanguage();
 
@@ -90,15 +99,47 @@ function RootLayoutContent() {
   // Si l'utilisateur n'est pas authentifié, affiche la navigation publique (auth)
   if (!isAuthenticated) {
     return (
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="(auth)" />
-      </Stack>
+      <>
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="(auth)" />
+        </Stack>
+
+        {/* Modal de configuration de mot de passe - disponible aussi en auth */}
+        {showPasswordSetupModal && pendingPasswordSetup && (
+          <PasswordSetupModal
+            visible={showPasswordSetupModal}
+            onDismiss={hidePasswordSetupModal}
+            userProvider={pendingPasswordSetup.provider}
+            userToken={pendingPasswordSetup.token}
+            onPasswordSet={() => {
+              console.log('Mot de passe configuré avec succès');
+              hidePasswordSetupModal();
+            }}
+          />
+        )}
+      </>
     );
   }
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="(app)" />
-    </Stack>
+    <>
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="(app)" />
+      </Stack>
+
+      {/* Modal de configuration de mot de passe - disponible aussi dans l'app */}
+      {showPasswordSetupModal && pendingPasswordSetup && (
+        <PasswordSetupModal
+          visible={showPasswordSetupModal}
+          onDismiss={hidePasswordSetupModal}
+          userProvider={pendingPasswordSetup.provider}
+          userToken={pendingPasswordSetup.token}
+          onPasswordSet={() => {
+            console.log('Mot de passe configuré avec succès');
+            hidePasswordSetupModal();
+          }}
+        />
+      )}
+    </>
   );
 }

@@ -113,7 +113,7 @@ const AutoSlider = <T extends { id?: string | number }>({
         showsHorizontalScrollIndicator={false}
         data={ensureArray(data)}
         keyExtractor={(item, index) => item.id?.toString() || index.toString()}
-        renderItem={({ item, index }) => renderItem(item, index)}
+        renderItem={({ item, index }) => renderItem(item, index) as React.ReactElement}
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={viewabilityConfig}
         snapToInterval={width - 32}
@@ -191,6 +191,22 @@ export default function HomeScreen() {
       route: '/(app)/candidature',
       description: 'Suivre mes candidatures'
     },
+    {
+      id: 'entretiens',
+      title: 'Entretien',
+      icon: 'event',
+      color: '#1F2937',
+      route: '/(app)/entretiens',
+      description: 'Suivre mes entretiens'
+    },
+    {
+      id: 'skills',
+      title: 'Tests',
+      icon: 'assessment',
+      color: '#FF5722',
+      route: '/(app)/skills-assessment',
+      description: 'Tests de compétences'
+    },
 
   ];
 
@@ -214,7 +230,6 @@ export default function HomeScreen() {
 
     try {
       setLoading(true);
-
       const [
         recommendedResponse,
         featuredResponse,
@@ -323,7 +338,7 @@ export default function HomeScreen() {
           profile_photo_path: profile.profile_photo_path,
           profile_photo: profile.profile_photo,
           user_from_parsed_cv: profile.parsed_cv?.full_name,
-          user_profile_photo: user?.profile_photo,
+          user_profile_photo: user?.profile_photo_url,
           user_photo_profil: user?.photo_profil
         });
         if (profile) {
@@ -341,7 +356,7 @@ export default function HomeScreen() {
             { field: 'experiences', value: profile.experiences && profile.experiences.length > 0 },
             { field: 'formations', value: profile.formations && profile.formations.length > 0 },
             { field: 'parsed_cv', value: profile.parsed_cv && (profile.parsed_cv.full_name || profile.parsed_cv.summary) },
-            { field: 'photo_profil', value: profile.photo_profil || profile.profile_photo_path || profile.profile_photo || user?.profile_photo || user?.photo_profil }
+            { field: 'photo_profil', value: profile.photo_profil || profile.profile_photo_path || profile.profile_photo || user?.profile_photo_url || user?.photo_profil }
           ];
 
           checks.forEach(check => {

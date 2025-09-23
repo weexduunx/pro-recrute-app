@@ -8,7 +8,8 @@ import {
   RefreshControl,
   Alert,
   ActivityIndicator,
-  AppState
+  AppState,
+  StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -121,7 +122,7 @@ export default function NotificationsScreen() {
       console.error('Erreur marquage notification:', error);
       // Revenir en arrière en cas d'erreur
       setNotifications(prev => prev.map(n => 
-        n.id === notification.id ? { ...n, read_at: null } : n
+        n.id === notification.id ? { ...n, read_at: undefined } : n
       ));
       refreshUnreadCount();
     }
@@ -145,7 +146,7 @@ export default function NotificationsScreen() {
       // Revenir en arrière
       setNotifications(prev => prev.map(n => {
         const wasUnread = unreadNotifications.find(un => un.id === n.id);
-        return wasUnread ? { ...n, read_at: null } : n;
+        return wasUnread ? { ...n, read_at: undefined } : n;
       }));
       refreshUnreadCount();
       Alert.alert('Erreur', 'Impossible de marquer les notifications comme lues');
@@ -323,6 +324,8 @@ export default function NotificationsScreen() {
   const unreadCount = notifications.filter(n => !n.read_at).length;
 
   return (
+    <>
+    <StatusBar barStyle="light-content" backgroundColor="#091e60" />
     <SafeAreaView style={styles.container}>
       <CustomHeader 
         title="Notifications" 
@@ -353,7 +356,8 @@ export default function NotificationsScreen() {
           renderItem={renderNotification}
           keyExtractor={item => item.id?.toString() || Math.random().toString()}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={['#0f8e35']}
+              tintColor="#0f8e35" />
           }
           onEndReached={handleLoadMore}
           onEndReachedThreshold={0.5}
@@ -363,6 +367,7 @@ export default function NotificationsScreen() {
         />
       )}
     </SafeAreaView>
+    </>
   );
 }
 

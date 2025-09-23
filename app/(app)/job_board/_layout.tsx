@@ -13,13 +13,19 @@ export default function JobBoardStackLayout() {
       <Stack.Screen
         name="index"
         options={{
-          headerShown: false, 
+          headerShown: false,
         }}
       />
       <Stack.Screen
         name="job_details"
         options={{
-          headerShown: false, 
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
+        name="favoris"
+        options={{
+          headerShown: false,
         }}
       />
     </Stack>
