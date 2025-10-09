@@ -157,12 +157,12 @@ export default function IpmFileScreen() {
   }, [user, t]);
 
   const loadFamilleMembers = useCallback(async () => {
-    if (!user) { 
+    if (!user) {
       setFamilleMembers([]);
-      setLoadingFamilleMembers(false); 
-      return; 
+      setLoadingFamilleMembers(false);
+      return;
     }
-    setLoadingFamilleMembers(true); 
+    setLoadingFamilleMembers(true);
     setErrorFamilleMembers(null);
     try {
       const members = await getFamilleMembers();
@@ -171,8 +171,8 @@ export default function IpmFileScreen() {
       console.error("Erreur de chargement des membres de la famille:", err);
       setFamilleMembers([]);
       setErrorFamilleMembers(err.response?.data?.message || t("Impossible de charger les membres de la famille."));
-    } finally { 
-      setLoadingFamilleMembers(false); 
+    } finally {
+      setLoadingFamilleMembers(false);
     }
   }, [user, t]);
 
@@ -281,12 +281,27 @@ export default function IpmFileScreen() {
       Alert.alert(t('Erreur'), t('Veuillez renseigner l\'objet de la demande.'));
       return;
     }
-    
+
+    // Validation du bénéficiaire - exclure Père et Mère
+    if (pecFamilleId) {
+      const selectedMember = familleMembers.find(member => member.id === pecFamilleId);
+      if (selectedMember) {
+        const lienCode = parseInt(selectedMember.lien.toString());
+        if (lienCode === 3 || lienCode === 4) {
+          Alert.alert(
+            t('Erreur'),
+            t('Les parents ne peuvent pas être bénéficiaires d\'une prise en charge. Veuillez sélectionner un autre membre de la famille.')
+          );
+          return;
+        }
+      }
+    }
+
     if (!pecStructureId && affiliatedStructures.length > 0) {
       // Utiliser la première structure par défaut si aucune n'est sélectionnée
       setPecStructureId(affiliatedStructures[0].id);
     }
-    
+
     if (!pecStructureId) {
       Alert.alert(t('Erreur'), t('Veuillez sélectionner une structure médicale.'));
       return;
@@ -313,6 +328,21 @@ export default function IpmFileScreen() {
   };
 
   const handleSubmitFeuilleDeSoins = async () => {
+    // Validation du bénéficiaire - exclure Père et Mère
+    if (fdsFamilleId) {
+      const selectedMember = familleMembers.find(member => member.id === fdsFamilleId);
+      if (selectedMember) {
+        const lienCode = parseInt(selectedMember.lien.toString());
+        if (lienCode === 3 || lienCode === 4) {
+          Alert.alert(
+            t('Erreur'),
+            t('Les parents ne peuvent pas être bénéficiaires d\'une feuille de soins. Veuillez sélectionner un autre membre de la famille.')
+          );
+          return;
+        }
+      }
+    }
+
     setSubmittingFds(true);
     try {
       await requestFeuilleDeSoins({
@@ -382,6 +412,17 @@ export default function IpmFileScreen() {
       case 6: return 'Personne Ressource';
       default: return lienCode || 'Non spécifié';
     }
+  };
+
+  // Fonction pour filtrer les membres de famille éligibles (exclut Père et Mère)
+  // Implémentation de la règle métier : exclusion des parents du dropdown bénéficiaire IPM
+  const getEligibleFamilyMembers = (members: FamilleMember[]) => {
+    return members.filter(member => {
+      const lienCode = parseInt(member.lien.toString());
+      // Exclure Père (code 3) et Mère (code 4) pour les demandes de prise en charge et feuilles de soins
+      // Cette exclusion est une exigence métier pour les prestations IPM
+      return lienCode !== 3 && lienCode !== 4;
+    });
   };
 
   const renderLoanItem = ({ item }: { item: Loan }) => (
@@ -856,9 +897,10 @@ export default function IpmFileScreen() {
                     style={{ height: 50, paddingHorizontal: 12, color: '#091e60' }}
                   >
                     <Picker.Item label={t("Vous-même")} value={undefined} />
-                    {Array.isArray(familleMembers) && familleMembers.map(member => (
-                      <Picker.Item key={member.id} label={`${member.prenom} ${member.nom} (${getLienLabel(member.lien)})`} value={member.id} />
-                    ))}
+                    {Array.isArray(familleMembers) && getEligibleFamilyMembers(familleMembers)
+                      .map(member => (
+                        <Picker.Item key={member.id} label={`${member.prenom} ${member.nom} (${getLienLabel(member.lien)})`} value={member.id} />
+                      ))}
                   </Picker>
                 </View>
               )}

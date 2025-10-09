@@ -16,7 +16,7 @@ import {
   ActionSheetIOS
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
-import { getOffreById, applyForOffre, toggleFavori, checkFavoriStatus, shareJobOffer, shareToSocialMedia } from '../../../utils/api';
+import { getOffreById, applyForOffre, toggleFavori, checkFavoriStatus, shareJobOffer, shareToSocialMedia, checkIfUserApplied } from '../../../utils/api';
 import CustomHeader from '../../../components/CustomHeader';
 import { useAuth } from '../../../components/AuthProvider';
 import AntDesign from '@expo/vector-icons/AntDesign';
@@ -95,6 +95,8 @@ export default function OffreDetailsScreen() {
   const [bookmarked, setBookmarked] = useState(false);
   const [checkingFavoris, setCheckingFavoris] = useState(true);
   const [togglingFavori, setTogglingFavori] = useState(false);
+  const [hasApplied, setHasApplied] = useState(false);
+  const [checkingApplication, setCheckingApplication] = useState(true);
   
   const scrollY = useRef(new Animated.Value(0)).current;
   const headerOpacity = useRef(new Animated.Value(0)).current;
@@ -122,6 +124,24 @@ export default function OffreDetailsScreen() {
         } finally {
           setCheckingFavoris(false);
         }
+
+        // Vérifier si l'utilisateur a déjà postulé
+        try {
+          setCheckingApplication(true);
+          console.log(`🔍 Vérification candidature pour offre ID: ${id}`);
+          const applicationStatus = await checkIfUserApplied(id);
+          console.log('📋 Réponse API checkIfUserApplied:', applicationStatus);
+          setHasApplied(applicationStatus.data.has_applied);
+          console.log(`✅ HasApplied défini à: ${applicationStatus.data.has_applied}`);
+        } catch (appErr) {
+          console.error("❌ Erreur lors de la vérification de la candidature:", appErr);
+          console.error("❌ Status de l'erreur:", appErr.response?.status);
+          console.error("❌ Message de l'erreur:", appErr.response?.data);
+          // En cas d'erreur, considérer comme non postulé
+          setHasApplied(false);
+        } finally {
+          setCheckingApplication(false);
+        }
         
         // Animation d'entrée
         Animated.timing(headerOpacity, {
@@ -140,22 +160,98 @@ export default function OffreDetailsScreen() {
   }, [id]);
 
   const handleApply = async () => {
-    if (!offre || applying) return;
+    if (!offre || applying || hasApplied) return;
+
+    // Vérifier si un test de compétences est requis pour ce poste
+    const jobTitle = (offre as any).poste?.titre_poste?.toLowerCase() || '';
+    const requiresSkillsTest = checkIfSkillsTestRequired(jobTitle);
+
+    if (requiresSkillsTest) {
+      Alert.alert(
+        "Test de compétences requis",
+        `Ce poste "${(offre as any).poste?.titre_poste}" nécessite un test d'évaluation des compétences. Le test sera lié à cette candidature.`,
+        [
+          {
+            text: "Postuler sans test",
+            style: "cancel",
+            onPress: () => proceedWithApplication()
+          },
+          {
+            text: "Passer le test",
+            onPress: () => {
+              // Passer les paramètres de l'offre au test pour lier le résultat
+              const offreData = {
+                id: (offre as any).id,
+                titre: (offre as any).poste?.titre_poste,
+                entreprise: (offre as any).demande?.entreprise?.libelleE
+              };
+              router.push({
+                pathname: '/(app)/skills-assessment',
+                params: {
+                  fromJobApplication: 'true',
+                  offreId: (offre as any).id,
+                  offreTitle: (offre as any).poste?.titre_poste,
+                  returnTo: 'job-details'
+                }
+              });
+            }
+          }
+        ]
+      );
+    } else {
+      proceedWithApplication();
+    }
+  };
+
+  const checkIfSkillsTestRequired = (jobTitle: string): boolean => {
+    const testRequiredJobs = [
+      'développeur',
+      'programmeur',
+      'ingénieur logiciel',
+      'analyste',
+      'data scientist',
+      'comptable',
+      'gestionnaire',
+      'commercial',
+      'marketeur',
+      'designer'
+    ];
+
+    return testRequiredJobs.some(job => jobTitle.includes(job));
+  };
+
+  const proceedWithApplication = async (skillsTestResult?: any) => {
     setApplying(true);
     try {
-      const response = await applyForOffre((offre as any).id);
+      // Préparer les données de candidature avec résultats du test si disponible
+      const applicationData: any = {};
+
+      if (skillsTestResult) {
+        applicationData.skills_assessment_id = skillsTestResult.assessmentId;
+        applicationData.skills_test_score = skillsTestResult.score;
+        applicationData.skills_test_passed = skillsTestResult.passed;
+      }
+
+      const response = await applyForOffre((offre as any).id, applicationData);
+      setHasApplied(true); // Mettre à jour l'état local
+
+      let successMessage = response.message || "Votre candidature a été soumise avec succès !";
+      if (skillsTestResult) {
+        successMessage += `\n\nRésultat du test: ${skillsTestResult.score}% ${skillsTestResult.passed ? '✅' : '❌'}`;
+      }
+
       Alert.alert(
-        "✅ Candidature soumise", 
-        response.message || "Votre candidature a été soumise avec succès !",
+        "✅ Candidature soumise",
+        successMessage,
         [
           { text: "Continuer", style: "default" },
-          { text: "Voir mes candidatures", onPress: () => router.push('/(app)/dashboard') }
+          { text: "Voir mes candidatures", onPress: () => router.push('/(app)/candidature') }
         ]
       );
     } catch (err: any) {
       console.error("Échec de la candidature:", err.response?.data || err.message);
       Alert.alert(
-        "❌ Erreur de candidature", 
+        "❌ Erreur de candidature",
         err.response?.data?.message || "Impossible de postuler à cette offre. Veuillez réessayer."
       );
     } finally {
@@ -472,19 +568,38 @@ export default function OffreDetailsScreen() {
           style={styles.bottomGradient}
         >
           <TouchableOpacity
-            style={[styles.applyButton, applying && styles.applyButtonDisabled]}
+            style={[
+              styles.applyButton,
+              (applying || hasApplied || checkingApplication) && styles.applyButtonDisabled
+            ]}
             onPress={handleApply}
-            disabled={applying}
+            disabled={applying || hasApplied || checkingApplication}
             activeOpacity={0.8}
           >
             <LinearGradient
-              colors={applying ? ['#9CA3AF', '#6B7280'] : ['#0f8e35', '#10B981']}
+              colors={
+                hasApplied
+                  ? ['#9CA3AF', '#6B7280']
+                  : applying
+                    ? ['#9CA3AF', '#6B7280']
+                    : ['#0f8e35', '#10B981']
+              }
               style={styles.applyGradient}
             >
-              {applying ? (
+              {checkingApplication ? (
+                <View style={styles.applyContent}>
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                  <Text style={styles.applyButtonText}>Vérification...</Text>
+                </View>
+              ) : applying ? (
                 <View style={styles.applyContent}>
                   <ActivityIndicator color="#FFFFFF" size="small" />
                   <Text style={styles.applyButtonText}>Candidature en cours...</Text>
+                </View>
+              ) : hasApplied ? (
+                <View style={styles.applyContent}>
+                  <AntDesign name="checkcircle" size={26} color="#ffffff" style={styles.applyIcon} />
+                  <Text style={styles.applyButtonText}>Déjà postulé</Text>
                 </View>
               ) : (
                 <View style={styles.applyContent}>

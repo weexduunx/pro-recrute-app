@@ -179,6 +179,9 @@ export default function AuthenticatedJobBoardScreen() {
       setLoadingOffres(true);
       setErrorOffres(null);
       const fetchedOffres = await getOffres();
+
+      // Le backend filtre déjà les offres actives (status_offre = 1)
+      // Pas besoin de refiltrer côté frontend
       setAllOffres(fetchedOffres);
       
       // Charger l'état des favoris si l'utilisateur est connecté

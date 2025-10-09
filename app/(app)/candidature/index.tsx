@@ -101,12 +101,37 @@ export default function MyApplicationsScreen() {
           icon: 'close-circle-outline',
           text: 'Non retenu',
         };
+      // Gestion des statuts entiers de la base de données
+      case 0:
+      case '0':
+        return {
+          color: '#F59E0B',
+          backgroundColor: '#FEF3C7',
+          icon: 'time',
+          text: 'En attente',
+        };
+      case 1:
+      case '1':
+        return {
+          color: '#10B981',
+          backgroundColor: '#D1FAE5',
+          icon: 'checkmark-circle-outline',
+          text: 'Acceptée',
+        };
+      case 2:
+      case '2':
+        return {
+          color: '#EF4444',
+          backgroundColor: '#FEE2E2',
+          icon: 'close-circle-outline',
+          text: 'Rejetée',
+        };
       default:
         return {
           color: '#6B7280',
           backgroundColor: '#F3F4F6',
           icon: 'help-circle-outline',
-          text: etat,
+          text: `Statut ${etat}`,
         };
     }
   };
@@ -224,17 +249,48 @@ export default function MyApplicationsScreen() {
     }
   };
 
-  const handleDeleteApplication = (applicationId: string, jobTitle: string) => {
+  const handleDeleteApplication = (applicationId: string, jobTitle: string, applicationStatus?: string) => {
     console.log('=== DELETE APPLICATION DEBUG ===');
     console.log('Application ID to delete:', applicationId);
     console.log('Job title:', jobTitle);
+    console.log('Application status:', applicationStatus);
+    console.log('Application status type:', typeof applicationStatus);
     console.log('Application ID type:', typeof applicationId);
-    
+
     if (!applicationId) {
       Alert.alert('Erreur', 'ID de candidature manquant');
       return;
     }
-    
+
+    // Empêcher la suppression si le candidat est retenu/accepté
+    // Vérifier tous les statuts correspondant à une candidature acceptée selon getStatusConfig
+    const isAccepted = applicationStatus === 'Retenu' ||
+                       applicationStatus === 'Acceptée' ||
+                       applicationStatus === 1 ||
+                       applicationStatus === '1';
+
+    console.log('Is application accepted?', isAccepted);
+    console.log('Checking conditions:', {
+      'status === "Retenu"': applicationStatus === 'Retenu',
+      'status === "Acceptée"': applicationStatus === 'Acceptée',
+      'status === 1': applicationStatus === 1,
+      'status === "1"': applicationStatus === '1',
+      'actual status': applicationStatus,
+      'status type': typeof applicationStatus
+    });
+
+    if (isAccepted) {
+      console.log('Blocking deletion - Application is accepted');
+      Alert.alert(
+        '❌ Suppression impossible',
+        'Votre candidature a été acceptée ! Vous ne pouvez plus la supprimer.',
+        [{ text: 'D\'accord', style: 'default' }]
+      );
+      return;
+    }
+
+    console.log('Allowing deletion - Application is not accepted');
+
     Alert.alert(
       'Supprimer la candidature',
       `Êtes-vous sûr de vouloir supprimer votre candidature pour "${jobTitle}" ?\n\nID: ${applicationId}`,
@@ -255,7 +311,7 @@ export default function MyApplicationsScreen() {
               console.error('Error object:', error);
               console.error('Error message:', error.message);
               console.error('Error response:', error.response?.data);
-              
+
               Alert.alert(
                 'Erreur',
                 error.message || error.response?.data?.message || 'Une erreur est survenue lors de la suppression de la candidature.'
@@ -319,12 +375,15 @@ export default function MyApplicationsScreen() {
         {/* Footer de la carte */}
         <View style={styles.cardFooter}>
           <View style={styles.tagsContainer}>
-            <TouchableOpacity 
-              style={styles.deleteButton} 
-              onPress={() => handleDeleteApplication(app.id, app.offre?.poste?.titre_poste || 'Poste non spécifié')}
-            >
-              <Ionicons name="trash-outline" size={16} color="#EF4444" />
-            </TouchableOpacity>
+            {/* Masquer le bouton de suppression pour les candidatures acceptées */}
+            {!(app.etat === 'Retenu' || app.etat === 'Acceptée' || app.etat === 1 || app.etat === '1') && (
+              <TouchableOpacity
+                style={styles.deleteButton}
+                onPress={() => handleDeleteApplication(app.id, app.offre?.poste?.titre_poste || 'Poste non spécifié', app.etat)}
+              >
+                <Ionicons name="trash-outline" size={16} color="#EF4444" />
+              </TouchableOpacity>
+            )}
           </View>
           <View style={styles.actionButtonsContainer}>
             <TouchableOpacity style={styles.detailsButton} onPress={() => handleApplicationPress(app.id)}>

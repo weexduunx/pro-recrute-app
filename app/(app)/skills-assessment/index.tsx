@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, FlatList, TouchableOpacity, RefreshControl, Alert, ScrollView } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../components/ThemeContext';
 import { useAuth } from '../../../components/AuthProvider';
@@ -48,6 +48,14 @@ interface AssessmentStats {
 export default function SkillsAssessmentScreen() {
   const { colors } = useTheme();
   const { user } = useAuth();
+  const params = useLocalSearchParams();
+
+  // Paramètres pour la candidature
+  const fromJobApplication = params.fromJobApplication === 'true';
+  const offreId = params.offreId as string;
+  const offreTitle = params.offreTitle as string;
+  const returnTo = params.returnTo as string;
+
   const [assessments, setAssessments] = useState<SkillsAssessment[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -329,13 +337,30 @@ export default function SkillsAssessmentScreen() {
       setStartingAssessmentId(assessment.id);
       console.log(`[Skills] Démarrage assessment: ${assessment.title}, statut: ${assessment.status}, id: ${assessment.id}`);
       if (assessment.status === 'completed') {
+        // Vérifier la limitation de 3 mois
+        if (assessment.lastAttempt) {
+          const lastCompletedDate = new Date(assessment.lastAttempt.completedAt);
+          const threeMonthsAgo = new Date();
+          threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+
+          if (lastCompletedDate > threeMonthsAgo) {
+            const remainingTime = Math.ceil((lastCompletedDate.getTime() + (3 * 30 * 24 * 60 * 60 * 1000) - Date.now()) / (1000 * 60 * 60 * 24));
+            Alert.alert(
+              '⏰ Test récemment complété',
+              `Vous avez terminé ce test récemment. Vous pourrez le refaire dans ${remainingTime} jour(s).`,
+              [{ text: 'D\'accord', style: 'default' }]
+            );
+            return;
+          }
+        }
+
         Alert.alert(
           'Test déjà passé',
           'Voulez-vous refaire ce test ?',
           [
             { text: 'Annuler', style: 'cancel' },
-            { 
-              text: 'Refaire', 
+            {
+              text: 'Refaire',
               onPress: () => handleRefakeTest(assessment.id)
             },
           ]

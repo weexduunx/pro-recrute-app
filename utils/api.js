@@ -420,6 +420,26 @@ export const applyForOffre = async (offreId, data = {}) => {
   }
 };
 
+export const checkIfUserApplied = async (offreId) => {
+  try {
+    const response = await api.get(`/offres/${offreId}/check-application`); // Laravel: GET /api/offres/{offre}/check-application
+    return response.data;
+  } catch (error) {
+    console.error(`Échec de la vérification de candidature pour l'offre ${offreId}:`, error.response?.data || error.message);
+    throw error;
+  }
+};
+
+export const startSkillsTestForJob = async (offreId, testId) => {
+  try {
+    const response = await api.post(`/offres/${offreId}/start-skills-test/${testId}`); // Laravel: POST /api/offres/{offre}/start-skills-test/{test}
+    return response.data;
+  } catch (error) {
+    console.error(`Échec du démarrage du test pour l'offre ${offreId}:`, error.response?.data || error.message);
+    throw error;
+  }
+};
+
 export const socialLoginCallback = async (provider, code) => {
   try {
     // L'URL ici correspond à votre route Laravel: /api/auth/{provider}/callback

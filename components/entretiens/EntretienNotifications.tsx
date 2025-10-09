@@ -54,8 +54,20 @@ export default function EntretienNotifications({ entretiens }: EntretienNotifica
         const titreOffre = entretien.titre_offre ||
                           entretien.offre?.titre ||
                           entretien.offre?.poste?.titre_poste ||
+                          entretien.offre?.titre_poste ||
                           entretien.offre_details?.titre ||
+                          entretien.titre_poste ||
+                          entretien.poste?.titre_poste ||
+                          entretien.job_title ||
+                          entretien.position ||
                           'Poste non spécifié';
+
+        // Debug pour voir la structure des données
+        console.log('🔍 DEBUG ENTRETIEN STRUCTURE:', {
+          entretien_id: entretien.id || entretien.entretien_id,
+          titre_trouve: titreOffre,
+          structure_complete: JSON.stringify(entretien, null, 2)
+        });
 
         const entrepriseNom = entretien.entreprise_nom ||
                              entretien.offre?.entreprise_nom ||
@@ -76,6 +88,20 @@ export default function EntretienNotifications({ entretiens }: EntretienNotifica
 
         console.log(`📅 Notification setup pour entretien: ${titreOffre} le ${dateEntretien} à ${heureFormatee} chez ${entrepriseNom} - Lieu: ${lieuEntretien}`);
 
+        // Log détaillé pour le debug du titre
+        if (titreOffre === 'Poste non spécifié') {
+          console.warn('⚠️ TITRE POSTE NON TROUVÉ - Chemins testés:', {
+            'entretien.titre_offre': entretien.titre_offre,
+            'entretien.offre?.titre': entretien.offre?.titre,
+            'entretien.offre?.poste?.titre_poste': entretien.offre?.poste?.titre_poste,
+            'entretien.offre?.titre_poste': entretien.offre?.titre_poste,
+            'entretien.titre_poste': entretien.titre_poste,
+            'entretien.poste?.titre_poste': entretien.poste?.titre_poste,
+            'entretien.job_title': entretien.job_title,
+            'entretien.position': entretien.position
+          });
+        }
+
         // Ne programmer que pour les entretiens futurs
         if (entretienDate > now) {
           // Notification 24h avant
@@ -84,8 +110,8 @@ export default function EntretienNotifications({ entretiens }: EntretienNotifica
 
           if (notification24h > now) {
             const id24h = await scheduleNotification(
-              'Entretien demain',
-              `Votre entretien pour "${titreOffre}" chez ${entrepriseNom} est prévu demain à ${heureFormatee}. Lieu: ${lieuEntretien}`,
+              '📅 Entretien demain',
+              `Votre entretien pour le poste "${titreOffre}" chez ${entrepriseNom} est prévu demain à ${heureFormatee}. 📍 ${lieuEntretien}`,
               notification24h,
               entretien
             );
@@ -98,12 +124,26 @@ export default function EntretienNotifications({ entretiens }: EntretienNotifica
 
           if (notification2h > now) {
             const id2h = await scheduleNotification(
-              'Entretien dans 2h',
-              `Votre entretien pour "${titreOffre}" commence dans 2 heures à ${heureFormatee}. Préparez-vous ! Lieu: ${lieuEntretien}`,
+              '⏰ Entretien dans 2h',
+              `Votre entretien pour le poste "${titreOffre}" commence dans 2 heures à ${heureFormatee}. Préparez-vous ! 📍 ${lieuEntretien}`,
               notification2h,
               entretien
             );
             if (id2h) newNotificationIds.push(id2h);
+          }
+
+          // Notification le jour J (matin à 8h00)
+          const notificationJourJ = new Date(entretienDate);
+          notificationJourJ.setHours(8, 0, 0, 0); // 8h00 du matin
+
+          if (notificationJourJ > now && notificationJourJ < entretienDate) {
+            const idJourJ = await scheduleNotification(
+              '📅 Entretien aujourd\'hui !',
+              `Rappel : Votre entretien pour le poste "${titreOffre}" chez ${entrepriseNom} est aujourd'hui à ${heureFormatee}. Bonne chance ! 📍 ${lieuEntretien}`,
+              notificationJourJ,
+              entretien
+            );
+            if (idJourJ) newNotificationIds.push(idJourJ);
           }
 
           // Notification 15 minutes avant
@@ -112,8 +152,8 @@ export default function EntretienNotifications({ entretiens }: EntretienNotifica
 
           if (notification15m > now) {
             const id15m = await scheduleNotification(
-              'Entretien imminent',
-              `Votre entretien pour "${titreOffre}" commence dans 15 minutes ! ${entretien.lien ? 'Cliquez pour rejoindre.' : `Rendez-vous: ${lieuEntretien}`}`,
+              '🚨 Entretien dans 15 min !',
+              `Votre entretien pour le poste "${titreOffre}" commence dans 15 minutes ! ${entretien.lien ? 'Cliquez pour rejoindre.' : `📍 Rendez-vous: ${lieuEntretien}`}`,
               notification15m,
               entretien,
               true // Notification urgente
@@ -128,8 +168,8 @@ export default function EntretienNotifications({ entretiens }: EntretienNotifica
             confirmationTime.setMinutes(confirmationTime.getMinutes() + 5); // Dans 5 minutes
 
             const confirmId = await scheduleNotification(
-              'Confirmez votre présence',
-              `Confirmez votre présence à l'entretien de demain pour "${titreOffre}" chez ${entrepriseNom}`,
+              '✅ Confirmez votre présence',
+              `Confirmez votre présence à l'entretien de demain pour le poste "${titreOffre}" chez ${entrepriseNom}`,
               confirmationTime,
               entretien
             );
