@@ -8,19 +8,35 @@ import api from './api';
 // Obtenir les statistiques générales du dashboard
 export const getDashboardStats = async (period = 'month', year = null, showAll = true) => {
   try {
-    const params = { 
+    // Vérifier si un token existe avant de faire l'appel
+    const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+    const token = await AsyncStorage.getItem('user_token');
+    if (!token) {
+      console.log('getDashboardStats: Pas de token disponible, appel ignoré');
+      return { success: false, message: 'No token available' };
+    }
+
+    const params = {
       period,
       show_all: showAll // Par défaut, afficher toutes les données historiques pour le dashboard
     };
     if (year) {
       params.year = year;
     }
-    
+
     const response = await api.get('/interim/analytics/dashboard', {
       params
     });
     return response.data;
   } catch (error) {
+    // Ne pas logguer l'erreur si c'est un 401 et qu'on n'a plus de token
+    const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+    const token = await AsyncStorage.getItem('user_token');
+    if (error.response?.status === 401 && !token) {
+      console.log('getDashboardStats: 401 sans token, probablement après déconnexion - ignoré');
+      return { success: false, message: 'Unauthenticated after logout' };
+    }
+
     console.error("Échec de l'appel API getDashboardStats:", error.response?.data || error.message);
     throw error;
   }

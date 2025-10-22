@@ -32,7 +32,7 @@ export default function AppDrawerLayout() {
         },
       }}
       drawerContent={(props) => <CustomDrawerContent {...props} />}
-    >
+      >
       {allowedRoutes.map((route) => (
         <Drawer.Screen
           key={route}
@@ -43,12 +43,8 @@ export default function AppDrawerLayout() {
               drawerIcons[route] ? drawerIcons[route](color, size) : null,
           }}
         />
-        
       ))}
     </Drawer>
-
-
-
   );
 }
 

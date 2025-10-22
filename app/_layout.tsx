@@ -14,6 +14,7 @@ import Toast from 'react-native-toast-message';
 import CleanupServiceManager from '../services/CleanupServiceManager';
 import * as Linking from 'expo-linking';
 import { PasswordSetupModal } from '../components/PasswordSetupModal';
+import { markPasswordAsSetup } from '../components/AuthProvider';
 
 /**
  * Composant Layout Racine :
@@ -111,8 +112,12 @@ function RootLayoutContent() {
             onDismiss={hidePasswordSetupModal}
             userProvider={pendingPasswordSetup.provider}
             userToken={pendingPasswordSetup.token}
-            onPasswordSet={() => {
+            onPasswordSet={async () => {
               console.log('Mot de passe configuré avec succès');
+              if (user?.email) {
+                await markPasswordAsSetup(user.email);
+                console.log('Utilisateur marqué comme ayant configuré son mot de passe:', user.email);
+              }
               hidePasswordSetupModal();
             }}
           />
@@ -134,8 +139,12 @@ function RootLayoutContent() {
           onDismiss={hidePasswordSetupModal}
           userProvider={pendingPasswordSetup.provider}
           userToken={pendingPasswordSetup.token}
-          onPasswordSet={() => {
+          onPasswordSet={async () => {
             console.log('Mot de passe configuré avec succès');
+            if (user?.email) {
+              await markPasswordAsSetup(user.email);
+              console.log('Utilisateur marqué comme ayant configuré son mot de passe:', user.email);
+            }
             hidePasswordSetupModal();
           }}
         />

@@ -1126,9 +1126,23 @@ export const getIpmRecapByMonth = async () => {
 
 export const getAffiliatedStructures = async (page = 1, perPage = 10) => {
   try {
+    // Vérifier si un token existe avant de faire l'appel
+    const token = await AsyncStorage.getItem('user_token');
+    if (!token) {
+      console.log('getAffiliatedStructures: Pas de token disponible, appel ignoré');
+      return { success: false, data: [], message: 'No token available' };
+    }
+
     const response = await api.get(`/interim/affiliated-structures?page=${page}&per_page=${perPage}`);
     return response.data; // 👈 PAS response.data.data
   } catch (error) {
+    // Ne pas logguer l'erreur si c'est un 401 et qu'on n'a plus de token
+    const token = await AsyncStorage.getItem('user_token');
+    if (error.response?.status === 401 && !token) {
+      console.log('getAffiliatedStructures: 401 sans token, probablement après déconnexion - ignoré');
+      return { success: false, data: [], message: 'Unauthenticated after logout' };
+    }
+
     console.error("Échec de l'appel API getAffiliatedStructures:", error.response?.data || error.message);
     throw error;
   }

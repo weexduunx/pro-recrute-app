@@ -94,19 +94,22 @@ export default function CleanupServiceManager({ children }: CleanupServiceManage
    */
   const cleanupServices = () => {
     console.log('=== NETTOYAGE DES SERVICES ===');
-    
+
     // Arrêter le service de nettoyage automatique
     if (services.cleanupIntervalId) {
       AutoCleanupService.stopAutoCleanupService(services.cleanupIntervalId);
     }
-    
+
+    // Arrêter le service d'inactivité
+    InactivityService.stopPeriodicChecks();
+
     // Réinitialiser l'état des services
     setServices({
       inactivityService: false,
       autoCleanupService: false,
       cleanupIntervalId: null,
     });
-    
+
     setServicesInitialized(false);
     console.log('Services nettoyés');
   };

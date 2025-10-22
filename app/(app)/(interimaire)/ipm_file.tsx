@@ -201,51 +201,66 @@ export default function IpmFileScreen() {
   }, [user, t]);
 
   const loadAffiliatedStructures = useCallback(async () => {
-    if (!user) { 
+    if (!user) {
       setAffiliatedStructures([]);
-      setLoadingStructures(false); 
-      return; 
+      setLoadingStructures(false);
+      return;
     }
-    setLoadingStructures(true); 
+    setLoadingStructures(true);
     setErrorStructures(null);
     try {
       let allStructures: any[] = [];
       let page = 1;
       let hasMorePages = true;
       const perPage = 50; // Récupérer 50 par page
-      
+
       // Boucle pour récupérer toutes les pages
       while (hasMorePages && page <= 10) { // Limite sécurité: max 10 pages (500 structures)
         const response = await getAffiliatedStructures(page, perPage);
         console.log(`=== DEBUG STRUCTURES PAGE ${page} ===`);
         console.log('Response:', response);
-        
+
+        // Gestion des cas d'erreur d'authentification - seulement si response.success existe ET est false
+        if (response && response.hasOwnProperty('success') && !response.success && response.message?.includes('No token available')) {
+          console.log('Structures: Pas de token disponible, arrêt du chargement');
+          setAffiliatedStructures([]);
+          return;
+        }
+
+        if (response && response.hasOwnProperty('success') && !response.success && response.message?.includes('Unauthenticated after logout')) {
+          console.log('Structures: Erreur d\'authentification après déconnexion - arrêt du chargement');
+          setAffiliatedStructures([]);
+          return;
+        }
+
         const structures = response.data || response || [];
         const structuresArray = Array.isArray(structures) ? structures : [];
-        
+
         allStructures = [...allStructures, ...structuresArray];
         console.log(`Page ${page}: ${structuresArray.length} structures, Total: ${allStructures.length}`);
-        
+
         // Vérifier s'il y a d'autres pages
         hasMorePages = structuresArray.length === perPage;
         page++;
       }
-      
+
       console.log('=== TOTAL STRUCTURES CHARGÉES ===', allStructures.length);
       setAffiliatedStructures(allStructures);
-      
-      // Sélectionner automatiquement la première structure si disponible
-      if (allStructures.length > 0 && !pecStructureId) {
-        setPecStructureId(allStructures[0].id);
-      }
     } catch (err: any) {
+      // Gérer silencieusement les erreurs 401 après déconnexion
+      if (err.message?.includes('Unauthenticated after logout') || err.response?.status === 401) {
+        console.log('Structures: Erreur d\'authentification après déconnexion - ignorée');
+        setAffiliatedStructures([]);
+        return;
+      }
+
       console.error("Erreur de chargement des structures affiliées:", err);
       setAffiliatedStructures([]);
       setErrorStructures(err.response?.data?.message || t("Impossible de charger les structures médicales."));
-    } finally { 
-      setLoadingStructures(false); 
+    } finally {
+      setLoadingStructures(false);
     }
-  }, [user, t, pecStructureId]);
+  }, [user, t]);
 
 
   // --- useEffects ---
@@ -256,6 +271,13 @@ export default function IpmFileScreen() {
     loadFeuillesDeSoinsHistory();
     loadAffiliatedStructures();
   }, [loadLoans, loadFamilleMembers, loadPrisesEnChargeHistory, loadFeuillesDeSoinsHistory, loadAffiliatedStructures]);
+
+  // Sélection automatique de la première structure quand les structures sont chargées
+  useEffect(() => {
+    if (affiliatedStructures.length > 0 && !pecStructureId) {
+      setPecStructureId(affiliatedStructures[0].id);
+    }
+  }, [affiliatedStructures]); // Déclenché uniquement quand affiliatedStructures change
 
   // --- Gestion des formulaires de demande ---
   const openRequestModal = (type: 'prise_en_charge' | 'feuille_de_soins') => {
@@ -967,12 +989,12 @@ export default function IpmFileScreen() {
                       {errorStructures}
                     </Text>
                   ) : (
-                    <View style={{ 
-                      borderWidth: 1, 
-                      borderColor: '#E5E7EB', 
-                      borderRadius: 8, 
+                    <View style={{
+                      borderWidth: 1,
+                      borderColor: '#E5E7EB',
+                      borderRadius: 8,
                       marginBottom: 16,
-                      backgroundColor: '#F9FAFB' 
+                      backgroundColor: '#F9FAFB'
                     }}>
                       <Picker
                         selectedValue={pecStructureId}
@@ -981,10 +1003,10 @@ export default function IpmFileScreen() {
                       >
                         <Picker.Item label={t("Sélectionner une structure")} value={undefined} />
                         {Array.isArray(affiliatedStructures) && affiliatedStructures.map(structure => (
-                          <Picker.Item 
-                            key={structure.id} 
-                            label={structure.nom || structure.name || `Structure ${structure.id}`} 
-                            value={structure.id} 
+                          <Picker.Item
+                            key={structure.id}
+                            label={structure.name || `Structure ${structure.id}`}
+                            value={structure.id}
                           />
                         ))}
                       </Picker>

@@ -41,9 +41,23 @@ export const markAllNotificationsAsRead = async () => {
 // Obtenir le nombre de notifications non lues
 export const getUnreadNotificationCount = async () => {
   try {
+    // Vérifier si un token existe avant de faire l'appel
+    const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+    const token = await AsyncStorage.getItem('user_token');
+    if (!token) {
+      console.log('getUnreadNotificationCount: Pas de token disponible, appel ignoré');
+      return { success: false, unread_count: 0 };
+    }
+
     const response = await api.get('/interim/notifications/unread-count');
     return response.data;
   } catch (error) {
+    // Vérifier si c'est une erreur 401 après déconnexion
+    if (error.response?.status === 401) {
+      console.log("API getUnreadNotificationCount: 401");
+      return { success: false, unread_count: 0 };
+    }
+
     // Réduire les logs d'erreur pour éviter le spam
     if (error.response?.status !== 404 && error.response?.status !== 500) {
       console.warn("API getUnreadNotificationCount:", error.response?.status || 'Network error');

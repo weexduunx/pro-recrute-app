@@ -16,25 +16,30 @@ export const useNotifications = (): NotificationHook => {
 
   const refreshUnreadCount = useCallback(async () => {
     if (!user || (user.role !== 'interimaire' && user.role !== 'user')) {
+      setUnreadCount(0);
       return;
     }
 
     try {
       setLoading(true);
       let response;
-      
+
       if (user.role === 'interimaire') {
         response = await getUnreadNotificationCount();
       } else if (user.role === 'user') {
         response = await getUnreadCandidatNotificationCount();
       }
-      
+
       if (response?.success) {
         setUnreadCount(response.unread_count);
+      } else {
+        // Si l'appel échoue (ex: pas de token), remettre le compteur à 0
+        setUnreadCount(0);
       }
     } catch (error) {
       console.error('Erreur lors du chargement du compteur:', error);
-      // Ne pas afficher d'erreur à l'utilisateur pour ne pas le déranger
+      // Remettre le compteur à 0 en cas d'erreur
+      setUnreadCount(0);
     } finally {
       setLoading(false);
     }

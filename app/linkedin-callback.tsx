@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useTheme } from '../components/ThemeContext';
-import { useAuth } from '../components/AuthProvider';
+import { useAuth, hasPasswordBeenSetup } from '../components/AuthProvider';
 import { useLanguage } from '../components/LanguageContext';
 import Toast from 'react-native-toast-message';
 import { apiRequest, getInterimProfile, markTokenAsRecentlySet } from '../utils/api';
@@ -20,7 +20,8 @@ export default function LinkedInCallback() {
     setToken,
     setError: setAuthError,
     setLoading: setAuthLoading,
-    showPasswordSetupModalForProvider
+    showPasswordSetupModalForProvider,
+    handleRedirect
   } = useAuth();
   const params = useLocalSearchParams();
   
@@ -105,9 +106,7 @@ export default function LinkedInCallback() {
         if (codeData.success) {
           setStatus('success');
           setMessage('Vous êtes déjà connecté ! Redirection...');
-          setTimeout(() => {
-            router.replace('/(app)/dashboard');
-          }, 1500);
+          // Laisser AuthProvider gérer la redirection automatiquement
           return;
         } else {
           throw new Error('Ce code d\'authentification a déjà été utilisé. Veuillez recommencer.');
@@ -149,7 +148,7 @@ export default function LinkedInCallback() {
         await new Promise(resolve => setTimeout(resolve, 100));
         
         // Récupérer le profil intérimaire si nécessaire
-        if (userFromApi?.role === 'interim') {
+        if (userFromApi?.role === 'interimaire') {
           try {
             const interimProfile = await getInterimProfile();
             if (interimProfile) {
@@ -164,7 +163,9 @@ export default function LinkedInCallback() {
         setUser(userFromApi);
 
         // Vérifier si l'utilisateur doit configurer son mot de passe
-        if (response.requires_password_setup && tokenFromApi) {
+        // Mais seulement s'il ne l'a pas déjà fait
+        const hasAlreadySetupPassword = await hasPasswordBeenSetup(userFromApi.email);
+        if (response.requires_password_setup && tokenFromApi && !hasAlreadySetupPassword) {
           // Afficher le modal automatiquement
           showPasswordSetupModalForProvider('linkedin', tokenFromApi);
 
@@ -178,6 +179,9 @@ export default function LinkedInCallback() {
         }
 
         console.log('✅ Connexion LinkedIn réussie pour:', userFromApi.email);
+
+        // Déclencher la redirection basée sur le rôle
+        handleRedirect(true, userFromApi?.role, userFromApi?.is_otp_verified, userFromApi?.is_contract_active);
         
         // Marquer le code comme réussi
         const updatedCodes = await AsyncStorage.getItem('used_linkedin_codes');
@@ -199,10 +203,7 @@ export default function LinkedInCallback() {
           text2: 'Bienvenue dans Pro Recrute !'
         });
 
-        // Rediriger vers le dashboard après connexion réussie
-        setTimeout(() => {
-          router.replace('/(app)/dashboard');
-        }, 1500);
+        // La redirection a été déclenchée par handleRedirect ci-dessus
         
       } else {
         // Marquer le code comme échoué

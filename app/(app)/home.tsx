@@ -337,7 +337,7 @@ export default function HomeScreen() {
           photo_profil: profile.photo_profil,
           profile_photo_path: profile.profile_photo_path,
           profile_photo: profile.profile_photo,
-          user_from_parsed_cv: profile.parsed_cv?.full_name,
+          user_from_parsed_cv: profile.parsed_cv?.full_name,  
           user_profile_photo: user?.profile_photo_url,
           user_photo_profil: user?.photo_profil
         });

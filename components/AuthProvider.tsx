@@ -113,6 +113,7 @@ interface AuthContextType {
   setToken: (token: string | null) => void;
   setError: (error: string | null) => void;
   setLoading: (loading: boolean) => void;
+  handleRedirect: (authenticated: boolean, userRole: string | undefined, isOtpVerified: boolean | undefined, isContractActive: boolean | undefined, emailForOtp?: string, deviceNameForOtp?: string) => void;
 }
 
 // IMPORTANT: Utiliser le scheme configuré dans app.json avec le bon path
@@ -126,12 +127,39 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 // Constants for AsyncStorage keys
 const STORAGE_KEYS = {
   USER_TOKEN: 'user_token',
-  ONBOARDING_COMPLETED: 'onboarding_completed'
+  ONBOARDING_COMPLETED: 'onboarding_completed',
+  PASSWORD_SETUP_COMPLETED: 'password_setup_completed_users'
 } as const;
 
 interface AuthProviderProps {
   children: ReactNode;
 }
+
+// Fonctions utilitaires pour gérer les utilisateurs qui ont configuré leur mot de passe
+export const hasPasswordBeenSetup = async (userEmail: string): Promise<boolean> => {
+  try {
+    const setupUsers = await AsyncStorage.getItem(STORAGE_KEYS.PASSWORD_SETUP_COMPLETED);
+    if (!setupUsers) return false;
+    const users = JSON.parse(setupUsers);
+    return users.includes(userEmail);
+  } catch (error) {
+    console.error('Erreur lors de la vérification du setup mot de passe:', error);
+    return false;
+  }
+};
+
+export const markPasswordAsSetup = async (userEmail: string): Promise<void> => {
+  try {
+    const setupUsers = await AsyncStorage.getItem(STORAGE_KEYS.PASSWORD_SETUP_COMPLETED);
+    let users = setupUsers ? JSON.parse(setupUsers) : [];
+    if (!users.includes(userEmail)) {
+      users.push(userEmail);
+      await AsyncStorage.setItem(STORAGE_KEYS.PASSWORD_SETUP_COMPLETED, JSON.stringify(users));
+    }
+  } catch (error) {
+    console.error('Erreur lors du marquage du setup mot de passe:', error);
+  }
+};
 
 export const AuthProvider = ({ children }: AuthProviderProps) => {
   const { t } = useLanguage();
@@ -226,7 +254,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   };
 
   const handleRedirect = useCallback((authenticated: boolean, userRole: string | undefined, isOtpVerified: boolean | undefined, isContractActive: boolean | undefined, emailForOtp?: string, deviceNameForOtp?: string) => {
-    if (isLoggingOut) { 
+    if (isLoggingOut || !isAppReady) {
       return;
     }
 
@@ -282,7 +310,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         }
       }
     }
-  }, [inAuthGroup, inAppGroup, inOnboardingGroup, user?.email, isLoggingOut, hasSeenOnboarding]); 
+  }, [inAuthGroup, inAppGroup, inOnboardingGroup, user?.email, isLoggingOut, hasSeenOnboarding, isAppReady]); 
 
   useEffect(() => {
     async function prepareApp() {
@@ -331,7 +359,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     if (isAppReady && !isLoggingOut) {
       handleRedirect(!!user, user?.role, user?.is_otp_verified, user?.is_contract_active);
     }
-  }, [isAppReady, user, handleRedirect, hasSeenOnboarding, isLoggingOut]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAppReady, user, hasSeenOnboarding, isLoggingOut]);
 
   const login = async (email: string, password: string, deviceName?: string) => {
     setLoading(true);
@@ -490,7 +519,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           setUser(userFromApi);
 
           // Vérifier si l'utilisateur doit configurer son mot de passe
-          if (response.requires_password_setup && response.token) {
+          // Mais seulement s'il ne l'a pas déjà fait
+          const hasAlreadySetupPassword = await hasPasswordBeenSetup(userFromApi.email);
+          if (response.requires_password_setup && response.token && !hasAlreadySetupPassword) {
             showPasswordSetupModalForProvider('google', response.token);
           }
 
@@ -602,6 +633,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     setToken,
     setError,
     setLoading,
+    handleRedirect,
   };
 
   return (

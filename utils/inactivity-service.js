@@ -22,6 +22,7 @@ export class InactivityService {
     { days: 85, message: 'Votre compte sera supprimé dans 5 jours d\'inactivité.' },
     { days: 89, message: 'Votre compte sera supprimé demain en cas d\'inactivité.' }
   ];
+  static periodicCheckInterval = null;
 
   // Mettre à jour la dernière activité de l'utilisateur
   static async updateLastActivity() {
@@ -216,12 +217,23 @@ export class InactivityService {
 
   // Planifier des vérifications périodiques
   static startPeriodicChecks() {
+    // Arrêter l'ancien interval s'il existe
+    this.stopPeriodicChecks();
+
     // Vérifier toutes les 24 heures
-    setInterval(async () => {
+    this.periodicCheckInterval = setInterval(async () => {
       await this.checkInactivityAndSendAlerts();
     }, 24 * 60 * 60 * 1000);
-    
+
     console.log('Vérifications périodiques d\'inactivité démarrées');
+  }
+
+  static stopPeriodicChecks() {
+    if (this.periodicCheckInterval) {
+      clearInterval(this.periodicCheckInterval);
+      this.periodicCheckInterval = null;
+      console.log('Vérifications périodiques d\'inactivité arrêtées');
+    }
   }
 }
 

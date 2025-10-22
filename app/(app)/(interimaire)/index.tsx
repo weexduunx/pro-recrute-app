@@ -154,8 +154,14 @@ export default function InterimDashboardScreen() {
     try {
       // Charger les statistiques du dashboard
       const statsResponse = await getDashboardStats('month');
-      if (statsResponse.success && statsResponse.data) {
+      if (statsResponse && statsResponse.success && statsResponse.data) {
         setDashboardStats(statsResponse.data);
+      } else if (statsResponse && !statsResponse.success && statsResponse.message?.includes('No token available')) {
+        // Pas de token, probablement après déconnexion
+        console.log('Dashboard: Pas de token disponible, données réinitialisées');
+        setDashboardStats(null);
+        setIpmData(null);
+        return;
       }
 
       // Charger les données IPM complètes
@@ -176,6 +182,14 @@ export default function InterimDashboardScreen() {
         setBirthdayLoading(false);
       }
     } catch (err: any) {
+      // Gérer silencieusement les erreurs 401 après déconnexion
+      if (err.message?.includes('Unauthenticated after logout') || err.response?.status === 401) {
+        console.log('Dashboard: Erreur d\'authentification après déconnexion - ignorée');
+        setDashboardStats(null);
+        setIpmData(null);
+        return;
+      }
+
       console.error("Erreur chargement données:", err);
       setError(err.message || t("Impossible de charger les données"));
     } finally {
