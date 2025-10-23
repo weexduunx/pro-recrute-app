@@ -930,9 +930,9 @@ export const getCertificatInfo = async () => {
 export const getPdf = async (encryptedId, type) => {
   let url = '';
   let defaultFileName = '';
-  
+
   if (type === 'attestation') {
-    url = `/interim/attestations/${encryptedId}/download`;
+    url = `/interim/attestations/${encryptedId}/download`; 
     defaultFileName = `attestation_${encryptedId}.pdf`;
   } else if (type === 'prise_en_charge') {
     url = `/interim/prises-en-charge/${encryptedId}/download`;
@@ -943,13 +943,18 @@ export const getPdf = async (encryptedId, type) => {
   } else {
     throw new Error("Type de document non supporté.");
   }
- 
+
   try {
-    // Requête GET et ID dans l'URL
-    const response = await api.get(url, {
+    // Récupérer le token pour l'authentification
+    const token = await AsyncStorage.getItem('user_token');
+
+    // Requête GET et ID dans l'URL - Configuration spéciale pour PDF
+    const response = await axios.get(`${API_URL}${url}`, {
       responseType: 'arraybuffer', // Indispensable pour recevoir des données binaires (le PDF)
       headers: {
         'Accept': 'application/pdf', // Demander un PDF
+        'Authorization': `Bearer ${token}`,
+        // Ne pas inclure Content-Type pour les téléchargements
       },
     });
            
@@ -981,10 +986,25 @@ export const getPdf = async (encryptedId, type) => {
  
     return { message: 'Document téléchargé et partagé.', uri: localUri };
   } catch (error) {
-    console.error(`Erreur téléchargement PDF ${type}:`, error.response?.data || error.message);
-    
-    // Gestion d'erreur plus spécifique selon le type
-    const errorMessage = getErrorMessage(type, error);
+    // Si la réponse est un ArrayBuffer mais contient un JSON d'erreur, le convertir
+    let errorData = error.response?.data;
+
+    if (error.response?.data instanceof ArrayBuffer) {
+      try {
+        // Convertir ArrayBuffer en string pour vérifier si c'est du JSON
+        const text = new TextDecoder().decode(error.response.data);
+        errorData = JSON.parse(text);
+      } catch (e) {
+        // Si ce n'est pas du JSON valide, garder les données originales
+        errorData = error.response?.data;
+      }
+    }
+
+    console.error(`Erreur téléchargement PDF ${type}:`, errorData || error.message);
+
+    // Utiliser le message d'erreur du backend si disponible
+    const backendMessage = errorData?.message;
+    const errorMessage = backendMessage || getErrorMessage(type, error);
     Alert.alert("Erreur", errorMessage);
     throw error;
   }

@@ -67,6 +67,17 @@ export const getUnreadNotificationCount = async () => {
   }
 };
 
+// Supprimer une notification spécifique
+export const deleteNotification = async (notificationId) => {
+  try {
+    const response = await api.delete(`/interim/notifications/${notificationId}`);
+    return response.data;
+  } catch (error) {
+    console.error("Échec de l'appel API deleteNotification:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
 // Supprimer toutes les notifications lues
 export const deleteReadNotifications = async () => {
   try {

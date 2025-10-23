@@ -28,10 +28,11 @@ export interface CustomHeaderProps {
   onBackPress?: () => void; // Action personnalisée pour le bouton retour
   rightComponent?: React.ReactNode; // Composant personnalisé à droite
   showNotificationIcon?: boolean; // Afficher l'icône de notification pour les intérimaires
+  hideMenuButton?: boolean; // Masquer complètement le bouton menu/retour
 }
 
 
-export default function CustomHeader({ title, user: propUser, showBackButton = false, onBackPress, rightComponent, showNotificationIcon = false }: CustomHeaderProps) {
+export default function CustomHeader({ title, user: propUser, showBackButton = false, onBackPress, rightComponent, showNotificationIcon = false, hideMenuButton = false }: CustomHeaderProps) {
   const navigation = useNavigation();
   const { logout, user: contextUser } = useAuth();
   const { t } = useLanguage();
@@ -102,14 +103,16 @@ const handleDropdownLogout = () => {
       <StatusBar style="light" />
       <View style={styles.headerContainer}>
         {/* Bouton du menu Hamburger ou Retour */}
-        {showBackButton ? (
-          <TouchableOpacity onPress={handleBackPress} style={styles.menuButton}>
-            <FontAwesome5 name="arrow-left" size={22} color="#FFFFFF" />
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity onPress={handleMenuPress} style={styles.menuButton}>
-            <FontAwesome5 name="bars" size={22} color="#FFFFFF" />
-          </TouchableOpacity>
+        {!hideMenuButton && (
+          showBackButton ? (
+            <TouchableOpacity onPress={handleBackPress} style={styles.menuButton}>
+              <FontAwesome5 name="arrow-left" size={22} color="#FFFFFF" />
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity onPress={handleMenuPress} style={styles.menuButton}>
+              <FontAwesome5 name="bars" size={22} color="#FFFFFF" />
+            </TouchableOpacity>
+          )
         )}
 
         {/* Section titre avec icône notification optionnelle */}

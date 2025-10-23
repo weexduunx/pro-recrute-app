@@ -59,7 +59,7 @@ function getDrawerLabel(route: string): string {
     actualites: 'Actualités',
     dashboard: 'Tableau de bord',
     settings: 'Paramètres',
-    '(interimaire)': 'Espace Intérimaire',
+    '(interimaire)': 'Accueil',
     entretiens: 'Mes entretiens',
     messages: 'Messages',
     'video-interview': 'Entretiens vidéo',

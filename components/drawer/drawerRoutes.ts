@@ -12,7 +12,7 @@ export const allowedDrawerRoutesByRole: Record<string, string[]> = {
     'settings'
   ],
   interimaire: [
-    '(interimaire)', 
+    '(interimaire)',
     'dashboard', 
     'profile-details', 
     'job_board', 
