@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   SafeAreaView,
-  Platform,
   Dimensions,
   ActivityIndicator,
   Alert,
@@ -15,6 +14,9 @@ import {
   RefreshControl,
   Image,
 } from "react-native";
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
+import { Asset } from 'expo-asset';
 import CustomHeader from '../../../components/CustomHeader';
 import { useAuth } from '../../../components/AuthProvider';
 import { useTheme } from '../../../components/ThemeContext';
@@ -24,11 +26,7 @@ import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { getDashboardStats } from "../../../utils/analytics-api";
 import { getIPMCardData, checkBirthday } from "../../../utils/api";
-import { Ionicons, FontAwesome5, FontAwesome6 } from '@expo/vector-icons';
-import { format } from "date-fns";
-import QRCode from 'react-native-qrcode-svg';
-
-const { width } = Dimensions.get("window");
+import { Ionicons } from '@expo/vector-icons';
 
 // Interface pour les statistiques du dashboard
 interface DashboardStats {
@@ -83,6 +81,14 @@ export default function EspaceInterimaireDashboard() {
       description: 'Retour à l\'accueil'
     },
     {
+      id: 'analytics',
+      title: t('Suivi Facturation'),
+      icon: 'analytics',
+      color: '#8B5CF6',
+      route: '/(app)/(interimaire)/analytics',
+      description: 'Suivi de la facturation'
+    },
+    {
       id: 'hr_file',
       title: t('Dossier RH'),
       icon: 'folder-outline',
@@ -99,20 +105,12 @@ export default function EspaceInterimaireDashboard() {
       description: 'Echéanciers, Historique Prises en charge et Feuille de Soins'
     },
     {
-      id: 'analytics',
-      title: t('Suivi Facturation'),
-      icon: 'analytics',
+      id: 'cahier_interimaire',
+      title: t('Cahier de l\'interimaire'),
+      icon: 'document-text-outline',
       color: '#8B5CF6',
-      route: '/(app)/(interimaire)/analytics',
-      description: 'Suivi de la facturation'
-    },
-    {
-      id: 'reports',
-      title: t('Rapports'),
-      icon: 'document-attach-outline',
-      color: '#F59E0B',
-      route: '/(app)/(interimaire)/reports',
-      description: 'Générer des rapports'
+      route: '',
+      description: 'Guide de l\'intérimaire'
     },
     {
       id: 'structures',
@@ -122,14 +120,22 @@ export default function EspaceInterimaireDashboard() {
       route: '/(app)/(interimaire)/structures',
       description: 'Centres de santé'
     },
+    // {
+    //   id: 'notifications',
+    //   title: t('Notifications'),
+    //   icon: 'notifications-outline',
+    //   color: '#10B981',
+    //   route: '/(app)/(interimaire)/notifications',
+    //   description: 'Messages et alertes'
+    // },
     {
-      id: 'notifications',
-      title: t('Notifications'),
-      icon: 'notifications-outline',
-      color: '#10B981',
-      route: '/(app)/(interimaire)/notifications',
-      description: 'Messages et alertes'
-    }
+      id: 'reports',
+      title: t('Rapports'),
+      icon: 'document-attach-outline',
+      color: '#F59E0B',
+      route: '/(app)/(interimaire)/reports',
+      description: 'Générer des rapports'
+    },
   ];
 
   useEffect(() => {
@@ -220,6 +226,51 @@ export default function EspaceInterimaireDashboard() {
   // Fonctions de navigation
   const handleMenuPress = () => { Alert.alert(t("Menu"), t("Menu Intérimaire pressé !")); };
   const handleAvatarPress = () => { router.push('/(app)/profile-details'); };
+
+  // Fonction pour ouvrir le cahier de l'intérimaire
+  const openCahierInterimaire = async () => {
+    try {
+      // Vérifier si le partage est disponible
+      const isAvailable = await Sharing.isAvailableAsync();
+      if (!isAvailable) {
+        Alert.alert(
+          t("Erreur"),
+          t("Le partage de fichiers n'est pas disponible sur cet appareil.")
+        );
+        return;
+      }
+
+      // Charger l'asset PDF
+      const asset = Asset.fromModule(require('../../../assets/pdf/cdi.pdf'));
+      await asset.downloadAsync();
+
+      if (asset.localUri) {
+        // Copier le fichier dans le répertoire documentDirectory
+        const fileUri = FileSystem.documentDirectory + 'cahier_interimaire.pdf';
+        await FileSystem.copyAsync({
+          from: asset.localUri,
+          to: fileUri,
+        });
+
+        // Partager le fichier (ouverture dans l'app PDF par défaut)
+        await Sharing.shareAsync(fileUri, {
+          mimeType: 'application/pdf',
+          dialogTitle: t('Cahier de l\'Intérimaire'),
+          UTI: 'com.adobe.pdf',
+        });
+
+      } else {
+        throw new Error('Impossible de charger le fichier PDF');
+      }
+    } catch (error: any) {
+      console.error('Erreur lors de l\'ouverture du PDF:', error);
+      Alert.alert(
+        t("Erreur"),
+        t("Une erreur est survenue lors de l'ouverture du fichier PDF. Assurez-vous qu'une application de lecture PDF est installée.")
+      );
+    }
+  };
+
 
   // Formatage des données
   const formatCurrency = (amount: number) => {
@@ -376,7 +427,13 @@ export default function EspaceInterimaireDashboard() {
             <TouchableOpacity
               key={action.id}
               style={[styles.primaryActionCard, { backgroundColor: colors.background || colors.background }]}
-              onPress={() => router.push(action.route as any)}
+              onPress={() => {
+                if (action.id === 'cahier_interimaire') {
+                  openCahierInterimaire();
+                } else {
+                  router.push(action.route as any);
+                }
+              }}
             >
               <View style={[styles.actionIcon, { backgroundColor: action.color + '15' }]}>
                 <Ionicons name={action.icon as any} size={24} color={action.color} />
@@ -397,7 +454,13 @@ export default function EspaceInterimaireDashboard() {
             <TouchableOpacity
               key={action.id}
               style={[styles.secondaryActionCard, { backgroundColor: colors.background || colors.background }]}
-              onPress={() => router.push(action.route as any)}
+              onPress={() => {
+                if (action.id === 'cahier_interimaire') {
+                  openCahierInterimaire();
+                } else {
+                  router.push(action.route as any);
+                }
+              }}
             >
               <View style={[styles.secondaryActionIcon, { backgroundColor: action.color + '15' }]}>
                 <Ionicons name={action.icon as any} size={20} color={action.color} />

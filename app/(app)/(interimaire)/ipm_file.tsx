@@ -58,6 +58,7 @@ interface PriseEnChargeRequest {
   structure_id?: number;
   statut: number;
   statut_label: string;
+  encrypted_id?: string;
   famille?: { prenom: string; nom: string; lien: string };
 }
 
@@ -66,7 +67,7 @@ interface FeuilleDeSoinsRequest {
   type: string;
   created_at: string;
   user_id: number;
-  encrypted_id: number;
+  encrypted_id?: string;
   famille_id?: number;
   statut: number;
   statut_label: string;
@@ -145,6 +146,7 @@ export default function IpmFileScreen() {
     setLoadingPrisesEnCharge(true);
     try {
       const history = await getPrisesEnChargeHistory();
+      console.log('Prises en charge reçues:', JSON.stringify(history, null, 2));
       setPrisesEnChargeHistory(history);
     } catch (err: any) {
       console.error("Erreur prises en charge:", err);
@@ -342,6 +344,14 @@ export default function IpmFileScreen() {
   };
 
   const handleDownloadPdf = async (encryptedId: string, type: 'prise_en_charge' | 'feuille_de_soins') => {
+    console.log('handleDownloadPdf appelé avec:', { encryptedId, type });
+
+    if (!encryptedId || encryptedId === '') {
+      console.error('encryptedId vide ou non défini');
+      Alert.alert(t("Erreur"), t("ID de document manquant"));
+      return;
+    }
+
     try {
       if (type === 'prise_en_charge') {
         setDownloadingPec(encryptedId);
@@ -349,10 +359,13 @@ export default function IpmFileScreen() {
         setDownloadingFds(encryptedId);
       }
 
+      console.log('Appel de getPdf avec:', { encryptedId, type });
       await getPdf(encryptedId, type);
       Alert.alert(t("Succès"), t("Document téléchargé avec succès !"));
     } catch (err: any) {
-      Alert.alert(t("Erreur"), err.response?.data?.message || t("Impossible de télécharger le document."));
+      console.error('Erreur dans handleDownloadPdf:', err);
+      const errorMessage = err.response?.data?.message || err.message || t("Impossible de télécharger le document.");
+      Alert.alert(t("Erreur"), `Téléchargement PDF ${type}:${JSON.stringify(errorMessage)}`);
     } finally {
       if (type === 'prise_en_charge') {
         setDownloadingPec(null);

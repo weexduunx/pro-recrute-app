@@ -173,6 +173,11 @@ export default function ProfileDetailsScreen() {
   const [uploadingProfilePhoto, setUploadingProfilePhoto] = useState(false);
   const [currentPhotoUrl, setCurrentPhotoUrl] = useState<string | null>(null);
 
+  // États pour la suppression de compte
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deletingAccount, setDeletingAccount] = useState(false);
+
   // Synchroniser l'état local avec les données utilisateur
   useEffect(() => {
     if (user?.photo_profil && !currentPhotoUrl) {
@@ -1093,33 +1098,38 @@ export default function ProfileDetailsScreen() {
   const handleAvatarPress = () => { Alert.alert(t("Profil"), t("Avatar pressé !")); };
 
   const handleDeleteAccount = () => {
-    Alert.alert(
-      t('Supprimer le compte'),
-      t('Cette action est irréversible. Toutes vos données seront définitivement supprimées. Êtes-vous sûr de vouloir continuer ?'),
-      [
-        { text: t('Annuler'), style: 'cancel' },
-        {
-          text: t('Supprimer'),
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteUserAccount();
-              Alert.alert(
-                t('Compte supprimé'),
-                t('Votre compte a été supprimé avec succès.'),
-                [{ text: 'OK', onPress: () => logout() }]
-              );
-            } catch (error: any) {
-              console.error('Erreur lors de la suppression du compte:', error);
-              Alert.alert(
-                t('Erreur'),
-                error.response?.data?.message || t('Une erreur est survenue lors de la suppression du compte.')
-              );
-            }
-          }
-        }
-      ]
-    );
+    setShowDeleteModal(true);
+  };
+
+  const handleConfirmDeleteAccount = async () => {
+    if (!deletePassword.trim()) {
+      Alert.alert(t('Erreur'), t('Veuillez saisir votre mot de passe pour confirmer'));
+      return;
+    }
+
+    setDeletingAccount(true);
+    try {
+      await deleteUserAccount(deletePassword);
+      setShowDeleteModal(false);
+      Alert.alert(
+        t('Compte supprimé'),
+        t('Votre compte a été supprimé avec succès.'),
+        [{ text: 'OK', onPress: () => logout() }]
+      );
+    } catch (error: any) {
+      console.error('Erreur lors de la suppression du compte:', error);
+      Alert.alert(
+        t('Erreur'),
+        error.response?.data?.message || t('Mot de passe incorrect ou erreur lors de la suppression du compte.')
+      );
+    } finally {
+      setDeletingAccount(false);
+    }
+  };
+
+  const handleCancelDelete = () => {
+    setShowDeleteModal(false);
+    setDeletePassword('');
   };
 
 
@@ -1755,13 +1765,13 @@ export default function ProfileDetailsScreen() {
             <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
               {t('Secteurs d\'activité préférés')}
             </Text>
-            <View style={styles.chipContainer}>
+            <View style={additionalStyles.chipContainer}>
               {['IT/Informatique', 'Commerce', 'Industrie', 'Santé', 'Éducation', 'Finance'].map((sector) => (
                 <TouchableOpacity
                   key={sector}
                   style={[
-                    styles.chip,
-                    missionPreferences.sectors.includes(sector) && styles.chipSelected,
+                    additionalStyles.chip,
+                    missionPreferences.sectors.includes(sector) && additionalStyles.chipSelected,
                     {
                       backgroundColor: missionPreferences.sectors.includes(sector) 
                         ? colors.secondary + '20' 
@@ -1779,7 +1789,7 @@ export default function ProfileDetailsScreen() {
                   }}
                 >
                   <Text style={[
-                    styles.chipText,
+                    additionalStyles.chipText,
                     { color: missionPreferences.sectors.includes(sector) ? colors.secondary : colors.textSecondary }
                   ]}>
                     {t(sector)}
@@ -1794,13 +1804,13 @@ export default function ProfileDetailsScreen() {
             <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
               {t('Types de contrats préférés')}
             </Text>
-            <View style={styles.chipContainer}>
+            <View style={additionalStyles.chipContainer}>
               {['Intérim', 'CDD', 'CDI', 'Freelance', 'Saisonnier'].map((contractType) => (
                 <TouchableOpacity
                   key={contractType}
                   style={[
-                    styles.chip,
-                    missionPreferences.contractTypes.includes(contractType) && styles.chipSelected,
+                    additionalStyles.chip,
+                    missionPreferences.contractTypes.includes(contractType) && additionalStyles.chipSelected,
                     {
                       backgroundColor: missionPreferences.contractTypes.includes(contractType) 
                         ? colors.secondary + '20' 
@@ -1818,7 +1828,7 @@ export default function ProfileDetailsScreen() {
                   }}
                 >
                   <Text style={[
-                    styles.chipText,
+                    additionalStyles.chipText,
                     { color: missionPreferences.contractTypes.includes(contractType) ? colors.secondary : colors.textSecondary }
                   ]}>
                     {t(contractType)}
@@ -1865,44 +1875,44 @@ export default function ProfileDetailsScreen() {
           </View>
         </View>
       ) : (
-        <View style={styles.displayContainer}>
+        <View style={additionalStyles.displayContainer}>
           {/* Affichage des préférences */}
           <View style={styles.infoContainer}>
-            <View style={styles.infoRow}>
-              <Text style={[styles.labelText, { color: colors.textSecondary }]}>
+            <View style={additionalStyles.infoRow}>
+              <Text style={[additionalStyles.labelText, { color: colors.textSecondary }]}>
                 {t('Secteurs préférés')}:
               </Text>
-              <Text style={[styles.valueText, { color: colors.textPrimary }]}>
-                {missionPreferences.sectors.length > 0 
-                  ? missionPreferences.sectors.join(', ') 
+              <Text style={[additionalStyles.valueText, { color: colors.textPrimary }]}>
+                {missionPreferences.sectors.length > 0
+                  ? missionPreferences.sectors.join(', ')
                   : t('Non renseigné')}
               </Text>
             </View>
-            <View style={styles.infoRow}>
-              <Text style={[styles.labelText, { color: colors.textSecondary }]}>
+            <View style={additionalStyles.infoRow}>
+              <Text style={[additionalStyles.labelText, { color: colors.textSecondary }]}>
                 {t('Types de contrats')}:
               </Text>
-              <Text style={[styles.valueText, { color: colors.textPrimary }]}>
-                {missionPreferences.contractTypes.length > 0 
-                  ? missionPreferences.contractTypes.join(', ') 
+              <Text style={[additionalStyles.valueText, { color: colors.textPrimary }]}>
+                {missionPreferences.contractTypes.length > 0
+                  ? missionPreferences.contractTypes.join(', ')
                   : t('Non renseigné')}
               </Text>
             </View>
-            <View style={styles.infoRow}>
-              <Text style={[styles.labelText, { color: colors.textSecondary }]}>
+            <View style={additionalStyles.infoRow}>
+              <Text style={[additionalStyles.labelText, { color: colors.textSecondary }]}>
                 {t('Durée préférée')}:
               </Text>
-              <Text style={[styles.valueText, { color: colors.textPrimary }]}>
+              <Text style={[additionalStyles.valueText, { color: colors.textPrimary }]}>
                 {missionPreferences.missionDuration || t('Non renseigné')}
               </Text>
             </View>
-            <View style={styles.infoRow}>
-              <Text style={[styles.labelText, { color: colors.textSecondary }]}>
+            <View style={additionalStyles.infoRow}>
+              <Text style={[additionalStyles.labelText, { color: colors.textSecondary }]}>
                 {t('Prétentions salariales')}:
               </Text>
-              <Text style={[styles.valueText, { color: colors.textPrimary }]}>
-                {missionPreferences.salaryExpectation 
-                  ? `${parseInt(missionPreferences.salaryExpectation).toLocaleString()} FCFA/mois` 
+              <Text style={[additionalStyles.valueText, { color: colors.textPrimary }]}>
+                {missionPreferences.salaryExpectation
+                  ? `${parseInt(missionPreferences.salaryExpectation).toLocaleString()} FCFA/mois`
                   : t('Non renseigné')}
               </Text>
             </View>
@@ -2843,88 +2853,59 @@ export default function ProfileDetailsScreen() {
         {renderPersonalInfo()}
         {renderCvSection()}
         
-        {/* Bouton de suppression de compte - toujours visible */}
+        {/* Zone de Danger - Simplifiée */}
         <View style={{
           marginTop: 24,
           marginHorizontal: 16,
-          paddingTop: 20,
-          paddingHorizontal: 20,
-          paddingBottom: 16,
-          borderTopWidth: 3,
-          borderTopColor: '#FCA5A5',
-          backgroundColor: '#FEF2F2',
-          borderRadius: 12,
-          shadowColor: '#EF4444',
+          padding: 20,
+          backgroundColor: colors.cardBackground,
+          borderRadius: 16,
+          borderWidth: 1,
+          borderColor: '#FCA5A5',
+          shadowColor: '#000',
           shadowOffset: { width: 0, height: 2 },
           shadowOpacity: 0.1,
-          shadowRadius: 4,
+          shadowRadius: 8,
           elevation: 2,
         }}>
-          <Text style={{
-            fontSize: 18,
-            fontWeight: '600',
-            marginBottom: 8,
-            textAlign: 'center',
-            color: colors.textPrimary
-          }}>{t('Zone de danger')}</Text>
-          
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+            <Ionicons name="warning" size={20} color={colors.error} style={{ marginRight: 8 }} />
+            <Text style={{
+              fontSize: 18,
+              fontWeight: '600',
+              color: colors.textPrimary
+            }}>{t('Zone de danger')}</Text>
+          </View>
+
           <Text style={{
             fontSize: 14,
-            textAlign: 'center',
             marginBottom: 16,
-            color: colors.textSecondary
+            color: colors.textSecondary,
+            lineHeight: 20
           }}>
-            {t('Actions irréversibles')}
+            {t('La suppression de votre compte est définitive et irréversible. Toutes vos données seront perdues.')}
           </Text>
-          
+
           <TouchableOpacity
             style={{
               flexDirection: 'row',
-              paddingVertical: 10,
-              paddingHorizontal: 24,
-              borderRadius: 16,
+              paddingVertical: 12,
+              paddingHorizontal: 20,
+              borderRadius: 12,
               alignItems: 'center',
               justifyContent: 'center',
-              marginTop: 14,
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.4,
-              shadowRadius: 8,
               backgroundColor: colors.error,
             }}
             onPress={handleDeleteAccount}
-            disabled={authLoading}
+            disabled={authLoading || deletingAccount}
           >
-            <Ionicons name="warning" size={24} color="#FFFFFF" style={{ marginRight: 8 }} />
+            <Ionicons name="trash-outline" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
             <Text style={{
               color: '#FFFFFF',
               fontSize: 16,
               fontWeight: '600',
-            }}>{t('Supprimer définitivement mon compte')}</Text>
+            }}>{t('Supprimer mon compte')}</Text>
           </TouchableOpacity>
-          
-          <View style={{
-            flexDirection: 'row',
-            alignItems: 'flex-start',
-            marginTop: 12,
-            paddingHorizontal: 12,
-            paddingVertical: 8,
-            backgroundColor: '#FEF9C3',
-            borderRadius: 8,
-            borderLeftWidth: 3,
-            borderLeftColor: '#F59E0B',
-          }}>
-            <Ionicons name="information-circle-outline" size={16} color={colors.textSecondary} />
-            <Text style={{
-              fontSize: 12,
-              marginLeft: 8,
-              lineHeight: 16,
-              flex: 1,
-              color: colors.textSecondary
-            }}>
-              {t('Cette action supprimera définitivement votre compte et toutes vos données. Cette opération ne peut pas être annulée.')}
-            </Text>
-          </View>
         </View>
       </ScrollView>
       <Modal
@@ -2998,6 +2979,141 @@ export default function ProfileDetailsScreen() {
             >
               <Text style={cvStyles.closeButtonText}>{t("Compléter plus tard")}</Text>
             </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal de confirmation de suppression de compte */}
+      <Modal
+        visible={showDeleteModal}
+        animationType="fade"
+        transparent
+        onRequestClose={handleCancelDelete}
+      >
+        <View style={{
+          flex: 1,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          justifyContent: 'center',
+          alignItems: 'center',
+          padding: 20,
+        }}>
+          <View style={{
+            backgroundColor: colors.cardBackground,
+            borderRadius: 20,
+            padding: 24,
+            width: '100%',
+            maxWidth: 400,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.3,
+            shadowRadius: 10,
+            elevation: 8,
+          }}>
+            {/* Header */}
+            <View style={{ alignItems: 'center', marginBottom: 20 }}>
+              <View style={{
+                width: 60,
+                height: 60,
+                borderRadius: 30,
+                backgroundColor: colors.error + '20',
+                justifyContent: 'center',
+                alignItems: 'center',
+                marginBottom: 12,
+              }}>
+                <Ionicons name="warning" size={32} color={colors.error} />
+              </View>
+              <Text style={{
+                fontSize: 20,
+                fontWeight: '700',
+                color: colors.textPrimary,
+                textAlign: 'center',
+              }}>{t('Supprimer le compte')}</Text>
+            </View>
+
+            {/* Message d'avertissement */}
+            <Text style={{
+              fontSize: 16,
+              color: colors.textSecondary,
+              textAlign: 'center',
+              marginBottom: 20,
+              lineHeight: 22,
+            }}>
+              {t('Cette action est irréversible. Pour confirmer, veuillez saisir votre mot de passe.')}
+            </Text>
+
+            {/* Champ mot de passe */}
+            <View style={{ marginBottom: 24 }}>
+              <Text style={{
+                fontSize: 14,
+                fontWeight: '600',
+                color: colors.textPrimary,
+                marginBottom: 8,
+              }}>{t('Mot de passe')}</Text>
+              <TextInput
+                style={{
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  borderRadius: 12,
+                  paddingHorizontal: 16,
+                  paddingVertical: 12,
+                  fontSize: 16,
+                  backgroundColor: colors.background,
+                  color: colors.textPrimary,
+                }}
+                placeholder={t('Saisissez votre mot de passe')}
+                placeholderTextColor={colors.textSecondary}
+                secureTextEntry
+                value={deletePassword}
+                onChangeText={setDeletePassword}
+                autoFocus
+              />
+            </View>
+
+            {/* Boutons */}
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  paddingVertical: 12,
+                  paddingHorizontal: 20,
+                  borderRadius: 12,
+                  backgroundColor: colors.border,
+                  alignItems: 'center',
+                }}
+                onPress={handleCancelDelete}
+                disabled={deletingAccount}
+              >
+                <Text style={{
+                  fontSize: 16,
+                  fontWeight: '600',
+                  color: colors.textSecondary,
+                }}>{t('Annuler')}</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  paddingVertical: 12,
+                  paddingHorizontal: 20,
+                  borderRadius: 12,
+                  backgroundColor: colors.error,
+                  alignItems: 'center',
+                  opacity: deletingAccount ? 0.7 : 1,
+                }}
+                onPress={handleConfirmDeleteAccount}
+                disabled={deletingAccount}
+              >
+                {deletingAccount ? (
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                ) : (
+                  <Text style={{
+                    fontSize: 16,
+                    fontWeight: '600',
+                    color: '#FFFFFF',
+                  }}>{t('Supprimer')}</Text>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>

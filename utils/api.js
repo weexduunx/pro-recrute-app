@@ -1764,10 +1764,12 @@ export const updateMissionPreferences = async (preferences) => {
 
 // ============= ACCOUNT MANAGEMENT =============
 
-export const deleteUserAccount = async () => {
+export const deleteUserAccount = async (password) => {
   try {
     console.log('=== API CALL: deleteUserAccount START ===');
-    const response = await api.delete('/user/account');
+    const response = await api.delete('/user/account', {
+      data: { password: password }
+    });
     console.log('=== API CALL: deleteUserAccount SUCCESS ===');
     console.log('Response data:', response.data);
     return response.data;
