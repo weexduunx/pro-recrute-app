@@ -21,6 +21,7 @@ import {
   generateAnalyticsReport,
   downloadReport,
   getReportsHistory,
+  deleteReport,
   formatDate,
   REPORT_TYPES
 } from '../../../utils/analytics-api';
@@ -35,7 +36,8 @@ export default function ReportsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [generatingReport, setGeneratingReport] = useState(false);
   const [downloadingReport, setDownloadingReport] = useState(null);
-  
+  const [deletingReport, setDeletingReport] = useState(null);
+
   // Données
   const [reportsHistory, setReportsHistory] = useState([]);
   
@@ -58,20 +60,21 @@ export default function ReportsScreen() {
       setLoading(true);
       console.log('Chargement historique rapports...');
       const response = await getReportsHistory();
-      
+
       console.log('Réponse getReportsHistory:', response);
-      
+
       if (response.success) {
         const reports = response.data.reports || [];
         console.log('Rapports trouvés:', reports.length, reports);
         setReportsHistory(reports);
       } else {
-        console.log('Erreur dans la réponse:', response);
-        Alert.alert('Information', 'Aucun rapport disponible pour le moment.');
+        console.log('Aucun rapport trouvé:', response.message);
+        setReportsHistory([]); // S'assurer que la liste est vide
       }
     } catch (error) {
       console.error('Erreur chargement historique:', error);
-      Alert.alert('Erreur', 'Impossible de charger l\'historique des rapports. Vérifiez votre connexion.');
+      setReportsHistory([]); // S'assurer que la liste est vide en cas d'erreur
+      // Ne plus afficher d'alert pour une meilleure UX
     } finally {
       setLoading(false);
     }
@@ -96,7 +99,7 @@ export default function ReportsScreen() {
       if (response.success) {
         Alert.alert(
           '✅ Rapport généré',
-          'Votre rapport a été généré avec succès et est maintenant disponible dans l\'historique.',
+          'Votre rapport a été généré avec succès à partir de vos données réelles et est maintenant disponible dans l\'historique.',
           [
             { text: 'Parfait !', onPress: () => {
               setShowGenerateModal(false);
@@ -108,7 +111,7 @@ export default function ReportsScreen() {
         );
       } else {
         console.log('Erreur dans la génération:', response);
-        Alert.alert('⚠️ Erreur', response.message || 'Impossible de générer le rapport. Veuillez réessayer.');
+        Alert.alert('⚠️ Erreur', response.message || 'Impossible de générer le rapport. Vérifiez que vous avez des données disponibles (contrats, attestations, etc.).');
       }
     } catch (error) {
       console.error('Erreur génération rapport:', error);
@@ -128,26 +131,26 @@ export default function ReportsScreen() {
       const blob = await downloadReport(report.id);
       
       console.log('Blob reçu:', blob?.size, 'bytes, type:', blob?.type);
-      
+
       // Vérifier que le blob est valide
       if (!blob || blob.size === 0) {
         throw new Error('Fichier vide ou corrompu reçu du serveur');
       }
-      
-      // Déterminer l'extension selon le type de contenu
-      let extension = '.pdf';
-      let mimeType = 'application/pdf';
-      
-      if (blob.type.includes('text/plain')) {
-        extension = '.txt';
-        mimeType = 'text/plain';
-      }
-      
-      // Créer un fichier temporaire
-      const filename = `${report.title.replace(/[^a-zA-Z0-9\s]/g, '_')}${extension}`;
+
+      // Utiliser l'extension TXT pour garantir la lisibilité
+      const extension = '.txt';
+      const mimeType = 'text/plain';
+
+      // Créer un nom de fichier sécurisé
+      const safeName = report.title
+        .replace(/[^a-zA-Z0-9\s\-_]/g, '_')  // Remplacer caractères spéciaux
+        .replace(/\s+/g, '_')                 // Remplacer espaces par underscore
+        .substring(0, 50);                    // Limiter la longueur
+
+      const filename = `${safeName}${extension}`;
       const fileUri = FileSystem.documentDirectory + filename;
-      
-      console.log('Création fichier:', filename, 'Type MIME:', mimeType);
+
+      console.log('Création fichier rapport:', filename, 'Type MIME:', mimeType);
       
       // Convertir le blob en base64 et l'écrire
       const reader = new FileReader();
@@ -184,9 +187,9 @@ export default function ReportsScreen() {
               mimeType: mimeType,
               dialogTitle: 'Ouvrir le rapport'
             });
-            Alert.alert('✅ Succès', 'Rapport téléchargé et ouvert avec succès !');
+            Alert.alert('✅ Succès', 'Rapport téléchargé et ouvert avec succès !\n\nLe fichier est maintenant disponible pour lecture dans n\'importe quelle application de texte.');
           } else {
-            Alert.alert('✅ Succès', `Rapport sauvegardé dans ${fileUri}`);
+            Alert.alert('✅ Succès', `Rapport sauvegardé dans ${fileUri}\n\nVous pouvez l'ouvrir avec n'importe quelle application de lecture de texte.`);
           }
         } catch (innerError) {
           console.error('Erreur traitement fichier:', innerError);
@@ -221,6 +224,51 @@ export default function ReportsScreen() {
     }
   };
 
+  const handleDeleteReport = async (report) => {
+    // Confirmation avant suppression
+    Alert.alert(
+      'Supprimer le rapport',
+      `Êtes-vous sûr de vouloir supprimer le rapport "${report.title}" ?\n\nCette action est irréversible.`,
+      [
+        {
+          text: 'Annuler',
+          style: 'cancel'
+        },
+        {
+          text: 'Supprimer',
+          style: 'destructive',
+          onPress: () => confirmDeleteReport(report)
+        }
+      ]
+    );
+  };
+
+  const confirmDeleteReport = async (report) => {
+    try {
+      setDeletingReport(report.id);
+      console.log('Suppression rapport:', report.id);
+
+      const response = await deleteReport(report.id);
+
+      if (response.success) {
+        // Mettre à jour la liste des rapports
+        setReportsHistory(prev => prev.filter(r => r.id !== report.id));
+
+        Alert.alert(
+          '✅ Rapport supprimé',
+          'Le rapport a été supprimé avec succès.'
+        );
+      } else {
+        Alert.alert('⚠️ Erreur', response.message || 'Impossible de supprimer le rapport.');
+      }
+    } catch (error) {
+      console.error('Erreur suppression rapport:', error);
+      Alert.alert('⚠️ Erreur', 'Une erreur est survenue lors de la suppression du rapport.');
+    } finally {
+      setDeletingReport(null);
+    }
+  };
+
   const renderReportTypeCard = (reportType) => (
     <TouchableOpacity
       key={reportType.id}
@@ -252,27 +300,39 @@ export default function ReportsScreen() {
     </TouchableOpacity>
   );
 
-  const renderGenerateModal = () => (
-    <Modal
-      visible={showGenerateModal}
-      transparent
-      animationType="slide"
-      onRequestClose={() => setShowGenerateModal(false)}
-    >
+  const renderGenerateModal = () => {
+    console.log('renderGenerateModal appelé, showGenerateModal:', showGenerateModal);
+
+    return (
+      <Modal
+        visible={showGenerateModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowGenerateModal(false)}
+      >
       <View style={styles.modalOverlay}>
-        <View style={[styles.modalContainer, { backgroundColor: colors.background }]}>
-          <View style={styles.modalHeader}>
-            <Text style={[styles.modalTitle, { color: colors.primary }]}>
+        <View style={[
+          styles.modalContainer,
+          {
+            backgroundColor: colors.background || '#FFFFFF' // Fallback blanc
+          }
+        ]}>
+          <View style={[styles.modalHeader, { borderBottomColor: colors.border || '#E5E5E5' }]}>
+            <Text style={[styles.modalTitle, { color: colors.primary || '#000000' }]}>
               Générer un rapport
             </Text>
             <TouchableOpacity onPress={() => setShowGenerateModal(false)}>
-              <Ionicons name="close" size={24} color={colors.textSecondary} />
+              <Ionicons name="close" size={24} color={colors.textSecondary || '#666666'} />
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.modalContent}>
+          <ScrollView
+            style={styles.modalContent}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.modalScrollContent}
+          >
             {/* Sélection du type de rapport */}
-            <Text style={[styles.sectionLabel, { color: colors.primary }]}>
+            <Text style={[styles.sectionLabel, { color: colors.primary || '#000000' }]}>
               Type de rapport
             </Text>
             <View style={styles.reportTypesGrid}>
@@ -287,20 +347,20 @@ export default function ReportsScreen() {
                 </Text>
 
                 <View style={styles.parameterRow}>
-                  <Text style={[styles.parameterLabel, { color: colors.text }]}>
+                  <Text style={[styles.parameterLabel, { color: colors.textPrimary }]}>
                     Année
                   </Text>
                   <TextInput
                     style={[
                       styles.parameterInput,
-                      { 
+                      {
                         backgroundColor: colors.background,
                         borderColor: colors.border,
-                        color: colors.text 
+                        color: colors.textPrimary
                       }
                     ]}
                     value={reportParams.year.toString()}
-                    onChangeText={(text) => 
+                    onChangeText={(text) =>
                       setReportParams(prev => ({ ...prev, year: parseInt(text) || new Date().getFullYear() }))
                     }
                     keyboardType="numeric"
@@ -309,20 +369,20 @@ export default function ReportsScreen() {
                 </View>
 
                 <View style={styles.parameterRow}>
-                  <Text style={[styles.parameterLabel, { color: colors.text }]}>
+                  <Text style={[styles.parameterLabel, { color: colors.textPrimary }]}>
                     Mois (optionnel)
                   </Text>
                   <TextInput
                     style={[
                       styles.parameterInput,
-                      { 
+                      {
                         backgroundColor: colors.background,
                         borderColor: colors.border,
-                        color: colors.text 
+                        color: colors.textPrimary
                       }
                     ]}
                     value={reportParams.month?.toString() || ''}
-                    onChangeText={(text) => 
+                    onChangeText={(text) =>
                       setReportParams(prev => ({ ...prev, month: text ? parseInt(text) : null }))
                     }
                     keyboardType="numeric"
@@ -341,7 +401,7 @@ export default function ReportsScreen() {
                     size={20}
                     color={reportParams.include_charts ? colors.secondary : colors.textSecondary}
                   />
-                  <Text style={[styles.checkboxText, { color: colors.text }]}>
+                  <Text style={[styles.checkboxText, { color: colors.textPrimary }]}>
                     Inclure les graphiques
                   </Text>
                 </TouchableOpacity>
@@ -355,12 +415,24 @@ export default function ReportsScreen() {
                     size={20}
                     color={reportParams.include_details ? colors.secondary : colors.textSecondary}
                   />
-                  <Text style={[styles.checkboxText, { color: colors.text }]}>
-                    Inclure les détails
+                  <Text style={[styles.checkboxText, { color: colors.textPrimary }]}>
+                    Inclure les détails complets
                   </Text>
                 </TouchableOpacity>
+
+                {reportParams.include_charts && (
+                  <View style={[styles.chartNote, { backgroundColor: colors.secondary + '10', borderColor: colors.secondary + '30' }]}>
+                    <Ionicons name="information-circle" size={16} color={colors.secondary} />
+                    <Text style={[styles.chartNoteText, { color: colors.secondary }]}>
+                      Les graphiques seront inclus sous forme de statistiques détaillées dans le rapport
+                    </Text>
+                  </View>
+                )}
               </View>
             )}
+
+            {/* Espacement pour s'assurer que le contenu est visible */}
+            <View style={{ height: 20 }} />
           </ScrollView>
 
           <View style={styles.modalActions}>
@@ -396,10 +468,12 @@ export default function ReportsScreen() {
         </View>
       </View>
     </Modal>
-  );
+    );
+  };
 
   const renderHistoryItem = (report) => {
     const isDownloading = downloadingReport === report.id;
+    const isDeleting = deletingReport === report.id;
     const statusColor = {
       'pending': colors.warning || '#F59E0B',
       'processing': colors.secondary,
@@ -421,14 +495,29 @@ export default function ReportsScreen() {
               Généré le {formatDate(report.created_at, 'medium')}
             </Text>
           </View>
-          
-          <View style={[styles.statusBadge, { backgroundColor: statusColor + '20' }]}>
-            <Text style={[styles.statusText, { color: statusColor }]}>
-              {report.status === 'pending' && 'En attente'}
-              {report.status === 'processing' && 'En cours'}
-              {report.status === 'completed' && 'Terminé'}
-              {report.status === 'failed' && 'Échec'}
-            </Text>
+
+          <View style={styles.headerActions}>
+            <View style={[styles.statusBadge, { backgroundColor: statusColor + '20' }]}>
+              <Text style={[styles.statusText, { color: statusColor }]}>
+                {report.status === 'pending' && 'En attente'}
+                {report.status === 'processing' && 'En cours'}
+                {report.status === 'completed' && 'Terminé'}
+                {report.status === 'failed' && 'Échec'}
+              </Text>
+            </View>
+
+            {/* Bouton de suppression */}
+            <TouchableOpacity
+              style={[styles.deleteButton, { opacity: isDeleting ? 0.7 : 1 }]}
+              onPress={() => handleDeleteReport(report)}
+              disabled={isDeleting}
+            >
+              {isDeleting ? (
+                <ActivityIndicator size="small" color={colors.error} />
+              ) : (
+                <Ionicons name="trash-outline" size={18} color={colors.error} />
+              )}
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -443,7 +532,7 @@ export default function ReportsScreen() {
             <TouchableOpacity
               style={[
                 styles.downloadButton,
-                { 
+                {
                   backgroundColor: colors.secondary,
                   opacity: isDownloading ? 0.7 : 1
                 }
@@ -491,13 +580,16 @@ export default function ReportsScreen() {
               Rapports d'activité
             </Text>
             <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>
-              Générez et téléchargez vos rapports personnalisés
+              Générez des rapports basés sur vos vraies données (contrats, IPM, attestations)
             </Text>
           </View>
           
           <TouchableOpacity
             style={[styles.generateButton, { backgroundColor: colors.secondary }]}
-            onPress={() => setShowGenerateModal(true)}
+            onPress={() => {
+              console.log('Ouverture modal génération rapport');
+              setShowGenerateModal(true);
+            }}
           >
             <Ionicons name="add" size={20} color={colors.textTertiary} />
             <Text style={[styles.generateButtonText, { color: colors.textTertiary }]}>
@@ -533,11 +625,14 @@ export default function ReportsScreen() {
                 Aucun rapport disponible
               </Text>
               <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-                Créez votre premier rapport en appuyant sur "Nouveau" ci-dessus
+                Créez votre premier rapport avec vos données réelles (contrats, attestations, IPM)
               </Text>
               <TouchableOpacity
                 style={[styles.emptyButton, { backgroundColor: colors.secondary }]}
-                onPress={() => setShowGenerateModal(true)}
+                onPress={() => {
+                  console.log('Création premier rapport - ouverture modal');
+                  setShowGenerateModal(true);
+                }}
               >
                 <Ionicons name="add" size={20} color={colors.textTertiary} />
                 <Text style={[styles.emptyButtonText, { color: colors.textTertiary }]}>
@@ -638,6 +733,11 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 12,
   },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   historyTitle: {
     fontSize: 16,
     fontWeight: '600',
@@ -679,6 +779,16 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     marginLeft: 6,
+  },
+  deleteButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(239, 68, 68, 0.1)', // Rouge transparent
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.3)',
   },
 
   // Empty state
@@ -729,7 +839,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalContainer: {
-    maxHeight: '90%',
+    flex: 0.9, // Utilise 90% de la hauteur disponible
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     overflow: 'hidden',
@@ -752,8 +862,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   modalContent: {
+    flex: 1,
+  },
+  modalScrollContent: {
     paddingHorizontal: 20,
     paddingVertical: 16,
+    paddingBottom: 40, // Extra padding pour s'assurer que le contenu est visible
   },
   sectionLabel: {
     fontSize: 16,
@@ -829,6 +943,21 @@ const styles = StyleSheet.create({
   checkboxText: {
     fontSize: 14,
     marginLeft: 12,
+  },
+  chartNote: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    marginTop: 12,
+  },
+  chartNoteText: {
+    fontSize: 12,
+    marginLeft: 8,
+    flex: 1,
+    lineHeight: 16,
   },
   modalActions: {
     flexDirection: 'row',
