@@ -7,7 +7,8 @@ import { Alert, TouchableOpacity, Text } from 'react-native';
 import * as Device from 'expo-device';
 
 // **IMPORTANT: Mettez à jour cette URL avec l'adresse IP et le port du  backend Laravel**
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.47:8000/api'; //Variable d'environnement en priorité
+// const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.47:8000/api'; //Variable d'environnement en priorité pour la production
+const API_URL = 'http://192.168.1.47:8000/api'; //Variable d'environnement en priorité pour le développement
 
 // Variable pour éviter la suppression immédiate du token après connexion
 let recentTokenSet = false;
@@ -1154,7 +1155,7 @@ export const getAffiliatedStructures = async (page = 1, perPage = 10) => {
     }
 
     const response = await api.get(`/interim/affiliated-structures?page=${page}&per_page=${perPage}`);
-    return response.data; // 👈 PAS response.data.data
+    return response.data; //  PAS response.data.data
   } catch (error) {
     // Ne pas logguer l'erreur si c'est un 401 et qu'on n'a plus de token
     const token = await AsyncStorage.getItem('user_token');
@@ -1477,6 +1478,17 @@ export const sendAttestationRequest = async (data) => {
     return response.data;
   } catch (error) {
     console.error("Échec de l'appel API sendAttestationRequest:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+// Récupérer les demandes d'attestation de l'utilisateur
+export const getAttestationRequests = async () => {
+  try {
+    const response = await api.get('/interim/attestation-requests');
+    return response.data;
+  } catch (error) {
+    console.error("Échec de l'appel API getAttestationRequests:", error.response?.data || error.message);
     throw error;
   }
 };
