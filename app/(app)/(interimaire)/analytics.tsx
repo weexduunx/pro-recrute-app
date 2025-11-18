@@ -273,7 +273,7 @@ export default function AnalyticsScreen() {
   };
 
   const renderStatCard = (title, value, change = null, iconName, color = colors.primary) => (
-    <View style={[styles.statCard, { backgroundColor: colors.surface || colors.background }]}>
+    <View style={[styles.statCard, { backgroundColor: colors.cardBackground || colors.background }]}>
       <View style={styles.statHeader}>
         <View style={[styles.statIcon, { backgroundColor: color + '20' }]}>
           <Ionicons name={iconName as any} size={20} color={color} />
@@ -369,10 +369,10 @@ export default function AnalyticsScreen() {
           </View>
           <View style={styles.societyDetails}>
             <Text style={[styles.societyName, { color: colors.primary }]}>
-              {dashboardStats.current_society || 'Aucune structure assignée'}
+              {(dashboardStats as any)?.current_society || 'Aucune structure assignée'}
             </Text>
             <Text style={[styles.societyStats, { color: colors.textSecondary }]}>
-              {safeFormatNumber(dashboardStats.active_contracts)} prises en charge - {safeFormatNumber(dashboardStats.unique_societies)} structures au total
+              {safeFormatNumber((dashboardStats as any)?.active_contracts || 0)} prises en charge - {safeFormatNumber((dashboardStats as any)?.unique_societies || 0)} structures au total
             </Text>
           </View>
         </View>
@@ -399,18 +399,18 @@ export default function AnalyticsScreen() {
 
     // Calcul du total des remboursements (somme de tous les remboursements)
     const totalRemboursements = allMedicalData.reduce((sum, item) => {
-      return sum + (parseFloat(item.remboursement) || 0);
+      return sum + (parseFloat((item as any).remboursement) || 0);
     }, 0);
 
     // Calcul du total des retenus (somme de tous les montants * taux_retenu)  
     const totalRetenus = allMedicalData.reduce((sum, item) => {
-      const montant = parseFloat(item.montant) || 0;
-      const tauxRetenu = parseFloat(item.retenue) || 0; // Le taux de retenue depuis l'API
+      const montant = parseFloat((item as any).montant) || 0;
+      const tauxRetenu = parseFloat((item as any).retenue) || 0; // Le taux de retenue depuis l'API
       return sum + tauxRetenu; // retenue est déjà calculée côté serveur
     }, 0);
-
+    
     return (
-      <View style={[styles.section, { backgroundColor: colors.surface || colors.background }]}>
+      <View style={[styles.section, { backgroundColor: colors.cardBackground || colors.background }]}>
         <Text style={[styles.sectionTitle, { color: colors.primary }]}>
           Analyse financière des soins
         </Text>
@@ -441,27 +441,27 @@ export default function AnalyticsScreen() {
           const currentYear = selectedYear;
           
           allMedicalData.forEach(item => {
-            if (item.date) {
-              const date = new Date(item.date);
+            if ((item as any).date) {
+              const date = new Date((item as any).date);
               if (date.getFullYear() === currentYear) {
                 const monthKey = date.getMonth();
-                if (!monthlyData[monthKey]) {
-                  monthlyData[monthKey] = {
+                if (!(monthlyData as any)[monthKey]) {
+                  (monthlyData as any)[monthKey] = {
                     month: monthKey,
                     month_short: date.toLocaleDateString('fr-FR', { month: 'short' }),
                     remboursements: 0,
                     retenues: 0
                   };
                 }
-                monthlyData[monthKey].remboursements += parseFloat(item.remboursement) || 0;
-                monthlyData[monthKey].retenues += parseFloat(item.retenue) || 0;
+                (monthlyData as any)[monthKey].remboursements += parseFloat((item as any).remboursement) || 0;
+                (monthlyData as any)[monthKey].retenues += parseFloat((item as any).retenue) || 0;
               }
             }
           });
           
-          const monthlyArray = Object.values(monthlyData).sort((a, b) => a.month - b.month);
-          const maxRemboursements = Math.max(...monthlyArray.map(m => m.remboursements), 1);
-          const maxRetenues = Math.max(...monthlyArray.map(m => m.retenues), 1);
+          const monthlyArray = Object.values(monthlyData).sort((a, b) => (a as any).month - (b as any).month);
+          const maxRemboursements = Math.max(...monthlyArray.map(m => (m as any).remboursements), 1);
+          const maxRetenues = Math.max(...monthlyArray.map(m => (m as any).retenues), 1);
           const maxValue = Math.max(maxRemboursements, maxRetenues);
           
           if (monthlyArray.length > 0) {
@@ -483,8 +483,8 @@ export default function AnalyticsScreen() {
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                   <View style={styles.evolutionChart}>
                     {monthlyArray.map((month, index) => {
-                      const rembHeight = Math.max(4, (month.remboursements / maxValue) * 80);
-                      const retenueHeight = Math.max(4, (month.retenues / maxValue) * 80);
+                      const rembHeight = Math.max(4, ((month as any).remboursements / maxValue) * 80);
+                      const retenueHeight = Math.max(4, ((month as any).retenues / maxValue) * 80);
                       
                       return (
                         <View key={index} style={styles.monthColumn}>
@@ -502,7 +502,7 @@ export default function AnalyticsScreen() {
                           
                           {/* Label du mois */}
                           <Text style={[styles.monthLabel, { color: colors.textSecondary }]}>
-                            {month.month_short}
+                            {(month as { month_short: string }).month_short}
                           </Text>
                           
                           {/* Barre retenues (vers le bas, rouge) */}
@@ -519,10 +519,10 @@ export default function AnalyticsScreen() {
                           
                           {/* Montants */}
                           <Text style={[styles.monthAmount, { color: colors.success || '#10B981', fontSize: 9 }]}>
-                            +{safeFormatCurrency(month.remboursements)}
+                            +{safeFormatCurrency((month as { remboursements: number }).remboursements)}
                           </Text>
                           <Text style={[styles.monthAmount, { color: colors.error || '#EF4444', fontSize: 9 }]}>
-                            -{safeFormatCurrency(month.retenues)}
+                            -{safeFormatCurrency((month as { retenues: number }).retenues)}
                           </Text>
                         </View>
                       );
@@ -545,7 +545,7 @@ export default function AnalyticsScreen() {
     // Calculs des nouvelles métriques
     const totalActes = allMedicalData.length;
     const actesRefuses = allMedicalData.filter(item => 
-      item.exclu && (item.exclu === '1' || item.exclu === 1 || item.exclu === true)
+(item as any).exclu && ((item as any).exclu === '1' || (item as any).exclu === 1 || (item as any).exclu === true)
     ).length;
     const actesCouvert = totalActes - actesRefuses;
     const tauxCouverture = totalActes > 0 ? Math.round((actesCouvert / totalActes) * 100) : 0;
@@ -553,8 +553,8 @@ export default function AnalyticsScreen() {
     // Structures partenaires uniques
     const structuresUniques = new Set();
     [...consultationsList, ...examensList, ...soinsList].forEach(item => {
-      if (item.structure && item.structure !== 'Non spécifiée') {
-        structuresUniques.add(item.structure);
+      if ((item as any).structure && (item as any).structure !== 'Non spécifiée') {
+        structuresUniques.add((item as any).structure);
       }
     });
     const nbStructures = structuresUniques.size;
@@ -563,8 +563,8 @@ export default function AnalyticsScreen() {
     // Spécialités consultées uniques (à partir du type de consultation)
     const specialitesUniques = new Set();
     [...consultationsList, ...examensList, ...soinsList].forEach(item => {
-      if (item.type && item.type !== 'Non spécifié') {
-        specialitesUniques.add(item.type);
+      if ((item as any).type && (item as any).type !== 'Non spécifié') {
+        specialitesUniques.add((item as any).type);
       }
     });
     const nbSpecialites = specialitesUniques.size;
@@ -638,7 +638,7 @@ export default function AnalyticsScreen() {
             </View>
             <View style={styles.ipmContent}>
               <Text style={[styles.ipmValue, { color: colors.primary }]}>
-                {safeFormatNumber(ipmStats?.total_feuilles_soins || 0)}
+                {safeFormatNumber((ipmStats as any)?.total_feuilles_soins || 0)}
               </Text>
               <Text style={[styles.ipmLabel, { color: colors.textSecondary }]}>
                 Feuilles de soins

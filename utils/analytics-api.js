@@ -237,10 +237,34 @@ export const downloadReport = async (reportId) => {
 // Obtenir l'historique des rapports générés
 export const getReportsHistory = async () => {
   try {
+    console.log('getReportsHistory: Début de l\'appel API...');
     const response = await api.get('/interim/analytics/reports');
+    console.log('getReportsHistory: Réponse reçue:', response.status, response.data);
     return response.data;
   } catch (error) {
-    console.error("Échec de l'appel API getReportsHistory:", error.response?.data || error.message);
+    console.error("getReportsHistory: Erreur complète:", error);
+    console.error("getReportsHistory: Status:", error.response?.status);
+    console.error("getReportsHistory: Data:", error.response?.data);
+    console.error("getReportsHistory: Message:", error.message);
+
+    // Retourner une structure par défaut pour éviter les plantages
+    return {
+      success: false,
+      message: error.response?.data?.message || error.message || 'Erreur de connexion',
+      data: {
+        reports: []
+      }
+    };
+  }
+};
+
+// Supprimer un rapport généré
+export const deleteReport = async (reportId) => {
+  try {
+    const response = await api.delete(`/interim/analytics/reports/${reportId}`);
+    return response.data;
+  } catch (error) {
+    console.error("Échec de l'appel API deleteReport:", error.response?.data || error.message);
     throw error;
   }
 };
@@ -323,8 +347,8 @@ export const REPORT_TYPES = [
   },
   {
     id: 'work_activity',
-    label: 'Activité de travail',
-    description: 'Contrats, heures travaillées, structures',
+    label: 'Rapport contractuel',
+    description: 'Contrats, heures travaillées, sociétés employeurs',
     icon: 'briefcase'
   },
   {

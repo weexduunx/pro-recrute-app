@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { AppState } from 'react-native';
 import { getUnreadNotificationCount } from '../utils/interim-notifications-api';
 import { getUnreadCandidatNotificationCount } from '../utils/candidat-notifications-api';
@@ -16,6 +16,7 @@ export const useNotifications = (): NotificationHook => {
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [lastCount, setLastCount] = useState(0);
+  const isRefreshingRef = useRef(false);
 
   const refreshUnreadCount = useCallback(async () => {
     if (!user || (user.role !== 'interimaire' && user.role !== 'user')) {
@@ -23,7 +24,13 @@ export const useNotifications = (): NotificationHook => {
       return;
     }
 
+    // Éviter les requêtes simultanées
+    if (isRefreshingRef.current) {
+      return;
+    }
+
     try {
+      isRefreshingRef.current = true;
       setLoading(true);
       let totalCount = 0;
 
@@ -64,6 +71,7 @@ export const useNotifications = (): NotificationHook => {
       setUnreadCount(0);
     } finally {
       setLoading(false);
+      isRefreshingRef.current = false;
     }
   }, [user]);
 
@@ -87,9 +95,9 @@ export const useNotifications = (): NotificationHook => {
       let pollingInterval;
 
       if (appState === 'active') {
-        pollingInterval = 5 * 1000; // 5 secondes quand l'app est active
+        pollingInterval = 30 * 1000; // 30 secondes quand l'app est active (au lieu de 5)
       } else if (appState === 'background') {
-        pollingInterval = 30 * 1000; // 30 secondes en arrière-plan
+        pollingInterval = 2 * 60 * 1000; // 2 minutes en arrière-plan
       } else {
         return; // Pas de polling si l'app est inactive
       }

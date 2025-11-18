@@ -4,7 +4,7 @@ import CustomHeader from '../../../components/CustomHeader';
 import { useAuth } from '../../../components/AuthProvider';
 import { useTheme } from '../../../components/ThemeContext';
 import { useLanguage } from '../../../components/LanguageContext';
-import { getInterimAttestations, getDetailsUserGbg, getPdf, getContractHistory, getCertificatInfo, getCertificatPdf, fetchEncryptedTypes, sendAttestationRequest } from '../../../utils/api';
+import { getInterimAttestations, getDetailsUserGbg, getPdf, getContractHistory, getCertificatInfo, getCertificatPdf, fetchEncryptedTypes, sendAttestationRequest, getAttestationRequests } from '../../../utils/api';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import Toast from 'react-native-toast-message';
@@ -44,6 +44,7 @@ export default function HrFileScreen() {
   const { t } = useLanguage();
 
   const [attestations, setAttestations] = useState<Attestation[]>([]);
+  const [attestationRequests, setAttestationRequests] = useState<any[]>([]);
   const [detailsUser, setDetailsUser] = useState<DetailsUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -56,7 +57,7 @@ export default function HrFileScreen() {
   const [certificat, setCertificat] = useState<any>(null);
   const [showDownloadBtn, setShowDownloadBtn] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  
+
   // États pour le modal de demande d'attestation
   const [showAttestationModal, setShowAttestationModal] = useState(false);
   const [selectedContractId, setSelectedContractId] = useState<number | undefined>(undefined);
@@ -112,8 +113,19 @@ export default function HrFileScreen() {
     setLoading(true);
     setError(null);
     try {
-      const fetchedAttestations = await getInterimAttestations();
-      setAttestations(fetchedAttestations);
+      const response = await getInterimAttestations();
+
+      // Extraire les attestations selon la structure de la réponse
+      let attestations = [];
+      if (response && response.data && Array.isArray(response.data)) {
+        attestations = response.data;
+      } else if (Array.isArray(response)) {
+        attestations = response;
+      } else if (response && response.attestations && Array.isArray(response.attestations)) {
+        attestations = response.attestations;
+      }
+
+      setAttestations(attestations);
     } catch (err: any) {
       console.error("Erreur de chargement des attestations:", err);
       setError(err.message || t("Impossible de charger les attestations."));
@@ -121,6 +133,21 @@ export default function HrFileScreen() {
       setLoading(false);
     }
   }, [user, t]);
+
+  // Charger les demandes d'attestation
+  const loadAttestationRequests = useCallback(async () => {
+    if (!user) {
+      setAttestationRequests([]);
+      return;
+    }
+    try {
+      const requests = await getAttestationRequests();
+      setAttestationRequests(Array.isArray(requests) ? requests : []);
+    } catch (err: any) {
+      console.error("Erreur de chargement des demandes d'attestation:", err);
+      setAttestationRequests([]);
+    }
+  }, [user]);
 
   const handleRequestAttestation = () => {
     setShowAttestationModal(true);
@@ -137,7 +164,7 @@ export default function HrFileScreen() {
       Alert.alert(t('Erreur'), t('Veuillez sélectionner un contrat.'));
       return;
     }
-    
+
     if (!attestationMessage.trim()) {
       Alert.alert(t('Erreur'), t('Veuillez écrire votre message.'));
       return;
@@ -147,27 +174,29 @@ export default function HrFileScreen() {
     try {
       // Trouver le contrat sélectionné
       const selectedContract = contractHistory.find((contract: any) => contract.id === selectedContractId);
-      
+
       // Préparer les données pour l'API backend
       const requestData = {
         contract_id: selectedContractId,
         message: attestationMessage,
         recipient_email: 'idy.ndiouck@gbg.sn',
         contract_info: {
-          society_name: selectedContract?.society_name,
-          date_debut: selectedContract?.date_debut,
-          date_terminaison: selectedContract?.date_terminaison
+          society_name: (selectedContract as any)?.society_name,
+          date_debut: (selectedContract as any)?.date_debut,
+          date_terminaison: (selectedContract as any)?.date_terminaison
         }
       };
 
       // Appel à l'API backend pour envoyer l'email
       const response = await sendAttestationRequest(requestData);
-      
+
       Alert.alert(t('Succès'), t('Votre demande d\'attestation a été envoyée avec succès.'));
       closeAttestationModal();
+      // Recharger les demandes d'attestation pour afficher la nouvelle demande
+      await loadAttestationRequests();
     } catch (error) {
       console.error('Erreur envoi attestation:', error);
-      const errorMessage = error.response?.data?.message || t('Impossible d\'envoyer la demande. Veuillez réessayer.');
+      const errorMessage = (error as any).response?.data?.message || t('Impossible d\'envoyer la demande. Veuillez réessayer.');
       Alert.alert(t('Erreur'), errorMessage);
     } finally {
       setSendingAttestation(false);
@@ -225,9 +254,10 @@ export default function HrFileScreen() {
     const fetchContractHistory = async () => {
       try {
         const data = await getContractHistory();
-        setContractHistory(data);
+        setContractHistory(data || []);
       } catch (err) {
         console.error('Erreur chargement historique contrats:', err);
+        setContractHistory([]);
         Toast.show({
           type: 'error',
           text1: 'Erreur',
@@ -259,7 +289,9 @@ export default function HrFileScreen() {
 
   useEffect(() => {
     fetchEncryptedTypes().then(setEncryptedTypes).catch(console.error);
-  }, []);
+    // Charger les demandes d'attestation au montage
+    loadAttestationRequests();
+  }, [loadAttestationRequests]);
 
   const handleAvatarPress = () => { router.push('/(app)/profile-details'); };
 
@@ -269,6 +301,7 @@ export default function HrFileScreen() {
     try {
       await Promise.all([
         loadAttestations(),
+        loadAttestationRequests(),
         loadCertificats()
       ]);
     } catch (error) {
@@ -455,7 +488,7 @@ export default function HrFileScreen() {
   };
 
 
-  const filteredContracts = contractHistory.filter((c) => {
+  const filteredContracts = (contractHistory || []).filter((c) => {
     return selectedFilter === 'Tous' || (c as { statut: string }).statut === selectedFilter;
   });
 
@@ -574,10 +607,10 @@ export default function HrFileScreen() {
                             </View>
                             {contrat.affectations?.length > 0 && (
                               <View style={[modernStyles.infoBox, { backgroundColor: colors.secondary + '08' }]}>
-                                <Text style={[modernStyles.sectionSubtitle, { color: colors.textPrimary, marginBottom: 8 }]}>
+                                <Text style={[simpleStyles.infoText, { color: colors.textPrimary, marginBottom: 8 }]}>
                                   {t("Affectations")}
                                 </Text>
-                                {contrat.affectations.map((affectation, idx) => (
+                                {contrat.affectations.map((affectation: { dateAffectation: string; structure: string }, idx: number) => (
                                   <View key={idx} style={modernStyles.infoRow}>
                                     <Ionicons name="location-outline" size={18} color={colors.secondary} style={modernStyles.icon} />
                                     <View style={modernStyles.infoContent}>
@@ -615,8 +648,8 @@ export default function HrFileScreen() {
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
       <CustomHeader title={t("Mon Dossier RH")} user={user} showBackButton={true} onAvatarPress={handleAvatarPress} />
-      <ScrollView 
-        contentContainerStyle={styles.scrollContent} 
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -644,7 +677,7 @@ export default function HrFileScreen() {
               >
                 <Text style={[
                   styles.filterText,
-                  { 
+                  {
                     color: selectedFilter === label ? colors.textTertiary : colors.textSecondary,
                     fontWeight: selectedFilter === label ? '600' : '400'
                   }
@@ -690,7 +723,7 @@ export default function HrFileScreen() {
                 <Text style={styles.retryButtonText}>{t('Réessayer')}</Text>
               </TouchableOpacity>
             </View>
-          ) : attestations.length === 0 ? (
+          ) : attestations.length === 0 && attestationRequests.length === 0 ? (
             <View style={[styles.emptyState, { backgroundColor: colors.cardBackground, position: 'relative', overflow: 'hidden' }]}>
               <Ionicons
                 name="file-tray-outline"
@@ -706,16 +739,67 @@ export default function HrFileScreen() {
               />
               <Ionicons name="file-tray-outline" size={48} color={colors.textSecondary} style={{ zIndex: 1 }} />
               <Text style={[styles.emptyTitle, { color: colors.textPrimary, zIndex: 1 }]}>{t('Aucune attestation trouvée')}</Text>
-              <Text style={[styles.emptyText, { color: colors.textSecondary, zIndex: 1 }]}>{t('Vos attestations apparaîtront ici.')}</Text>
+              <Text style={[styles.emptyText, { color: colors.textSecondary, zIndex: 1 }]}>{t('Vos attestations et demandes apparaîtront ici.')}</Text>
             </View>
           ) : (
-            <FlatList
-              data={attestations || []}
-              renderItem={renderCertificateItem}
-              keyExtractor={item => item?.attestation_id?.toString() ?? `item-${Math.random()}`}
-              scrollEnabled={false}
-              contentContainerStyle={styles.listContainer}
-            />
+            <>
+              {/* Demandes d'attestation en attente */}
+              {attestationRequests.filter(req => req.statut === 'en_attente').map((request, index) => (
+                <View key={`request-${request.id}-${index}`} style={[styles.cardItem, { backgroundColor: colors.cardBackground, borderColor: colors.warning + '40', borderWidth: 2, overflow: 'hidden' }]}>
+                  <Ionicons
+                    name="hourglass-outline"
+                    size={190}
+                    color={colors.warning + '15'}
+                    style={{
+                      position: 'absolute',
+                      right: -30,
+                      top: -10,
+                      zIndex: 0,
+                    }}
+                  />
+                  <View style={[styles.itemContent, { zIndex: 1 }]}>
+                    <View
+                      style={{
+                        backgroundColor: colors.warning + '20',
+                        paddingVertical: 4,
+                        paddingHorizontal: 10,
+                        borderRadius: 8,
+                        alignSelf: 'flex-start',
+                        marginBottom: 8,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          color: colors.warning,
+                          fontWeight: 'bold',
+                          fontSize: 13,
+                        }}
+                      >
+                        {t('Demande en attente')}
+                      </Text>
+                    </View>
+                    <Text style={[styles.itemTitle, { color: colors.textPrimary }]}>
+                      {t("Société :")} {request.society_name || t('Non spécifiée')}
+                    </Text>
+                    <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>
+                      {t("Demandé le :")} {new Date(request.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    </Text>
+                    <Text style={[styles.itemSubtitle, { color: colors.textSecondary, marginTop: 5 }]}>
+                      {t("Contrat ID :")} {request.contrat_id}
+                    </Text>
+                  </View>
+                </View>
+              ))}
+
+              {/* Attestations approuvées */}
+              <FlatList
+                data={attestations || []}
+                renderItem={renderCertificateItem}
+                keyExtractor={item => item?.attestation_id?.toString() ?? `item-${Math.random()}`}
+                scrollEnabled={false}
+                contentContainerStyle={styles.listContainer}
+              />
+            </>
           )}
 
         </View>
@@ -947,12 +1031,12 @@ export default function HrFileScreen() {
 
       {/* Modal de demande d'attestation */}
       <Modal visible={showAttestationModal} transparent animationType="slide">
-        <View style={{ 
-          flex: 1, 
-          backgroundColor: 'rgba(0, 0, 0, 0.5)', 
-          justifyContent: 'flex-end' 
+        <View style={{
+          flex: 1,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          justifyContent: 'flex-end'
         }}>
-          <View style={{ 
+          <View style={{
             backgroundColor: colors.background || '#FFFFFF',
             borderTopLeftRadius: 24,
             borderTopRightRadius: 24,
@@ -969,15 +1053,15 @@ export default function HrFileScreen() {
               borderBottomWidth: 1,
               borderBottomColor: colors.border || '#F3F4F6'
             }}>
-              <Text style={{ 
-                fontSize: 20, 
-                fontWeight: '700', 
-                color: colors.textPrimary || '#091e60' 
+              <Text style={{
+                fontSize: 20,
+                fontWeight: '700',
+                color: colors.textPrimary || '#091e60'
               }}>
                 {t('Demande d\'Attestation')}
               </Text>
-              <TouchableOpacity 
-                onPress={closeAttestationModal} 
+              <TouchableOpacity
+                onPress={closeAttestationModal}
                 style={{ padding: 8 }}
               >
                 <Ionicons name="close" size={24} color={colors.textSecondary} />
@@ -986,21 +1070,21 @@ export default function HrFileScreen() {
 
             <ScrollView style={{ padding: 20 }}>
               {/* Section Contrat */}
-              <Text style={{ 
-                fontSize: 16, 
-                fontWeight: 'bold', 
-                color: colors.textPrimary || '#091e60', 
-                marginBottom: 12 
+              <Text style={{
+                fontSize: 16,
+                fontWeight: 'bold',
+                color: colors.textPrimary || '#091e60',
+                marginBottom: 12
               }}>
                 {t('Sélectionner le contrat')}
               </Text>
-              
-              <View style={{ 
-                borderWidth: 1, 
-                borderColor: colors.border || '#E5E7EB', 
-                borderRadius: 8, 
+
+              <View style={{
+                borderWidth: 1,
+                borderColor: colors.border || '#E5E7EB',
+                borderRadius: 8,
                 marginBottom: 20,
-                backgroundColor: colors.cardBackground || '#F9FAFB' 
+                backgroundColor: colors.cardBackground || '#F9FAFB'
               }}>
                 <Picker
                   selectedValue={selectedContractId}
@@ -1009,33 +1093,33 @@ export default function HrFileScreen() {
                     // Générer un message par défaut quand un contrat est sélectionné
                     if (itemValue) {
                       const contract = contractHistory.find((c: any) => c.id === itemValue);
-                      const dateDebut = contract?.date_debut ? new Date(contract.date_debut).toLocaleDateString('fr-FR', {
+                      const dateDebut = contract?.date_debut ? new Date((contract as any).date_debut).toLocaleDateString('fr-FR', {
                         day: '2-digit',
-                        month: 'long', 
+                        month: 'long',
                         year: 'numeric'
                       }) : 'Date non spécifiée';
-                      
+
                       const userName = user?.name || 'Nom non spécifié';
-                      
+
                       const defaultMessage = `Madame, Monsieur,\n\nJe soussigné(e) ${userName}, vous prie de bien vouloir m'établir une attestation de travail pour le contrat effectué au sein de ${contract?.society_name || 'votre société'} à compter du ${dateDebut}.\n\nJe vous remercie par avance pour votre diligence.\n\nCordialement,\n${userName}`;
                       setAttestationMessage(defaultMessage);
                     }
                   }}
-                  style={{ 
-                    height: 50, 
-                    paddingHorizontal: 12, 
-                    color: colors.textPrimary || '#091e60' 
+                  style={{
+                    height: 50,
+                    paddingHorizontal: 12,
+                    color: colors.textPrimary || '#091e60'
                   }}
                 >
-                  <Picker.Item 
-                    label={t("-- Choisir un contrat --")} 
-                    value={undefined} 
+                  <Picker.Item
+                    label={t("-- Choisir un contrat --")}
+                    value={undefined}
                   />
                   {contractHistory.map((contract: any) => (
-                    <Picker.Item 
-                      key={contract.id} 
+                    <Picker.Item
+                      key={contract.id}
                       label={`${contract.society_name} (${contract.date_debut ? new Date(contract.date_debut).toLocaleDateString() : 'N/A'} - ${contract.date_terminaison ? new Date(contract.date_terminaison).toLocaleDateString() : 'En cours'})`}
-                      value={contract.id} 
+                      value={contract.id}
                     />
                   ))}
                 </Picker>
@@ -1044,22 +1128,22 @@ export default function HrFileScreen() {
               {/* Section Message */}
               {selectedContractId && (
                 <>
-                  <Text style={{ 
-                    fontSize: 16, 
-                    fontWeight: 'bold', 
-                    color: colors.textPrimary || '#091e60', 
-                    marginBottom: 12 
+                  <Text style={{
+                    fontSize: 16,
+                    fontWeight: 'bold',
+                    color: colors.textPrimary || '#091e60',
+                    marginBottom: 12
                   }}>
                     {t('Message de la demande')}
                   </Text>
-                  
+
                   <TextInput
-                    style={{ 
-                      borderWidth: 1, 
-                      borderColor: colors.border || '#E5E7EB', 
-                      borderRadius: 8, 
-                      padding: 12, 
-                      fontSize: 16, 
+                    style={{
+                      borderWidth: 1,
+                      borderColor: colors.border || '#E5E7EB',
+                      borderRadius: 8,
+                      padding: 12,
+                      fontSize: 16,
                       marginBottom: 20,
                       backgroundColor: colors.cardBackground || '#F9FAFB',
                       color: colors.textPrimary || '#091e60',
@@ -1074,11 +1158,11 @@ export default function HrFileScreen() {
                     onChangeText={setAttestationMessage}
                   />
 
-                  <Text style={{ 
-                    fontSize: 12, 
-                    color: colors.textSecondary, 
+                  <Text style={{
+                    fontSize: 12,
+                    color: colors.textSecondary,
                     marginBottom: 20,
-                    fontStyle: 'italic' 
+                    fontStyle: 'italic'
                   }}>
                     {t('Destinataire: idy.ndiouck@gbg.sn')}
                   </Text>
@@ -1087,12 +1171,12 @@ export default function HrFileScreen() {
 
               {/* Boutons d'action */}
               <TouchableOpacity
-                style={{ 
-                  backgroundColor: selectedContractId ? (colors.primary || '#091e60') : (colors.textSecondary || '#9CA3AF'), 
-                  padding: 12, 
-                  borderRadius: 8, 
-                  alignItems: 'center', 
-                  marginBottom: 12 
+                style={{
+                  backgroundColor: selectedContractId ? (colors.primary || '#091e60') : (colors.textSecondary || '#9CA3AF'),
+                  padding: 12,
+                  borderRadius: 8,
+                  alignItems: 'center',
+                  marginBottom: 12
                 }}
                 onPress={handleSendAttestation}
                 disabled={!selectedContractId || sendingAttestation}
@@ -1100,10 +1184,10 @@ export default function HrFileScreen() {
                 {sendingAttestation ? (
                   <ActivityIndicator color="#FFFFFF" size="small" />
                 ) : (
-                  <Text style={{ 
-                    color: '#FFFFFF', 
+                  <Text style={{
+                    color: '#FFFFFF',
                     fontWeight: 'bold',
-                    fontSize: 16 
+                    fontSize: 16
                   }}>
                     {t('Envoyer la demande')}
                   </Text>
@@ -1111,17 +1195,17 @@ export default function HrFileScreen() {
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={{ 
-                  backgroundColor: colors.border || '#E5E7EB', 
-                  padding: 12, 
-                  borderRadius: 8, 
-                  alignItems: 'center' 
+                style={{
+                  backgroundColor: colors.border || '#E5E7EB',
+                  padding: 12,
+                  borderRadius: 8,
+                  alignItems: 'center'
                 }}
                 onPress={closeAttestationModal}
               >
-                <Text style={{ 
-                  color: colors.textSecondary || '#6B7280', 
-                  fontWeight: 'bold' 
+                <Text style={{
+                  color: colors.textSecondary || '#6B7280',
+                  fontWeight: 'bold'
                 }}>
                   {t('Annuler')}
                 </Text>

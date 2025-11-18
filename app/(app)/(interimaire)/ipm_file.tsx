@@ -175,21 +175,36 @@ export default function IpmFileScreen() {
 
       while (hasMorePages && page <= 10) {
         const response = await getAffiliatedStructures(page, perPage);
+        console.log('loadAffiliatedStructures - Response page', page, ':', JSON.stringify(response, null, 2));
 
+        // Vérifier si la réponse indique un échec
         if (response && response.hasOwnProperty('success') && !response.success) {
+          console.log('loadAffiliatedStructures - Échec de la réponse:', response);
           setAffiliatedStructures([]);
           return;
         }
 
-        const structures = response.data || response || [];
-        const structuresArray = Array.isArray(structures) ? structures : [];
-        allStructures = [...allStructures, ...structuresArray];
-        hasMorePages = structuresArray.length === perPage;
+        // Extraire les structures selon la structure de la réponse
+        let structures = [];
+        if (response && response.data && Array.isArray(response.data)) {
+          structures = response.data;
+        } else if (Array.isArray(response)) {
+          structures = response;
+        } else if (response && response.data && response.data.data && Array.isArray(response.data.data)) {
+          structures = response.data.data;
+        }
+
+        console.log('loadAffiliatedStructures - Structures extraites page', page, ':', structures.length, 'structures');
+
+        allStructures = [...allStructures, ...structures];
+        hasMorePages = structures.length === perPage;
         page++;
       }
 
+      console.log('loadAffiliatedStructures - Total structures récupérées:', allStructures.length);
       setAffiliatedStructures(allStructures);
     } catch (err: any) {
+      console.error('loadAffiliatedStructures - Erreur:', err);
       if (err.response?.status === 401) {
         setAffiliatedStructures([]);
         return;
@@ -230,9 +245,14 @@ export default function IpmFileScreen() {
     }
   }, [loadLoans, loadFamilleMembers, loadPrisesEnChargeHistory, loadFeuillesDeSoinsHistory, loadAffiliatedStructures]);
 
-  const openRequestModal = (type: 'prise_en_charge' | 'feuille_de_soins') => {
+  const openRequestModal = async (type: 'prise_en_charge' | 'feuille_de_soins') => {
     setRequestType(type);
     setShowRequestModal(true);
+
+    // Si c'est une prise en charge, s'assurer que les structures sont chargées
+    if (type === 'prise_en_charge') {
+      await loadAffiliatedStructures();
+    }
 
     Animated.parallel([
       Animated.timing(fadeAnim, {
@@ -931,7 +951,43 @@ export default function IpmFileScreen() {
                     {t('Structure médicale')}
                   </Text>
                   {loadingStructures ? (
-                    <ActivityIndicator size="small" color={colors.primary} />
+                    <View style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      paddingVertical: 15,
+                      marginBottom: 20
+                    }}>
+                      <ActivityIndicator size="small" color={colors.primary} />
+                      <Text style={{
+                        marginLeft: 10,
+                        color: colors.textSecondary,
+                        fontSize: 14
+                      }}>
+                        {t('Chargement des structures...')}
+                      </Text>
+                    </View>
+                  ) : affiliatedStructures.length === 0 ? (
+                    <View style={{
+                      paddingVertical: 15,
+                      paddingHorizontal: 12,
+                      marginBottom: 20,
+                      borderWidth: 1,
+                      borderColor: colors.error + '30',
+                      backgroundColor: colors.error + '10',
+                      borderRadius: 8,
+                      flexDirection: 'row',
+                      alignItems: 'center'
+                    }}>
+                      <Ionicons name="alert-circle-outline" size={20} color={colors.error} />
+                      <Text style={{
+                        color: colors.error,
+                        marginLeft: 8,
+                        fontSize: 14,
+                        flex: 1
+                      }}>
+                        {t('Aucune structure affiliée disponible')}
+                      </Text>
+                    </View>
                   ) : (
                     <View style={{
                       borderWidth: 1,
