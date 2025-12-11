@@ -87,10 +87,7 @@ export default function CalendrierEntretiens({
     return days;
   }, [currentMonth]);
 
-  const renderCalendarDay = (date: Date | null, index: number) => {
-    if (!date) {
-      return <View key={`empty-${index}`} style={styles.emptyDay} />;
-    }
+  const renderCalendarDay = (date: Date, index: number) => {
 
     const dayEntretiens = getEntretiensForDate(date);
     const hasEntretiens = dayEntretiens.length > 0;
@@ -202,7 +199,9 @@ export default function CalendrierEntretiens({
 
       {/* Grille du calendrier */}
       <View style={styles.calendarGrid}>
-        {calendarDays.map((date, index) => renderCalendarDay(date, index))}
+        {calendarDays.map((date, index) => (
+          date ? renderCalendarDay(date, index) : <View key={`empty-${currentMonth.getMonth()}-${index}`} style={styles.emptyDay} />
+        ))}
       </View>
 
       {/* Légende */}

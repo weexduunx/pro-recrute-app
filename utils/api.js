@@ -6,9 +6,22 @@ import * as Sharing from 'expo-sharing';
 import { Alert, TouchableOpacity, Text } from 'react-native';
 import * as Device from 'expo-device';
 
-// **IMPORTANT: Mettez à jour cette URL avec l'adresse IP et le port du  backend Laravel**
-// const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.47:8000/api'; //Variable d'environnement en priorité pour la production
-const API_URL = 'http://192.168.1.47:8000/api'; //Variable d'environnement en priorité pour le développement
+// **IMPORTANT: Configuration dynamique pour émulateur vs appareil physique**
+// Détection automatique de l'environnement
+const getApiUrl = () => {
+  // Si on est sur un émulateur Android, utiliser 10.0.2.2
+  if (Device.isDevice === false && Device.osName === 'Android') {
+    return 'http://10.0.2.2:8000/api';
+  }
+  // Si on est sur un simulateur iOS, utiliser localhost
+  if (Device.isDevice === false && Device.osName === 'iOS') {
+    return 'http://127.0.0.1:8000/api';
+  }
+  // Pour les appareils physiques, utiliser l'IP du réseau local
+  return 'http://192.168.1.47:8000/api';
+};
+
+const API_URL = process.env.EXPO_PUBLIC_API_URL || getApiUrl();
 
 // Variable pour éviter la suppression immédiate du token après connexion
 let recentTokenSet = false;

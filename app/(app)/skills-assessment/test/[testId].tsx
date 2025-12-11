@@ -634,15 +634,15 @@ export default function SkillTestScreen() {
           <View style={styles.optionsContainer}>
             {question.options.map((option, index) => {
               const { text: optionText, value: optionValue } = getOptionData(option);
-              
+
               // Pour les questions à choix multiple, on peut avoir plusieurs réponses
-              const isSelected = question.type_question === 'multiple_choice' 
+              const isSelected = question.type_question === 'multiple_choice'
                 ? (Array.isArray(currentAnswer) ? currentAnswer.includes(optionValue) : currentAnswer === optionValue)
                 : (Array.isArray(currentAnswer) && currentAnswer.includes(optionValue));
-              
+
               return (
                 <TouchableOpacity
-                  key={index}
+                  key={`${question.id}-option-${index}-${optionValue}`}
                   style={[
                     styles.optionButton,
                     { 
@@ -695,12 +695,12 @@ export default function SkillTestScreen() {
           <View style={styles.optionsContainer}>
             {question.options.map((option, index) => {
               const { text: optionText, value: optionValue } = getOptionData(option);
-              
+
               const isSelected = currentAnswer === optionValue;
-              
+
               return (
                 <TouchableOpacity
-                  key={index}
+                  key={`${question.id}-qcu-option-${index}-${optionValue}`}
                   style={[
                     styles.optionButton,
                     { 

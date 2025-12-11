@@ -97,42 +97,17 @@ function RootLayoutContent() {
     return null; // ou un écran de chargement si nécessaire
   }
 
-  // Si l'utilisateur n'est pas authentifié, affiche la navigation publique (auth)
-  if (!isAuthenticated) {
-    return (
-      <>
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="(auth)" />
-        </Stack>
-
-        {/* Modal de configuration de mot de passe - disponible aussi en auth */}
-        {showPasswordSetupModal && pendingPasswordSetup && (
-          <PasswordSetupModal
-            visible={showPasswordSetupModal}
-            onDismiss={hidePasswordSetupModal}
-            userProvider={pendingPasswordSetup.provider}
-            userToken={pendingPasswordSetup.token}
-            onPasswordSet={async () => {
-              console.log('Mot de passe configuré avec succès');
-              if (user?.email) {
-                await markPasswordAsSetup(user.email);
-                console.log('Utilisateur marqué comme ayant configuré son mot de passe:', user.email);
-              }
-              hidePasswordSetupModal();
-            }}
-          />
-        )}
-      </>
-    );
-  }
-
   return (
     <>
       <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="(app)" />
+        {!isAuthenticated ? (
+          <Stack.Screen name="(auth)" />
+        ) : (
+          <Stack.Screen name="(app)" />
+        )}
       </Stack>
 
-      {/* Modal de configuration de mot de passe - disponible aussi dans l'app */}
+      {/* Modal de configuration de mot de passe - unique instance */}
       {showPasswordSetupModal && pendingPasswordSetup && (
         <PasswordSetupModal
           visible={showPasswordSetupModal}

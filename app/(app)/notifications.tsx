@@ -55,14 +55,29 @@ export default function NotificationsScreen() {
       }
 
       const response = await getCandidatNotifications(pageNum, 20);
-      
+
       if (response.success) {
         const newNotifications = response.notifications;
-        
+
         if (isRefresh || pageNum === 1) {
           setNotifications(newNotifications);
         } else {
-          setNotifications(prev => [...prev, ...newNotifications]);
+          setNotifications(prev => {
+            const combined = [...prev, ...newNotifications];
+            // Dédupliquer basé sur l'ID ou sur created_at + type si pas d'ID
+            const unique = combined.filter((notification, index, arr) => {
+              if (notification.id) {
+                return arr.findIndex(n => n.id === notification.id) === index;
+              } else {
+                return arr.findIndex(n =>
+                  n.created_at === notification.created_at &&
+                  n.type === notification.type &&
+                  n.title === notification.title
+                ) === index;
+              }
+            });
+            return unique;
+          });
         }
         
         setHasMore(newNotifications.length === 20);
@@ -452,7 +467,13 @@ export default function NotificationsScreen() {
         <FlatList
           data={notifications}
           renderItem={renderNotification}
-          keyExtractor={(item, index) => item.id?.toString() || `notification-${index}`}
+          keyExtractor={(item, index) => {
+            if (item.id) {
+              return `notif-${item.id}`;
+            }
+            // Si pas d'ID, créer une clé unique basée sur plusieurs propriétés
+            return `notif-${index}-${item.created_at || 'no-date'}-${item.type || 'no-type'}-${item.title?.substring(0, 10) || 'no-title'}`;
+          }}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={['#0f8e35']}
               tintColor="#0f8e35" />
