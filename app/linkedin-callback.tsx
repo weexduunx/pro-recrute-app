@@ -30,11 +30,39 @@ export default function LinkedInCallback() {
   const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
+    // Nettoyer les codes expirés au démarrage
+    cleanExpiredCodes();
+
     // Protection contre les appels multiples
-    if (!isProcessing && params.code) {
+    if (!isProcessing && params.code && status === 'loading') {
       handleLinkedInCallback();
     }
   }, [params.code, isProcessing]);
+
+  const cleanExpiredCodes = async () => {
+    try {
+      const usedCodesData = await AsyncStorage.getItem('used_linkedin_codes');
+      if (!usedCodesData) return;
+
+      const usedCodes = JSON.parse(usedCodesData);
+      const now = Date.now();
+      let hasChanges = false;
+
+      // Nettoyer les codes expirés (plus de 10 minutes)
+      Object.keys(usedCodes).forEach(storedCode => {
+        if (now - usedCodes[storedCode].timestamp > 10 * 60 * 1000) {
+          delete usedCodes[storedCode];
+          hasChanges = true;
+        }
+      });
+
+      if (hasChanges) {
+        await AsyncStorage.setItem('used_linkedin_codes', JSON.stringify(usedCodes));
+      }
+    } catch (error) {
+      console.warn('Erreur lors du nettoyage des codes LinkedIn:', error);
+    }
+  };
 
   const handleLinkedInCallback = async () => {
     if (isProcessing) {
@@ -102,11 +130,18 @@ export default function LinkedInCallback() {
       if (usedCodes[code]) {
         const codeData = usedCodes[code];
         console.log('Code LinkedIn déjà utilisé:', codeData);
-        
+
         if (codeData.success) {
           setStatus('success');
           setMessage('Vous êtes déjà connecté ! Redirection...');
-          // Laisser AuthProvider gérer la redirection automatiquement
+
+          // Redirection immédiate pour éviter la boucle
+          setTimeout(() => {
+            const userRole = codeData.role || 'candidat';
+            const isOtpVerified = codeData.is_otp_verified !== false;
+            const isContractActive = codeData.is_contract_active;
+            handleRedirect(true, userRole, isOtpVerified, isContractActive);
+          }, 1500);
           return;
         } else {
           throw new Error('Ce code d\'authentification a déjà été utilisé. Veuillez recommencer.');
@@ -183,14 +218,17 @@ export default function LinkedInCallback() {
         // Déclencher la redirection basée sur le rôle
         handleRedirect(true, userFromApi?.role, userFromApi?.is_otp_verified, userFromApi?.is_contract_active);
         
-        // Marquer le code comme réussi
+        // Marquer le code comme réussi avec plus d'informations pour éviter les boucles
         const updatedCodes = await AsyncStorage.getItem('used_linkedin_codes');
         const codesData = updatedCodes ? JSON.parse(updatedCodes) : {};
         codesData[code] = {
           timestamp: now,
           success: true,
           processing: false,
-          email: userFromApi.email
+          email: userFromApi.email,
+          role: userFromApi.role,
+          is_otp_verified: userFromApi.is_otp_verified,
+          is_contract_active: userFromApi.is_contract_active
         };
         await AsyncStorage.setItem('used_linkedin_codes', JSON.stringify(codesData));
         
