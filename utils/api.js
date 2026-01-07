@@ -7,7 +7,7 @@ import { Alert, TouchableOpacity, Text } from 'react-native';
 import * as Device from 'expo-device';
 
 // **IMPORTANT: Mettez à jour cette URL avec l'adresse IP et le port du  backend Laravel**
-const API_URL = 'http://192.168.1.144:8000/api' || process.env.EXPO_PUBLIC_API_URL; //Fallback pour le développement
+const API_URL = 'http://192.168.1.129:8000/api' || process.env.EXPO_PUBLIC_API_URL; //Fallback pour le développement
 
 console.log('API_URL configuré:', API_URL); //Debug
 
