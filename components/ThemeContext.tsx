@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useColorScheme } from 'react-native'; // Hook pour détecter le thème système
 
 // Définition des couleurs pour les modes clair et sombre
-const lightColors = {
+const lightColors = { 
   primary: '#091e60', // Bleu foncé
   secondary: '#0f8e35', // Vert
   background: '#F8FAFC', // Fond clair général
@@ -117,7 +117,7 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
   }, []);
 
   return (
-    <ThemeContext.Provider value={{ isDarkMode, toggleDarkMode, colors }}>
+    <ThemeContext.Provider value={{ isDarkMode, toggleDarkMode, colors: isDarkMode ? { ...darkColors, backgroundVert: '#4CAF50', textTertiary: '#FFFFFF', shadow: 'rgba(0, 0, 0, 0.7)' } : lightColors }}>
       {children}
     </ThemeContext.Provider>
   );

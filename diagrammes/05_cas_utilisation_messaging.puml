@@ -1,0 +1,94 @@
+@startuml Cas_Utilisation_Messaging
+title Diagramme de Cas d'Utilisation - Messagerie Instantanée
+
+left to right direction
+
+actor "Candidat" as candidat
+actor "Recruteur" as recruteur
+actor "Système de Notifications" as notif
+actor "Modérateur" as moderateur
+actor "WebSocket Server" as ws
+
+package "Messagerie et Communication" {
+  usecase "Démarrer conversation" as UC1
+  usecase "Envoyer message" as UC2
+  usecase "Recevoir message" as UC3
+  usecase "Rechercher conversations" as UC4
+  usecase "Consulter historique" as UC5
+  usecase "Partager fichiers" as UC6
+  usecase "Voir statuts lecture" as UC7
+  usecase "Gérer notifications" as UC8
+  usecase "Modérer contenu" as UC9
+  usecase "Bloquer utilisateur" as UC10
+  usecase "Archiver conversation" as UC11
+  usecase "Synchroniser multi-device" as UC12
+  usecase "Mode hors-ligne" as UC13
+  usecase "Chiffrer messages" as UC14
+}
+
+' Relations Candidat
+candidat --> UC1 : "Initier discussion"
+candidat --> UC2 : "Écrire message"
+candidat --> UC3 : "Lire messages"
+candidat --> UC4 : "Chercher conversations"
+candidat --> UC5 : "Voir historique"
+candidat --> UC6 : "Envoyer documents"
+candidat --> UC7 : "Voir si lu"
+candidat --> UC8 : "Configurer alertes"
+candidat --> UC10 : "Signaler utilisateur"
+candidat --> UC11 : "Archiver chat"
+
+' Relations Recruteur
+recruteur --> UC1
+recruteur --> UC2
+recruteur --> UC3
+recruteur --> UC4
+recruteur --> UC5
+recruteur --> UC6
+recruteur --> UC7
+recruteur --> UC8
+recruteur --> UC10
+recruteur --> UC11
+
+' Relations Système
+notif --> UC8 : "Envoyer notifications push"
+notif --> UC3 : "Alerter nouveau message"
+ws --> UC2 : "Transmettre temps réel"
+ws --> UC3 : "Livrer instantanément"
+ws --> UC12 : "Synchroniser appareils"
+
+' Relations Modérateur
+moderateur --> UC9 : "Contrôler contenu"
+moderateur --> UC10 : "Sanctionner utilisateur"
+
+' Inclusions et Extensions
+UC2 ..> UC14 : "<<include>>"
+UC3 ..> UC14 : "<<include>>"
+UC2 ..> UC12 : "<<include>>"
+UC3 ..> UC8 : "<<extend>>"
+UC6 ..> UC14 : "<<include>>"
+UC2 ..> UC13 : "<<extend>>"
+
+note right of UC6
+  Images
+  Documents PDF
+  Vidéos
+  Audio
+  Liens
+end note
+
+note bottom of UC14
+  End-to-End Encryption
+  Message Integrity
+  Forward Secrecy
+  Key Management
+end note
+
+note right of UC12
+  Real-time Sync
+  Conflict Resolution
+  State Consistency
+  Multi-device Support
+end note
+
+@enduml

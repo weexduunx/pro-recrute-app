@@ -7,7 +7,14 @@ import { getUserApplications, getRecommendedOffres, getCandidatEntretiensCalendr
 import { getAIJobRecommendations } from '../../utils/ai-api'; 
 import { router, useRouter  } from 'expo-router';
 import CustomHeader from '../../components/CustomHeader';
-import { useTheme } from '../../components/ThemeContext'; 
+import { useTheme } from '../../components/ThemeContext';
+import InactivityAlert from '../../components/InactivityAlert'; 
+
+// Fonction helper pour s'assurer qu'on a toujours un tableau
+const ensureArray = (data: any): any[] => {
+  if (Array.isArray(data)) return data;
+  return [];
+};
 
 /**
  * Écran du Tableau de bord de l'utilisateur :
@@ -104,13 +111,14 @@ export default function DashboardScreen() {
       setLoadingApplications(true);
       try {
         const fetchedApplications = await getUserApplications();
-        setApplications(fetchedApplications);
+        const safeApplications = ensureArray(fetchedApplications);
+        setApplications(safeApplications);
         
         // Calculer les stats d'activité hebdomadaire
         const oneWeekAgo = new Date();
         oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
         
-        const newApplicationsThisWeek = fetchedApplications.filter((app: any) => 
+        const newApplicationsThisWeek = safeApplications.filter((app: any) => 
           new Date(app.created_at) >= oneWeekAgo
         ).length;
         
@@ -190,15 +198,18 @@ export default function DashboardScreen() {
       setLoadingEntretiens(true);
       try {
         console.log('Calling getCandidatEntretiensCalendrier...');
-        const fetchedEntretiens = await getCandidatEntretiensCalendrier();
-        console.log('Entretiens récupérés:', fetchedEntretiens);
-        console.log('Type des entretiens:', typeof fetchedEntretiens);
-        console.log('Length des entretiens:', fetchedEntretiens?.length);
-        setEntretiens(fetchedEntretiens);
+        const response = await getCandidatEntretiensCalendrier();
+
+        // Gérer la suggestion de création de profil candidat
+        if (response.needsProfileCreation) {
+          console.log('Info Dashboard:', response.message);
+          setEntretiens([]); // Pas d'entretiens sans profil candidat
+        } else {
+          console.log('Entretiens récupérés:', response.entretiens?.length || 0);
+          setEntretiens(response.entretiens || []);
+        }
       } catch (error: any) {
-        console.error("Erreur de chargement des entretiens:", error);
-        console.error("Error details:", error.response?.data);
-        // En cas d'erreur, on met un tableau vide pour éviter les bugs d'affichage
+        console.log("Info: Aucun entretien disponible pour le dashboard");
         setEntretiens([]);
       } finally {
         setLoadingEntretiens(false);
@@ -334,6 +345,9 @@ export default function DashboardScreen() {
         onAvatarPress={handleAvatarPress}
       />
 
+      {/* Alerte d'inactivité */}
+      <InactivityAlert />
+
       <ScrollView 
         contentContainerStyle={[styles.scrollContainer, { backgroundColor: colors.background }]}
         showsVerticalScrollIndicator={false}
@@ -369,7 +383,7 @@ export default function DashboardScreen() {
                 <FontAwesome5 name="check-circle" size={16} color="#10B981" />
               </View>
               <Text style={styles.statNumber}>
-                {applications.filter(app => app.etat === 'Acceptée').length}
+                {Array.isArray(applications) ? applications.filter(app => app.etat === 'Acceptée').length : 0}
               </Text>
               <Text style={styles.statLabel}>Acceptées</Text>
             </View>
@@ -463,7 +477,7 @@ export default function DashboardScreen() {
               <FontAwesome5 name="percentage" size={16} color="#8B5CF6" />
               <Text style={styles.activityText}>
                 <Text style={styles.activityNumber}>
-                  {applications.length > 0 
+                  {Array.isArray(applications) && applications.length > 0
                     ? Math.round((applications.filter(app => app.etat === 'Acceptée').length / applications.length) * 100)
                     : 0}%
                 </Text> taux d'acceptation
@@ -503,7 +517,7 @@ export default function DashboardScreen() {
               <ActivityIndicator size="small" color="#0f8e35" />
               <Text style={styles.loadingText}>Chargement des entretiens...</Text>
             </View>
-          ) : entretiens.length > 0 ? (
+          ) : entretiens && entretiens.length > 0 ? (
             <View style={styles.calendarContainer}>
               {entretiens.slice(0, 3).map((entretien: any, index: number) => (
                 <TouchableOpacity 
@@ -569,7 +583,7 @@ export default function DashboardScreen() {
               <ActivityIndicator size="small" color="#0f8e35" />
               <Text style={styles.loadingText}>Chargement...</Text>
             </View>
-          ) : applications.length > 0 ? (
+          ) : applications && applications.length > 0 ? (
             <View style={styles.listContainer} >
               {applications.slice(0, 3).map(app => (
                 <TouchableOpacity key={app.id} style={styles.listItem} onPress={() => handleApplicationPress(app.id)} activeOpacity={0.7}>
@@ -614,7 +628,7 @@ export default function DashboardScreen() {
               <ActivityIndicator size="small" color="#0f8e35" />
               <Text style={styles.loadingText}>Chargement des recommandations IA...</Text>
             </View>
-          ) : aiRecommendations.length > 0 ? (
+          ) : aiRecommendations && aiRecommendations.length > 0 ? (
             <View style={styles.listContainer}>
               {aiRecommendations.slice(0, 3).map((recommendation: any, index: number) => (
                 <TouchableOpacity 

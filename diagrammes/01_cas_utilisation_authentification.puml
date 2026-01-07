@@ -1,0 +1,76 @@
+@startuml Cas_Utilisation_Authentification
+title Diagramme de Cas d'Utilisation - Système d'Authentification
+
+left to right direction
+
+actor "Candidat" as candidat
+actor "Intérimaire" as interimaire  
+actor "Recruteur" as recruteur
+actor "Administrateur" as admin
+actor "Système Biométrique" as bio
+actor "OAuth Provider" as oauth
+
+package "Authentification et Sécurité" {
+  usecase "S'inscrire" as UC1
+  usecase "Se connecter" as UC2
+  usecase "Authentification Biométrique" as UC3
+  usecase "Connexion OAuth" as UC4
+  usecase "Vérifier OTP" as UC5
+  usecase "Réinitialiser mot de passe" as UC6
+  usecase "Gérer les sessions" as UC7
+  usecase "Déconnexion automatique" as UC8
+  usecase "Changer mot de passe" as UC9
+  usecase "Gérer permissions" as UC10
+}
+
+' Relations Candidat
+candidat --> UC1 : "Créer compte"
+candidat --> UC2 : "Accéder app"
+candidat --> UC3 : "Scanner biométrie"
+candidat --> UC4 : "Google/LinkedIn"
+candidat --> UC5 : "Valider code"
+candidat --> UC6 : "Mot de passe oublié"
+candidat --> UC9 : "Modifier mot de passe"
+
+' Relations Intérimaire
+interimaire --> UC1
+interimaire --> UC2
+interimaire --> UC3
+interimaire --> UC4
+interimaire --> UC9
+
+' Relations Recruteur
+recruteur --> UC2
+recruteur --> UC3
+recruteur --> UC9
+recruteur --> UC7 : "Consulter sessions actives"
+
+' Relations Admin
+admin --> UC2
+admin --> UC7 : "Administrer sessions"
+admin --> UC10 : "Configurer permissions"
+
+' Relations Système
+bio --> UC3 : "Fournir données"
+oauth --> UC4 : "Authentifier"
+
+' Extensions
+UC2 ..> UC3 : "<<extend>>"
+UC2 ..> UC4 : "<<extend>>"
+UC1 ..> UC5 : "<<include>>"
+UC6 ..> UC5 : "<<include>>"
+UC2 ..> UC8 : "<<extend>>"
+
+note right of UC3
+  Face ID / Touch ID
+  Empreinte digitale
+  Reconnaissance faciale
+end note
+
+note right of UC5
+  Email OTP
+  SMS OTP
+  Code temporaire
+end note
+
+@enduml

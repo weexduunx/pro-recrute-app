@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "scheme": "prorecruteapp",
     "owner": "weexduunx88",
-    "description": "Pro Recrute GBG is a recruitment app designed to connect job seekers with employers in the Greater Banjul Area, Gambia. It provides a platform for users to search for job opportunities, apply for positions, and manage their profiles.",
+    "description": "Pro Recrute GBG est une application de recrutement conçue pour mettre en relation les demandeurs d'emploi et les employeurs au Sénégal. Elle offre une plateforme permettant aux utilisateurs de rechercher des offres d'emploi, de postuler et de gérer leur profil.",
     "platforms": [
       "ios",
       "android",
@@ -14,7 +14,7 @@
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
@@ -26,7 +26,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "foregroundImage": "./assets/images/icon.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
@@ -63,7 +63,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/logo.png",
+          "image": "./assets/images/logogbg.png",
           "dark": {
             "image": "./assets/images/logo-gbg-white.png",
             "backgroundColor": "#000000"
@@ -75,7 +75,8 @@
       ],
       "expo-web-browser",
       "expo-notifications",
-      "expo-secure-store"
+      "expo-secure-store",
+      "@react-native-google-signin/google-signin"
     ],
     "experiments": {
       "typedRoutes": true

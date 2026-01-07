@@ -6,8 +6,50 @@ import * as Sharing from 'expo-sharing';
 import { Alert, TouchableOpacity, Text } from 'react-native';
 import * as Device from 'expo-device';
 
-// **IMPORTANT: Mettez à jour cette URL avec l'adresse IP et le port du  backend Laravel**
-const API_URL = 'http://192.168.1.129:8000/api' || process.env.EXPO_PUBLIC_API_URL; //Fallback pour le développement
+// **IMPORTANT: Configuration dynamique pour émulateur vs appareil physique**
+// Détection automatique de l'environnement
+const getApiUrl = () => {
+  // Si on est sur un émulateur Android, utiliser 10.0.2.2
+  if (Device.isDevice === false && Device.osName === 'Android') {
+    return 'http://10.0.2.2:8000/api';
+  }
+  // Si on est sur un simulateur iOS, utiliser localhost
+  if (Device.isDevice === false && Device.osName === 'iOS') {
+    return 'http://127.0.0.1:8000/api';
+  }
+  // Pour les appareils physiques, utiliser l'IP du réseau local
+  return 'http://192.168.1.47:8000/api';
+};
+
+const API_URL = process.env.EXPO_PUBLIC_API_URL || getApiUrl();
+
+// Variable pour éviter la suppression immédiate du token après connexion
+let recentTokenSet = false;
+let tokenSetTimestamp = 0;
+
+// Fonction utilitaire pour vérifier si l'utilisateur est authentifié
+export const isUserAuthenticated = async () => {
+  try {
+    const token = await AsyncStorage.getItem('user_token');
+    return !!token;
+  } catch (error) {
+    console.error('Erreur lors de la vérification du token:', error);
+    return false;
+  }
+};
+
+// Fonction pour marquer qu'un token a été récemment défini
+export const markTokenAsRecentlySet = () => {
+  recentTokenSet = true;
+  tokenSetTimestamp = Date.now();
+  console.log('API: Token marqué comme récemment défini à', new Date(tokenSetTimestamp));
+  
+  // Réinitialiser après 10 secondes pour éviter les problèmes à long terme
+  setTimeout(() => {
+    recentTokenSet = false;
+    console.log('API: Protection du token récent expirée');
+  }, 10000);
+};
 
 console.log('API_URL configuré:', API_URL); //Debug
 
@@ -44,9 +86,27 @@ api.interceptors.response.use(
     // Si c'est une erreur 401 (Non authentifié) et que la requête n'a pas déjà été retentée
     if (error.response?.status === 401 && !error.config._retry) {
       error.config._retry = true; // Marque la requête comme retentée pour éviter les boucles infinies
-      console.warn("API Interceptor: Jeton d'authentification expiré ou invalide (401).");
-      await AsyncStorage.removeItem('user_token'); // Nettoie le token invalide localement
-      // L'AuthProvider devrait gérer la redirection vers l'écran de connexion
+
+      // Vérifier s'il y a encore un token avant de logguer
+      const currentToken = await AsyncStorage.getItem('user_token');
+
+      if (currentToken) {
+        console.warn("API Interceptor: Jeton d'authentification expiré ou invalide (401).");
+
+        // Vérifier si un token vient d'être défini récemment (dans les 5 dernières secondes)
+        const now = Date.now();
+        if (recentTokenSet && (now - tokenSetTimestamp) < 5000) {
+          console.log("API Interceptor: Token récent détecté, pas de suppression automatique");
+          // Ne pas supprimer le token s'il vient d'être défini
+        } else {
+          await AsyncStorage.removeItem('user_token'); // Nettoie le token invalide localement
+          console.log("API Interceptor: Token supprimé en raison d'une erreur 401");
+          // L'AuthProvider devrait gérer la redirection vers l'écran de connexion
+        }
+      } else {
+        // 401 sans token = probablement après déconnexion, pas de log
+        console.log("API Interceptor: 401 sans token, probablement après déconnexion");
+      }
     } else {
       // Loggue les autres erreurs API comme des erreurs (y compris les 500)
       // Mais pas les 409 qui sont des cas normaux pour les skill assessments
@@ -300,10 +360,66 @@ export const getParsedCvData = async () => {
 
 export const getUserApplications = async () => {
   try {
+    console.log('=== API CALL: getUserApplications START ===');
     const response = await api.get('/user/applications'); // Laravel: GET /api/user/applications
+    console.log('=== API CALL: getUserApplications SUCCESS ===');
+    console.log('Response status:', response.status);
+    console.log('Response data:', response.data);
+    console.log('Data length:', response.data?.length || 0);
     return response.data;
   } catch (error) {
+    console.error('=== API CALL: getUserApplications ERROR ===');
+    console.error('Error status:', error.response?.status);
+    console.error('Error data:', error.response?.data);
     console.error("Échec de l'appel API getUserApplications:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+// Route de debug pour diagnostiquer le problème candidature
+export const debugCandidatureIssue = async () => {
+  try {
+    console.log('=== DEBUG CANDIDATURE ISSUE ===');
+    const response = await api.get('/debug/applications');
+    console.log('Debug response:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('Debug candidature error:', error.response?.data || error.message);
+    throw error;
+  }
+};
+
+// Version debug spécifique pour diagnostiquer les problèmes d'intérimaires
+export const debugGetUserApplications = async () => {
+  try {
+    console.log('=== DEBUG API CALL: getUserApplications START ===');
+    
+    // Récupérer le token manuellement
+    const token = await AsyncStorage.getItem('user_token');
+    console.log('Token in storage:', token ? 'Present' : 'Missing');
+    
+    // Faire plusieurs tests d'endpoints
+    const endpoints = [
+      '/user/applications',
+      '/candidature', // Alternative endpoint
+      '/user/candidatures' // Autre alternative
+    ];
+    
+    for (const endpoint of endpoints) {
+      try {
+        console.log(`Testing endpoint: ${endpoint}`);
+        const response = await api.get(endpoint);
+        console.log(`SUCCESS ${endpoint}:`, response.status, response.data);
+        return { endpoint, success: true, data: response.data };
+      } catch (err) {
+        console.log(`FAILED ${endpoint}:`, err.response?.status, err.response?.data);
+      }
+    }
+    
+    throw new Error('All endpoints failed');
+  } catch (error) {
+    console.error('=== DEBUG API CALL: All tests failed ===');
+    console.error('Final error:', error);
     throw error;
   }
 };
@@ -314,6 +430,26 @@ export const applyForOffre = async (offreId, data = {}) => {
     return response.data;
   } catch (error) {
     console.error(`Échec de l'appel API applyForOffre pour l'offre ${offreId}:`, error.response?.data || error.message);
+    throw error;
+  }
+};
+
+export const checkIfUserApplied = async (offreId) => {
+  try {
+    const response = await api.get(`/offres/${offreId}/check-application`); // Laravel: GET /api/offres/{offre}/check-application
+    return response.data;
+  } catch (error) {
+    console.error(`Échec de la vérification de candidature pour l'offre ${offreId}:`, error.response?.data || error.message);
+    throw error;
+  }
+};
+
+export const startSkillsTestForJob = async (offreId, testId) => {
+  try {
+    const response = await api.post(`/offres/${offreId}/start-skills-test/${testId}`); // Laravel: POST /api/offres/{offre}/start-skills-test/{test}
+    return response.data;
+  } catch (error) {
+    console.error(`Échec du démarrage du test pour l'offre ${offreId}:`, error.response?.data || error.message);
     throw error;
   }
 };
@@ -573,6 +709,29 @@ export const getInterimProfile = async () => {
   }
 };
 
+export const getIPMCardData = async () => {
+  try {
+    console.log('=== API CALL: getIPMCardData START ===');
+    const response = await api.get('/interim/ipm-card-data'); // Laravel: GET /api/interim/ipm-card-data
+    console.log('=== API CALL: getIPMCardData SUCCESS ===');
+    console.log('Response status:', response.status);
+    console.log('Response data keys:', response.data ? Object.keys(response.data) : 'no data');
+    return response.data;
+  } catch (error) {
+    console.error('=== API CALL: getIPMCardData ERROR ===');
+    console.error('Error status:', error.response?.status);
+    console.error('Error data:', error.response?.data);
+    console.error('Error message:', error.message);
+    
+    if (error.response?.status === 404) {
+      console.log("Données IPM non trouvées (404).");
+      return null;
+    }
+    console.error("Échec de l'appel API getIPMCardData:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
 export const createOrUpdateInterimProfile = async (profileData) => {
   try {
     const response = await api.post('/interim/create-update-profile', profileData); // Laravel: POST /api/interim/create-update-profile
@@ -785,9 +944,9 @@ export const getCertificatInfo = async () => {
 export const getPdf = async (encryptedId, type) => {
   let url = '';
   let defaultFileName = '';
-  
+
   if (type === 'attestation') {
-    url = `/interim/attestations/${encryptedId}/download`;
+    url = `/interim/attestations/${encryptedId}/download`; 
     defaultFileName = `attestation_${encryptedId}.pdf`;
   } else if (type === 'prise_en_charge') {
     url = `/interim/prises-en-charge/${encryptedId}/download`;
@@ -798,13 +957,18 @@ export const getPdf = async (encryptedId, type) => {
   } else {
     throw new Error("Type de document non supporté.");
   }
- 
+
   try {
-    // Requête GET et ID dans l'URL
-    const response = await api.get(url, {
+    // Récupérer le token pour l'authentification
+    const token = await AsyncStorage.getItem('user_token');
+
+    // Requête GET et ID dans l'URL - Configuration spéciale pour PDF
+    const response = await axios.get(`${API_URL}${url}`, {
       responseType: 'arraybuffer', // Indispensable pour recevoir des données binaires (le PDF)
       headers: {
         'Accept': 'application/pdf', // Demander un PDF
+        'Authorization': `Bearer ${token}`,
+        // Ne pas inclure Content-Type pour les téléchargements
       },
     });
            
@@ -836,10 +1000,25 @@ export const getPdf = async (encryptedId, type) => {
  
     return { message: 'Document téléchargé et partagé.', uri: localUri };
   } catch (error) {
-    console.error(`Erreur téléchargement PDF ${type}:`, error.response?.data || error.message);
-    
-    // Gestion d'erreur plus spécifique selon le type
-    const errorMessage = getErrorMessage(type, error);
+    // Si la réponse est un ArrayBuffer mais contient un JSON d'erreur, le convertir
+    let errorData = error.response?.data;
+
+    if (error.response?.data instanceof ArrayBuffer) {
+      try {
+        // Convertir ArrayBuffer en string pour vérifier si c'est du JSON
+        const text = new TextDecoder().decode(error.response.data);
+        errorData = JSON.parse(text);
+      } catch (e) {
+        // Si ce n'est pas du JSON valide, garder les données originales
+        errorData = error.response?.data;
+      }
+    }
+
+    console.error(`Erreur téléchargement PDF ${type}:`, errorData || error.message);
+
+    // Utiliser le message d'erreur du backend si disponible
+    const backendMessage = errorData?.message;
+    const errorMessage = backendMessage || getErrorMessage(type, error);
     Alert.alert("Erreur", errorMessage);
     throw error;
   }
@@ -981,9 +1160,23 @@ export const getIpmRecapByMonth = async () => {
 
 export const getAffiliatedStructures = async (page = 1, perPage = 10) => {
   try {
+    // Vérifier si un token existe avant de faire l'appel
+    const token = await AsyncStorage.getItem('user_token');
+    if (!token) {
+      console.log('getAffiliatedStructures: Pas de token disponible, appel ignoré');
+      return { success: false, data: [], message: 'No token available' };
+    }
+
     const response = await api.get(`/interim/affiliated-structures?page=${page}&per_page=${perPage}`);
-    return response.data; // 👈 PAS response.data.data
+    return response.data; //  PAS response.data.data
   } catch (error) {
+    // Ne pas logguer l'erreur si c'est un 401 et qu'on n'a plus de token
+    const token = await AsyncStorage.getItem('user_token');
+    if (error.response?.status === 401 && !token) {
+      console.log('getAffiliatedStructures: 401 sans token, probablement après déconnexion - ignoré');
+      return { success: false, data: [], message: 'Unauthenticated after logout' };
+    }
+
     console.error("Échec de l'appel API getAffiliatedStructures:", error.response?.data || error.message);
     throw error;
   }
@@ -994,10 +1187,17 @@ export const getAffiliatedStructures = async (page = 1, perPage = 10) => {
  */
 export const storeActiveSession = async (sessionData, deviceHeaders = {}) => {
   try {
+    // Vérifier si un token existe avant de faire l'appel
+    const token = await AsyncStorage.getItem('user_token');
+    if (!token) {
+      console.warn('storeActiveSession: Pas de token disponible, appel ignoré');
+      return { success: false, message: 'No token available' };
+    }
+
     console.log('=== storeActiveSession API Call ===');
     console.log('Session Data:', sessionData);
     console.log('Device Headers:', deviceHeaders);
-    
+
     // Construire la configuration de la requête avec les headers personnalisés
     const requestConfig = {
       headers: {
@@ -1005,14 +1205,21 @@ export const storeActiveSession = async (sessionData, deviceHeaders = {}) => {
         ...deviceHeaders // Ajouter les headers de device
       }
     };
-    
+
     console.log('Request Config:', requestConfig);
-    
+
     const response = await api.post('/sessions', sessionData, requestConfig);
-    
+
     console.log('Response storeActiveSession:', response.data);
     return response.data;
   } catch (error) {
+    // Ne pas logguer l'erreur si c'est un 401 et qu'on n'a plus de token
+    const token = await AsyncStorage.getItem('user_token');
+    if (error.response?.status === 401 && !token) {
+      console.log('storeActiveSession: 401 sans token, probablement après déconnexion - ignoré');
+      return { success: false, message: 'Unauthenticated after logout' };
+    }
+
     console.error("Échec de l'appel API storeActiveSession:", error.response?.data || error.message);
     console.error("Full error:", error);
     throw error;
@@ -1025,9 +1232,16 @@ export const storeActiveSession = async (sessionData, deviceHeaders = {}) => {
  */
 export const getActiveSessions = async (deviceHeaders = {}) => {
   try {
+    // Vérifier si un token existe avant de faire l'appel
+    const token = await AsyncStorage.getItem('user_token');
+    if (!token) {
+      console.warn('getActiveSessions: Pas de token disponible, appel ignoré');
+      return { success: false, sessions: [], message: 'No token available' };
+    }
+
     console.log('=== getActiveSessions API Call ===');
     console.log('Device Headers:', deviceHeaders);
-    
+
     // Construire la configuration de la requête avec les headers personnalisés
     const requestConfig = {
       headers: {
@@ -1035,14 +1249,21 @@ export const getActiveSessions = async (deviceHeaders = {}) => {
         ...deviceHeaders // Ajouter les headers de device pour identification
       }
     };
-    
+
     console.log('Request Config:', requestConfig);
-    
+
     const response = await api.get('/sessions', requestConfig);
-    
+
     console.log('Response getActiveSessions:', response.data);
     return response.data;
   } catch (error) {
+    // Ne pas logguer l'erreur si c'est un 401 et qu'on n'a plus de token
+    const token = await AsyncStorage.getItem('user_token');
+    if (error.response?.status === 401 && !token) {
+      console.log('getActiveSessions: 401 sans token, probablement après déconnexion - ignoré');
+      return { success: false, sessions: [], message: 'Unauthenticated after logout' };
+    }
+
     console.error("Échec de l'appel API getActiveSessions:", error.response?.data || error.message);
     throw error;
   }
@@ -1130,30 +1351,75 @@ export const getCandidatEntretiens = async () => {
   try {
     console.log('=== API CALL: getCandidatEntretiens (tous les entretiens) ===');
     const response = await api.get('/candidat/entretiens');
+
+    // Gérer le cas où l'utilisateur n'a pas de profil candidat
+    if (response.data.needs_profile_creation || response.data.suggestion) {
+      console.log('Info: Profil candidat non trouvé -', response.data.message);
+      return {
+        entretiens: [],
+        needsProfileCreation: true,
+        message: response.data.message,
+        suggestion: response.data.suggestion
+      };
+    }
+
     console.log('API Response getCandidatEntretiens:', response.data);
-    return response.data.entretiens || [];
+    return {
+      entretiens: response.data.entretiens || [],
+      needsProfileCreation: false
+    };
   } catch (error) {
-    console.error("Échec de l'appel API getCandidatEntretiens:", error.response?.data || error.message);
-    return []; // Retour tableau vide en cas d'erreur
+    // Gestion silencieuse des erreurs 404 pour profil manquant
+    if (error.response?.status === 404 && error.response?.data?.message?.includes('candidat non trouvé')) {
+      console.log('Info: Profil candidat non trouvé - suggestion de création');
+      return {
+        entretiens: [],
+        needsProfileCreation: true,
+        message: 'Aucun profil candidat trouvé',
+        suggestion: 'Créez votre profil candidat pour accéder aux entretiens'
+      };
+    }
+    console.error("Erreur appel API getCandidatEntretiens:", error.response?.data || error.message);
+    return { entretiens: [], needsProfileCreation: false };
   }
 };
 
 export const getCandidatEntretiensCalendrier = async () => {
   try {
     console.log('=== API CALL: getCandidatEntretiensCalendrier ===');
-    
+
     const response = await api.get('/candidat/entretiens-calendrier');
+
+    // Gérer le cas où l'utilisateur n'a pas de profil candidat
+    if (response.data.suggestion) {
+      console.log('Info: Profil candidat non trouvé pour calendrier -', response.data.message || 'Aucun profil candidat');
+      return {
+        entretiens: [],
+        needsProfileCreation: true,
+        message: response.data.message || 'Aucun profil candidat trouvé',
+        suggestion: response.data.suggestion || 'Créez votre profil candidat'
+      };
+    }
+
     console.log('API Response status:', response.status);
-    console.log('API Response data:', response.data);
-    console.log('API Response entretiens:', response.data.entretiens);
-    return response.data.entretiens || [];
+    console.log('API Response entretiens count:', response.data.entretiens?.length || 0);
+    return {
+      entretiens: response.data.entretiens || [],
+      needsProfileCreation: false
+    };
   } catch (error) {
-    console.error("=== API ERROR: getCandidatEntretiensCalendrier ===");
-    console.error("Error:", error);
-    console.error("Error response:", error.response?.data);
-    console.error("Error status:", error.response?.status);
-    // Retourner un tableau vide en cas d'erreur pour éviter de casser l'interface
-    return [];
+    // Gestion silencieuse des erreurs liées au profil candidat manquant
+    if (error.response?.status === 404 && error.response?.data?.message?.includes('candidat')) {
+      console.log('Info: Aucun profil candidat trouvé pour le calendrier');
+      return {
+        entretiens: [],
+        needsProfileCreation: true,
+        message: 'Aucun profil candidat trouvé',
+        suggestion: 'Créez votre profil candidat pour voir vos entretiens'
+      };
+    }
+    console.log("Info: Aucun entretien disponible -", error.response?.data?.message || 'Erreur de connexion');
+    return { entretiens: [], needsProfileCreation: false };
   }
 };
 
@@ -1210,6 +1476,32 @@ export const demandReportEntretien = async (entretienId, raison, nouvelleDate = 
     return response.data;
   } catch (error) {
     console.error("Échec de l'appel API demandReportEntretien:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+/**
+ * Envoie une demande d'attestation par email
+ * @param {object} data - Les données de la demande (contractId, message, etc.)
+ * @returns {Promise<object>} La réponse du serveur
+ */
+export const sendAttestationRequest = async (data) => {
+  try {
+    const response = await api.post('/interim/request-attestation', data);
+    return response.data;
+  } catch (error) {
+    console.error("Échec de l'appel API sendAttestationRequest:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+// Récupérer les demandes d'attestation de l'utilisateur
+export const getAttestationRequests = async () => {
+  try {
+    const response = await api.get('/interim/attestation-requests');
+    return response.data;
+  } catch (error) {
+    console.error("Échec de l'appel API getAttestationRequests:", error.response?.data || error.message);
     throw error;
   }
 };
@@ -1444,6 +1736,224 @@ export const shareToSocialMedia = async (platform, offreData) => {
   } catch (error) {
     console.error(`Erreur lors du partage sur ${platform}:`, error);
     throw error;
+  }
+};
+
+// Fonction pour vérifier l'anniversaire de l'utilisateur
+export const checkBirthday = async () => {
+  try {
+    const response = await api.get('/interim/check-birthday');
+    return response.data;
+  } catch (error) {
+    console.error('Erreur lors de la vérification d\'anniversaire:', error);
+    return { success: false, is_birthday: false };
+  }
+};
+
+// ============= MISSION PREFERENCES =============
+
+// Récupérer les préférences de mission de l'utilisateur
+export const getMissionPreferences = async () => {
+  try {
+    console.log('=== API CALL: getMissionPreferences START ===');
+    const response = await api.get('/user/mission-preferences');
+    console.log('=== API CALL: getMissionPreferences SUCCESS ===');
+    console.log('Response data:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('=== API CALL: getMissionPreferences ERROR ===');
+    console.error('Error status:', error.response?.status);
+    console.error('Error data:', error.response?.data);
+    console.error("Échec de l'appel API getMissionPreferences:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+// Mettre à jour les préférences de mission de l'utilisateur
+export const updateMissionPreferences = async (preferences) => {
+  try {
+    console.log('=== API CALL: updateMissionPreferences START ===');
+    console.log('Preferences data:', preferences);
+    const response = await api.post('/user/mission-preferences', preferences);
+    console.log('=== API CALL: updateMissionPreferences SUCCESS ===');
+    console.log('Response data:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('=== API CALL: updateMissionPreferences ERROR ===');
+    console.error('Error status:', error.response?.status);
+    console.error('Error data:', error.response?.data);
+    console.error("Échec de l'appel API updateMissionPreferences:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+// ============= ACCOUNT MANAGEMENT =============
+
+export const deleteUserAccount = async (password) => {
+  try {
+    console.log('=== API CALL: deleteUserAccount START ===');
+    const response = await api.delete('/user/account', {
+      data: { password: password }
+    });
+    console.log('=== API CALL: deleteUserAccount SUCCESS ===');
+    console.log('Response data:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('=== API CALL: deleteUserAccount ERROR ===');
+    console.error('Error status:', error.response?.status);
+    console.error('Error data:', error.response?.data);
+    console.error("Échec de l'appel API deleteUserAccount:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+export const deleteUserApplication = async (applicationId) => {
+  console.log('=== API CALL: deleteUserApplication START ===');
+  console.log('Application ID:', applicationId);
+  
+  if (!applicationId) {
+    throw new Error('Application ID is required');
+  }
+  
+  try {
+    const response = await api.delete(`/user/applications/${applicationId}`);
+    console.log('✅ Candidature supprimée avec succès:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('❌ Erreur lors de la suppression de la candidature:', error.response?.data || error.message);
+    throw error;
+  }
+};
+
+// Envoyer un avertissement d'inactivité au backend
+export const sendInactivityWarning = async (inactivityDays, warningDay) => {
+  try {
+    console.log('=== API CALL: sendInactivityWarning START ===');
+    const response = await api.post('/user/inactivity-warning', {
+      inactivity_days: inactivityDays,
+      warning_day: warningDay,
+      timestamp: Date.now()
+    });
+    console.log('=== API CALL: sendInactivityWarning SUCCESS ===');
+    console.log('Response data:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('=== API CALL: sendInactivityWarning ERROR ===');
+    console.error('Error status:', error.response?.status);
+    console.error('Error data:', error.response?.data);
+    console.error("Échec de l'appel API sendInactivityWarning:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+// Déclencher la suppression automatique d'un compte pour inactivité
+export const autoDeleteInactiveAccount = async () => {
+  try {
+    console.log('=== API CALL: autoDeleteInactiveAccount START ===');
+    const response = await api.delete('/user/account/auto-delete');
+    console.log('=== API CALL: autoDeleteInactiveAccount SUCCESS ===');
+    console.log('Response data:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('=== API CALL: autoDeleteInactiveAccount ERROR ===');
+    console.error('Error status:', error.response?.status);
+    console.error('Error data:', error.response?.data);
+    console.error("Échec de l'appel API autoDeleteInactiveAccount:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+// Obtenir le statut d'inactivité de l'utilisateur actuel
+export const getUserInactivityStatus = async () => {
+  try {
+    console.log('=== API CALL: getUserInactivityStatus START ===');
+    const response = await api.get('/user/inactivity-status');
+    console.log('=== API CALL: getUserInactivityStatus SUCCESS ===');
+    console.log('Response data:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('=== API CALL: getUserInactivityStatus ERROR ===');
+    console.error('Error status:', error.response?.status);
+    console.error('Error data:', error.response?.data);
+    console.error("Échec de l'appel API getUserInactivityStatus:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+// Enregistrer l'activité de l'utilisateur
+export const recordUserActivity = async () => {
+  try {
+    console.log('=== API CALL: recordUserActivity START ===');
+    const response = await api.post('/user/activity', {
+      timestamp: Date.now(),
+      activity_type: 'general'
+    });
+    console.log('=== API CALL: recordUserActivity SUCCESS ===');
+    console.log('Response data:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('=== API CALL: recordUserActivity ERROR ===');
+    console.error('Error status:', error.response?.status);
+    console.error('Error data:', error.response?.data);
+    console.error("Échec de l'appel API recordUserActivity:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+// Fonctions pour le reset de mot de passe
+export const sendPasswordResetLink = async (email) => {
+  try {
+    console.log('Envoi du lien de réinitialisation pour:', email);
+    const response = await api.post('/password/email', { email });
+    console.log('Réponse sendPasswordResetLink:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('Erreur sendPasswordResetLink:', error.response?.data || error.message);
+    throw error;
+  }
+};
+
+export const resetPassword = async (email, password, passwordConfirmation, token) => {
+  try {
+    console.log('Réinitialisation du mot de passe pour:', email);
+    const response = await api.post('/password/reset', {
+      email,
+      password,
+      password_confirmation: passwordConfirmation,
+      token
+    });
+    console.log('Réponse resetPassword:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('Erreur resetPassword:', error.response?.data || error.message);
+    throw error;
+  }
+};
+
+// Fonction utilitaire pour faire des requêtes API génériques
+export const apiRequest = async (endpoint, options = {}) => {
+  try {
+    const { method = 'GET', body, headers } = options;
+    
+    const config = {
+      method,
+      url: endpoint,
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        ...headers,
+      },
+    };
+
+    if (body && (method === 'POST' || method === 'PUT' || method === 'PATCH')) {
+      config.data = body;
+    }
+
+    const response = await api(config);
+    return response.data;
+  } catch (error) {
+    console.error(`Erreur API ${endpoint}:`, error.response?.data || error.message);
+    throw error.response?.data || error;
   }
 };
 

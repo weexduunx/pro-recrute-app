@@ -35,7 +35,11 @@ import {
   createOrUpdateCandidatProfile,
   getInterimProfile,
   createOrUpdateInterimProfile,
+  getMissionPreferences,
+  updateMissionPreferences,
+  deleteUserAccount,
 } from '../../utils/api';
+import { getJobPreferences, updateJobPreferences } from '../../utils/ai-api';
 import { router } from 'expo-router';
 import { useTheme } from '../../components/ThemeContext';
 import { useLanguage } from '../../components/LanguageContext';
@@ -131,10 +135,6 @@ export default function ProfileDetailsScreen() {
   const { colors } = useTheme();
   const { t } = useLanguage();
 
-  const [activeTab, setActiveTab] = useState(() => {
-    if (user?.role === 'interimaire') return 'interimaire';
-    return 'personal';
-  });
 
 
   // Etats Date Picker
@@ -173,12 +173,18 @@ export default function ProfileDetailsScreen() {
   const [uploadingProfilePhoto, setUploadingProfilePhoto] = useState(false);
   const [currentPhotoUrl, setCurrentPhotoUrl] = useState<string | null>(null);
 
+  // États pour la suppression de compte
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deletingAccount, setDeletingAccount] = useState(false);
+
   // Synchroniser l'état local avec les données utilisateur
   useEffect(() => {
     if (user?.photo_profil && !currentPhotoUrl) {
       const photoUrl = user.photo_profil.startsWith('http') 
         ? user.photo_profil 
-        : `http://192.168.1.144:8000/storage/${user.photo_profil}`;
+        : `http://192.168.1.47:8000/storage/${user.photo_profil}`;
+
       console.log('=== PHOTO URL SYNCHRONISATION ===');
       console.log('user.photo_profil:', user.photo_profil);
       console.log('photoUrl construite:', photoUrl);
@@ -187,14 +193,6 @@ export default function ProfileDetailsScreen() {
   }, [user?.photo_profil, currentPhotoUrl]);
   const [candidatUpdateError, setCandidatUpdateError] = useState<string | null>(null);
 
-  // États profil Intérimaire
-  const [interimProfile, setInterimProfile] = useState<InterimProfileData | null>(null);
-  const [loadingInterimProfile, setLoadingInterimProfile] = useState(true);
-  const [interimEditMode, setInterimEditMode] = useState(false);
-  const [editableInterimProfile, setEditableInterimProfile] = useState<InterimProfileData>({
-    matricule: '', sexe: 1, matrimoniale: 1, nationalite: '', phone: '', date_naissance: '', lieu_naissance: '', cni: '', adresse: '', profile_photo_path: '', statut_agent: 0, diplome: '', taux_retenu: 0, taux_remboursse: 0,
-  });
-  const [interimUpdateError, setInterimUpdateError] = useState<string | null>(null);
 
 
   // États CV
@@ -247,6 +245,8 @@ export default function ProfileDetailsScreen() {
     workEnvironment: [], // Environnements de travail préférés
   });
   const [editingMissionPrefs, setEditingMissionPrefs] = useState(false);
+  const [loadingMissionPrefs, setLoadingMissionPrefs] = useState(false);
+  const [savingMissionPrefs, setSavingMissionPrefs] = useState(false);
 
   // Options pour le Picker du type de contrat
   const contractTypeOptions = [
@@ -350,7 +350,6 @@ export default function ProfileDetailsScreen() {
     const shouldShowModal = (
       !isEditingAnything &&
       !candidatEditMode &&
-      !interimEditMode &&
       (newProfileCompletion.missingFields.length > 0 || newCvCompletion.missingFields.length > 0) &&
       candidatProfile !== null &&
       !loadingCandidatProfile
@@ -360,7 +359,6 @@ export default function ProfileDetailsScreen() {
       shouldShowModal,
       isEditingAnything,
       candidatEditMode,
-      interimEditMode,
       profileMissing: newProfileCompletion.missingFields.length,
       cvMissing: newCvCompletion.missingFields.length,
       candidatProfile: !!candidatProfile,
@@ -381,7 +379,6 @@ export default function ProfileDetailsScreen() {
     initialLoadComplete,
     isEditingAnything,
     candidatEditMode,
-    interimEditMode,
     candidatProfile,
     loadingCandidatProfile,
     profileCompletion.missingFields.length,
@@ -397,7 +394,7 @@ export default function ProfileDetailsScreen() {
     setProfileCompletion(newProfileCompletion);
     setCvCompletion(newCvCompletion);
 
-    const isEditing = cvEditMode || personalEditMode || candidatEditMode || interimEditMode || datePickerOpen;
+    const isEditing = cvEditMode || personalEditMode || candidatEditMode || datePickerOpen;
     const hasIncompleteData = newProfileCompletion.missingFields.length > 0 || newCvCompletion.missingFields.length > 0;
 
     console.log('checkCompletionStatus:', {
@@ -418,7 +415,6 @@ export default function ProfileDetailsScreen() {
     cvEditMode,
     personalEditMode,
     candidatEditMode,
-    interimEditMode,
     datePickerOpen
   ]);
 
@@ -534,52 +530,104 @@ export default function ProfileDetailsScreen() {
     }
   }, [user]); // Retiré checkCompletionStatus des dépendances
 
-  // Callback de chargement intérimaire optimisé
-  const loadInterimProfile = useCallback(async () => {
-    if (user && user.role === 'interimaire') {
-      setLoadingInterimProfile(true);
-      try {
-        const data = await getInterimProfile();
-        setInterimProfile(data);
-        setEditableInterimProfile({
-          matricule: data?.matricule || '',
-          sexe: data?.sexe ?? 1,
-          matrimoniale: data?.matrimoniale ?? 1,
-          nationalite: data?.nationalite || '',
-          phone: data?.phone || '',
-          date_naissance: data?.date_naissance || '',
-          lieu_naissance: data?.lieu_naissance || '',
-          cni: data?.cni || '',
-          adresse: data?.adresse || '',
-          profile_photo_path: data?.profile_photo_path || '',
-          statut_agent: data?.statut_agent ?? 0,
-          diplome: data?.diplome || '',
-          taux_retenu: data?.taux_retenu ?? 0,
-          taux_remboursse: data?.taux_remboursse ?? 0,
-        });
-      } catch (error: any) {
-        console.error("Erreur de chargement du profil intérimaire:", error);
-        setInterimProfile(null);
-        setEditableInterimProfile({
-          matricule: '', sexe: 1, matrimoniale: 1, nationalite: '', phone: '',
-          date_naissance: '', lieu_naissance: '', cni: '', adresse: '',
-          profile_photo_path: '', statut_agent: 0, diplome: '', taux_retenu: 0,
-          taux_remboursse: 0,
-        });
-      } finally {
-        setLoadingInterimProfile(false);
+  // Fonctions pour les préférences de mission
+  const loadMissionPreferences = useCallback(async () => {
+    if (!user) return;
+    
+    try {
+      setLoadingMissionPrefs(true);
+      console.log('=== LOADING MISSION PREFERENCES ===');
+      const response = await getMissionPreferences();
+      
+      console.log('API Response:', response);
+      if (response.success && response.data) {
+        console.log('Setting mission preferences with data:', response.data);
+        console.log('Mission duration from API:', response.data.missionDuration);
+        
+        // Mise à jour défensive pour s'assurer que tous les champs sont définis
+        const updatedPrefs = {
+          sectors: response.data.sectors || [],
+          contractTypes: response.data.contractTypes || [],
+          missionDuration: response.data.missionDuration || '',
+          salaryExpectation: response.data.salaryExpectation || '',
+          workEnvironment: response.data.workEnvironment || [],
+        };
+        
+        console.log('Final preferences being set:', updatedPrefs);
+        setMissionPreferences(updatedPrefs);
+        console.log('Mission preferences loaded:', response.data);
+      } else {
+        console.log('Response does not have success/data:', { success: response.success, hasData: !!response.data });
+        console.log('Full response for debugging:', JSON.stringify(response, null, 2));
       }
-    } else {
-      setInterimProfile(null);
-      setEditableInterimProfile({
-        matricule: '', sexe: 1, matrimoniale: 1, nationalite: '', phone: '',
-        date_naissance: '', lieu_naissance: '', cni: '', adresse: '',
-        profile_photo_path: '', statut_agent: 0, diplome: '', taux_retenu: 0,
-        taux_remboursse: 0,
-      });
-      setLoadingInterimProfile(false);
+    } catch (error) {
+      console.error('Erreur lors du chargement des préférences de mission:', error);
+    } finally {
+      setLoadingMissionPrefs(false);
     }
   }, [user]);
+
+  const saveMissionPreferences = useCallback(async () => {
+    if (!user) return;
+    
+    try {
+      setSavingMissionPrefs(true);
+      console.log('=== SAVING MISSION PREFERENCES ===');
+      console.log('Data to save:', missionPreferences);
+      console.log('Mission duration being saved:', missionPreferences.missionDuration);
+      console.log('Mission duration type:', typeof missionPreferences.missionDuration);
+      console.log('Mission duration length:', missionPreferences.missionDuration.length);
+      
+      const response = await updateMissionPreferences(missionPreferences);
+      console.log('Save response:', response);
+      
+      if (response.success) {
+        // Synchroniser avec le système AI
+        try {
+          const aiPrefs = {
+            preferredSectors: missionPreferences.sectors,
+            preferredLocations: [],
+            salaryExpectation: {
+              min: missionPreferences.salaryExpectation ? parseInt(missionPreferences.salaryExpectation) : 300000,
+              max: missionPreferences.salaryExpectation ? Math.round(parseInt(missionPreferences.salaryExpectation) * 1.5) : 1000000,
+              currency: 'XOF'
+            },
+            contractTypes: missionPreferences.contractTypes,
+            experienceLevel: 'intermediate',
+            remoteWork: false,
+            travelWillingness: 50,
+            notificationFrequency: 'weekly',
+            minimumMatchScore: 60,
+            careerGoals: [],
+            skillsToImprove: [],
+            workSchedule: 'no_preference',
+            companySize: 'no_preference',
+            missionDuration: missionPreferences.missionDuration, // ✅ AJOUT DU CHAMP MANQUANT
+            workEnvironment: missionPreferences.workEnvironment,
+          };
+          
+          await updateJobPreferences(aiPrefs);
+          console.log('Preferences synchronized to AI system');
+        } catch (aiError) {
+          console.log('Could not sync to AI system (not critical):', aiError);
+          // Ce n'est pas critique, on continue
+        }
+        
+        Alert.alert('Succès', 'Vos préférences de mission ont été sauvegardées avec succès');
+        setEditingMissionPrefs(false);
+        // Recharger les préférences pour être sûr
+        await loadMissionPreferences();
+      } else {
+        Alert.alert('Erreur', 'Impossible de sauvegarder vos préférences');
+      }
+    } catch (error) {
+      console.error('Erreur lors de la sauvegarde des préférences de mission:', error);
+      Alert.alert('Erreur', 'Une erreur est survenue lors de la sauvegarde');
+    } finally {
+      setSavingMissionPrefs(false);
+    }
+  }, [user, missionPreferences, loadMissionPreferences]);
+
 
   // Fonction de chargement du CV parsé (inchangée mais optimisée)
   const loadParsedCv = useCallback(async () => {
@@ -623,15 +671,19 @@ export default function ProfileDetailsScreen() {
     }
 
     const loadProfiles = async () => {
+      console.log('=== STARTING LOAD PROFILES ===');
+      console.log('User:', user?.id, user?.email);
       setInitialLoadComplete(false);
       setEditableName(user?.name || '');
 
       // Charger en parallèle pour optimiser
+      console.log('=== CALLING LOAD FUNCTIONS ===');
       await Promise.all([
         loadCandidatProfile(),
-        loadInterimProfile(),
+        loadMissionPreferences(),
         // loadParsedCv() si nécessaire
       ]);
+      console.log('=== LOAD FUNCTIONS COMPLETED ===');
 
       // Marquer le chargement initial comme terminé avec un délai pour stabiliser les états
       setTimeout(() => {
@@ -640,7 +692,7 @@ export default function ProfileDetailsScreen() {
     };
 
     loadProfiles();
-  }, [user, loadCandidatProfile, loadInterimProfile]);
+  }, [user, loadCandidatProfile]);
 
   // useEffect séparé pour déclencher la vérification de complétude après le chargement
   useEffect(() => {
@@ -652,6 +704,13 @@ export default function ProfileDetailsScreen() {
     }
   }, [initialLoadComplete, candidatProfile, checkCompletionStatus]);
 
+  // Debug des changements de missionPreferences
+  useEffect(() => {
+    console.log('=== MISSION PREFERENCES STATE CHANGED ===');
+    console.log('Current missionPreferences:', missionPreferences);
+    console.log('Mission duration value:', missionPreferences.missionDuration);
+    console.log('Mission duration type:', typeof missionPreferences.missionDuration);
+  }, [missionPreferences]);
 
   // Gestionnaire d'événements pour la sauvegarde des informations personnelles
   const handlePersonalInfoSave = async () => {
@@ -706,45 +765,6 @@ export default function ProfileDetailsScreen() {
     }
   };
 
-  const handleInterimProfileSave = async () => {
-    setInterimUpdateError(null);
-    try {
-      if (!editableInterimProfile) {
-        setInterimUpdateError(t("Aucune donnée de profil intérimaire à sauvegarder."));
-        return;
-      }
-      if (!editableInterimProfile.phone || !editableInterimProfile.cni || !editableInterimProfile.adresse) {
-        Alert.alert(t("Erreur"), t("Veuillez remplir tous les champs obligatoires (Téléphone, CNI, Adresse)."));
-        setInterimUpdateError(t("Veuillez remplir les champs obligatoires du profil intérimaire."));
-        return;
-      }
-      if (editableInterimProfile.date_naissance && isNaN(new Date(editableInterimProfile.date_naissance).getTime())) {
-        Alert.alert(t("Erreur"), t("Format de date de naissance invalide (AAAA-MM-JJ attendu)."));
-        setInterimUpdateError(t("Format de date de naissance invalide (AAAA-MM-JJ)."));
-        return;
-      }
-      if (editableInterimProfile.taux_retenu !== undefined && isNaN(editableInterimProfile.taux_retenu)) {
-        Alert.alert(t("Erreur"), t("Le taux de retenue doit être un nombre."));
-        setInterimUpdateError(t("Le taux de retenue doit être un nombre."));
-        return;
-      }
-      if (editableInterimProfile.taux_remboursse !== undefined && isNaN(editableInterimProfile.taux_remboursse)) {
-        Alert.alert(t("Erreur"), t("Le taux de remboursement doit être un nombre."));
-        setInterimUpdateError(t("Le taux de remboursement doit être un nombre."));
-        return;
-      }
-
-      const dataToSave = { ...editableInterimProfile };
-      await createOrUpdateInterimProfile(dataToSave);
-      Alert.alert(t("Succès"), t("Profil intérimaire mis à jour !"));
-      await loadInterimProfile();
-      setInterimEditMode(false);
-    } catch (error: any) {
-      console.error("Erreur de sauvegarde du profil intérimaire:", error);
-      setInterimUpdateError(error.response?.data?.message || t("Échec de la mise à jour du profil intérimaire."));
-      Alert.alert(t("Erreur"), error.response?.data?.message || t("Échec de la mise à jour du profil intérimaire."));
-    }
-  };
 
   const handleCvSave = async () => {
     try {
@@ -883,7 +903,7 @@ export default function ProfileDetailsScreen() {
         // S'assurer que l'URL est au bon format complet
         const fullPhotoUrl = uploadResult.photo_path.startsWith('http') 
           ? uploadResult.photo_path 
-          : `http://192.168.1.144:8000${uploadResult.photo_path}`;
+          : `http://192.168.1.47:8000${uploadResult.photo_path}`;
         console.log('fullPhotoUrl calculée:', fullPhotoUrl);
         setCurrentPhotoUrl(fullPhotoUrl);
         console.log('currentPhotoUrl mise à jour avec:', fullPhotoUrl);
@@ -1077,76 +1097,41 @@ export default function ProfileDetailsScreen() {
   const handleMenuPress = () => { Alert.alert(t("Menu"), t("Menu pressé !")); };
   const handleAvatarPress = () => { Alert.alert(t("Profil"), t("Avatar pressé !")); };
 
-  const renderTabBar = () => {
-    const interimaireTabs = [
-      { key: 'cv', label: t('Candidat'), icon: 'person' },
-      { key: 'interimaire', label: t('Intérimaire'), icon: 'business' },
-    ];
-
-    const userTabs = [
-      { key: 'personal', label: t('Personnel'), icon: 'person' },
-      { key: 'cv', label: t('Mon CV'), icon: 'document-text' },
-    ];
-
-    const tabs = user?.role === 'interimaire' ? interimaireTabs : userTabs; // Utilisez 'interim' en minuscule pour le rôle
-
-    const handleTabChange = (tabKey: string) => {
-      setActiveTab(tabKey);
-
-      // Désactive tous les modes édition par défaut
-      setPersonalEditMode(false);
-      setCvEditMode(false);
-      setCandidatEditMode(false);
-      setInterimEditMode(false);
-    };
-
-    return (
-      <View style={styles.tabBarContainer}>
-        <View style={[styles.tabBar, { backgroundColor: colors.cardBackground }]}>
-          {tabs.map((tab) => (
-            <TouchableOpacity
-              key={tab.key}
-              style={[
-                styles.tab,
-                activeTab === tab.key && styles.activeTab,
-                {
-                  backgroundColor:
-                    activeTab === tab.key ? colors.secondary + '15' : 'transparent',
-                },
-              ]}
-              onPress={() => handleTabChange(tab.key)}
-            >
-              <View
-                style={[
-                  styles.tabIconContainer,
-                  activeTab === tab.key && styles.activeTabIconContainer,
-                ]}
-              >
-                <Ionicons
-                  name={tab.icon as any}
-                  size={24}
-                  color={
-                    activeTab === tab.key ? colors.secondary : colors.textSecondary
-                  }
-                />
-              </View>
-              <Text
-                style={[
-                  styles.tabText,
-                  {
-                    color:
-                      activeTab === tab.key ? colors.secondary : colors.textSecondary,
-                  },
-                ]}
-              >
-                {tab.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
-    );
+  const handleDeleteAccount = () => {
+    setShowDeleteModal(true);
   };
+
+  const handleConfirmDeleteAccount = async () => {
+    if (!deletePassword.trim()) {
+      Alert.alert(t('Erreur'), t('Veuillez saisir votre mot de passe pour confirmer'));
+      return;
+    }
+
+    setDeletingAccount(true);
+    try {
+      await deleteUserAccount(deletePassword);
+      setShowDeleteModal(false);
+      Alert.alert(
+        t('Compte supprimé'),
+        t('Votre compte a été supprimé avec succès.'),
+        [{ text: 'OK', onPress: () => logout() }]
+      );
+    } catch (error: any) {
+      console.error('Erreur lors de la suppression du compte:', error);
+      Alert.alert(
+        t('Erreur'),
+        error.response?.data?.message || t('Mot de passe incorrect ou erreur lors de la suppression du compte.')
+      );
+    } finally {
+      setDeletingAccount(false);
+    }
+  };
+
+  const handleCancelDelete = () => {
+    setShowDeleteModal(false);
+    setDeletePassword('');
+  };
+
 
   const formatDateOfBirth = (dateString: string): string => {
     if (!dateString) return t('Non renseignée');
@@ -1219,7 +1204,7 @@ export default function ProfileDetailsScreen() {
                 } else if (user?.photo_profil) {
                   finalImageUrl = user.photo_profil.startsWith('http')
                     ? user.photo_profil
-                    : `http://192.168.1.144:8000/storage/${user.photo_profil}`;
+                    : `http://192.168.1.47:8000/storage/${user.photo_profil}`;
                 }
                 
                 console.log('=== IMAGE DISPLAY ===');
@@ -1564,7 +1549,7 @@ export default function ProfileDetailsScreen() {
           )}
         </View>
       )}
-      {(user?.role === 'user' || user?.role === 'interimaire') && !candidatProfile && !loadingCandidatProfile && !interimProfile && !loadingInterimProfile && (
+      {(user?.role === 'user' || user?.role === 'interimaire') && !candidatProfile && !loadingCandidatProfile && (
         <View style={styles.emptyState}>
           <Ionicons name="briefcase-outline" size={48} color={colors.textSecondary} />
           <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>{t('Pas de profil candidat')}</Text>
@@ -1581,36 +1566,6 @@ export default function ProfileDetailsScreen() {
 
   const renderCvSection = () => (
     <>
-      {user?.role === 'interimaire' && (
-        <>
-          <TouchableOpacity
-            style={[additionalStyles.dropdownButton, { backgroundColor: colors.cardBackground }]}
-            onPress={() => setShowPersonalInfo(!showPersonalInfo)}
-          >
-            <View style={additionalStyles.dropdownContent}>
-              <Ionicons
-                name="person-outline"
-                size={20}
-                color={colors.secondary}
-                style={additionalStyles.dropdownIcon}
-              />
-              <Text style={[additionalStyles.dropdownTitle, { color: colors.secondary }]}>
-                {t('Profil Candidat')}
-              </Text>
-            </View>
-            <Ionicons
-              name={showPersonalInfo ? "chevron-up" : "chevron-down"}
-              size={20}
-              color={colors.secondary}
-              style={additionalStyles.dropdownArrow}
-            />
-          </TouchableOpacity>
-          <View>
-            {showPersonalInfo && renderPersonalInfo()}
-          </View>
-        </>
-
-      )}
         {/* Collapse Mon CV */}
         <TouchableOpacity
           style={[additionalStyles.dropdownButton, { backgroundColor: colors.cardBackground }]}
@@ -1746,6 +1701,14 @@ export default function ProfileDetailsScreen() {
 
   const renderMissionPreferences = () => (
     <View style={[styles.section, { backgroundColor: colors.cardBackground }]}>
+      {loadingMissionPrefs && (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="small" color={colors.primary} />
+          <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
+            {t('Chargement des préférences...')}
+          </Text>
+        </View>
+      )}
       <View style={styles.sectionHeader}>
         <View style={styles.headerLeft}>
           <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
@@ -1753,19 +1716,44 @@ export default function ProfileDetailsScreen() {
           </Text>
         </View>
         <View style={styles.headerActions}>
+          {editingMissionPrefs && (
+            <TouchableOpacity
+              style={[
+                styles.actionButton,
+                { backgroundColor: colors.border, marginRight: 8 }
+              ]}
+              onPress={() => {
+                setEditingMissionPrefs(false);
+                // Recharger les préférences pour annuler les changements
+                loadMissionPreferences();
+              }}
+              disabled={savingMissionPrefs}
+            >
+              <Ionicons
+                name="close"
+                size={18}
+                color={colors.textSecondary}
+              />
+            </TouchableOpacity>
+          )}
           <TouchableOpacity
             style={[
               styles.actionButton,
               editingMissionPrefs && styles.actionButtonActive,
               { backgroundColor: editingMissionPrefs ? colors.secondary : colors.settingIconBg }
             ]}
-            onPress={() => setEditingMissionPrefs(!editingMissionPrefs)}
+            onPress={editingMissionPrefs ? saveMissionPreferences : () => setEditingMissionPrefs(true)}
+            disabled={savingMissionPrefs}
           >
-            <Ionicons
-              name={editingMissionPrefs ? "checkmark" : "pencil"}
-              size={18}
-              color={editingMissionPrefs ? "#ffffff" : colors.secondary}
-            />
+            {savingMissionPrefs ? (
+              <ActivityIndicator size="small" color="#ffffff" />
+            ) : (
+              <Ionicons
+                name={editingMissionPrefs ? "checkmark" : "pencil"}
+                size={18}
+                color={editingMissionPrefs ? "#ffffff" : colors.secondary}
+              />
+            )}
           </TouchableOpacity>
         </View>
       </View>
@@ -1777,13 +1765,13 @@ export default function ProfileDetailsScreen() {
             <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
               {t('Secteurs d\'activité préférés')}
             </Text>
-            <View style={styles.chipContainer}>
+            <View style={additionalStyles.chipContainer}>
               {['IT/Informatique', 'Commerce', 'Industrie', 'Santé', 'Éducation', 'Finance'].map((sector) => (
                 <TouchableOpacity
                   key={sector}
                   style={[
-                    styles.chip,
-                    missionPreferences.sectors.includes(sector) && styles.chipSelected,
+                    additionalStyles.chip,
+                    missionPreferences.sectors.includes(sector) && additionalStyles.chipSelected,
                     {
                       backgroundColor: missionPreferences.sectors.includes(sector) 
                         ? colors.secondary + '20' 
@@ -1801,7 +1789,7 @@ export default function ProfileDetailsScreen() {
                   }}
                 >
                   <Text style={[
-                    styles.chipText,
+                    additionalStyles.chipText,
                     { color: missionPreferences.sectors.includes(sector) ? colors.secondary : colors.textSecondary }
                   ]}>
                     {t(sector)}
@@ -1816,13 +1804,13 @@ export default function ProfileDetailsScreen() {
             <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
               {t('Types de contrats préférés')}
             </Text>
-            <View style={styles.chipContainer}>
+            <View style={additionalStyles.chipContainer}>
               {['Intérim', 'CDD', 'CDI', 'Freelance', 'Saisonnier'].map((contractType) => (
                 <TouchableOpacity
                   key={contractType}
                   style={[
-                    styles.chip,
-                    missionPreferences.contractTypes.includes(contractType) && styles.chipSelected,
+                    additionalStyles.chip,
+                    missionPreferences.contractTypes.includes(contractType) && additionalStyles.chipSelected,
                     {
                       backgroundColor: missionPreferences.contractTypes.includes(contractType) 
                         ? colors.secondary + '20' 
@@ -1840,7 +1828,7 @@ export default function ProfileDetailsScreen() {
                   }}
                 >
                   <Text style={[
-                    styles.chipText,
+                    additionalStyles.chipText,
                     { color: missionPreferences.contractTypes.includes(contractType) ? colors.secondary : colors.textSecondary }
                   ]}>
                     {t(contractType)}
@@ -1874,57 +1862,57 @@ export default function ProfileDetailsScreen() {
           {/* Prétentions salariales */}
           <View style={styles.inputGroup}>
             <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
-              {t('Prétentions salariales (€/jour)')}
+              {t('Prétentions salariales (FCFA/mois)')}
             </Text>
             <TextInput
               style={[styles.input, { borderColor: colors.border, backgroundColor: colors.background, color: colors.textPrimary }]}
               value={missionPreferences.salaryExpectation}
               onChangeText={(text) => setMissionPreferences(prev => ({ ...prev, salaryExpectation: text }))}
-              placeholder={t('Ex: 350')}
+              placeholder={t('Ex: 350000')}
               placeholderTextColor={colors.textSecondary}
               keyboardType="numeric"
             />
           </View>
         </View>
       ) : (
-        <View style={styles.displayContainer}>
+        <View style={additionalStyles.displayContainer}>
           {/* Affichage des préférences */}
           <View style={styles.infoContainer}>
-            <View style={styles.infoRow}>
-              <Text style={[styles.labelText, { color: colors.textSecondary }]}>
+            <View style={additionalStyles.infoRow}>
+              <Text style={[additionalStyles.labelText, { color: colors.textSecondary }]}>
                 {t('Secteurs préférés')}:
               </Text>
-              <Text style={[styles.valueText, { color: colors.textPrimary }]}>
-                {missionPreferences.sectors.length > 0 
-                  ? missionPreferences.sectors.join(', ') 
+              <Text style={[additionalStyles.valueText, { color: colors.textPrimary }]}>
+                {missionPreferences.sectors.length > 0
+                  ? missionPreferences.sectors.join(', ')
                   : t('Non renseigné')}
               </Text>
             </View>
-            <View style={styles.infoRow}>
-              <Text style={[styles.labelText, { color: colors.textSecondary }]}>
+            <View style={additionalStyles.infoRow}>
+              <Text style={[additionalStyles.labelText, { color: colors.textSecondary }]}>
                 {t('Types de contrats')}:
               </Text>
-              <Text style={[styles.valueText, { color: colors.textPrimary }]}>
-                {missionPreferences.contractTypes.length > 0 
-                  ? missionPreferences.contractTypes.join(', ') 
+              <Text style={[additionalStyles.valueText, { color: colors.textPrimary }]}>
+                {missionPreferences.contractTypes.length > 0
+                  ? missionPreferences.contractTypes.join(', ')
                   : t('Non renseigné')}
               </Text>
             </View>
-            <View style={styles.infoRow}>
-              <Text style={[styles.labelText, { color: colors.textSecondary }]}>
+            <View style={additionalStyles.infoRow}>
+              <Text style={[additionalStyles.labelText, { color: colors.textSecondary }]}>
                 {t('Durée préférée')}:
               </Text>
-              <Text style={[styles.valueText, { color: colors.textPrimary }]}>
+              <Text style={[additionalStyles.valueText, { color: colors.textPrimary }]}>
                 {missionPreferences.missionDuration || t('Non renseigné')}
               </Text>
             </View>
-            <View style={styles.infoRow}>
-              <Text style={[styles.labelText, { color: colors.textSecondary }]}>
+            <View style={additionalStyles.infoRow}>
+              <Text style={[additionalStyles.labelText, { color: colors.textSecondary }]}>
                 {t('Prétentions salariales')}:
               </Text>
-              <Text style={[styles.valueText, { color: colors.textPrimary }]}>
-                {missionPreferences.salaryExpectation 
-                  ? `${missionPreferences.salaryExpectation}€/jour` 
+              <Text style={[additionalStyles.valueText, { color: colors.textPrimary }]}>
+                {missionPreferences.salaryExpectation
+                  ? `${parseInt(missionPreferences.salaryExpectation).toLocaleString()} FCFA/mois`
                   : t('Non renseigné')}
               </Text>
             </View>
@@ -2497,7 +2485,6 @@ export default function ProfileDetailsScreen() {
           style={[styles.secondaryButton, { backgroundColor: colors.settingIconBg, borderColor: colors.border }]}
           onPress={() => {
             setCvEditMode(false);
-            setCandidatEditMode(false);
             loadCandidatProfile();
             setCvUpdateError(null);
             setCandidatUpdateError(null);
@@ -2721,495 +2708,8 @@ export default function ProfileDetailsScreen() {
     );
   };
 
-  const getSexeLabel = (sexe: number | null | undefined) => {
-    if (sexe === 1) return 'Homme';
-    if (sexe === 2) return 'Femme';
-    return '';
-  };
-
-  const getSituationMat = (situation_matrimoniale: number | null | undefined) => {
-    if (situation_matrimoniale === 1) return 'Célibataire';
-    if (situation_matrimoniale === 2) return 'Divorcé(e)';
-    if (situation_matrimoniale === 3) return 'Veuf(ve)';
-    if (situation_matrimoniale === 0) return 'Marié(e)';
-    return '';
-  };
-
-  //  Rendu de la section Intérimaire
-  const renderInterimSection = () => (
-    <View style={[styles.section, { backgroundColor: colors.cardBackground }]}>
-      <View style={styles.sectionHeader}>
-        <View style={styles.headerLeft}>
-          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{t('Profil Intérimaire')}</Text>
-        </View>
-        {/* <View style={styles.headerActions}>
-          <TouchableOpacity
-            style={[styles.actionButton, interimEditMode && styles.actionButtonActive, { backgroundColor: interimEditMode ? colors.secondary : colors.settingIconBg }]}
-            onPress={() => interimEditMode ? handleInterimProfileSave() : setInterimEditMode(true)}
-          >
-            <Ionicons
-              name={interimEditMode ? "checkmark" : "pencil"}
-              size={18}
-              color={interimEditMode ? "#ffffff" : colors.secondary}
-            />
-          </TouchableOpacity>
-          {interimEditMode && (
-            <TouchableOpacity
-              style={[styles.actionButton, styles.actionButtonCancel, { backgroundColor: colors.error }]}
-              onPress={() => {
-                setInterimEditMode(false);
-                loadInterimProfile();
-                setInterimUpdateError(null);
-              }}
-            >
-              <Ionicons name="close" size={18} color="#ffffff" />
-            </TouchableOpacity>
-          )}
-        </View> */}
-      </View>
-
-      {loadingInterimProfile ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="small" color={colors.secondary} />
-          <Text style={[styles.loadingText, { color: colors.textSecondary }]}>{t('Chargement du profil intérimaire...')}</Text>
-        </View>
-      ) : user?.role !== 'interimaire' || interimProfile?.is_contract_active === false ? (
-        <View style={styles.emptyState}>
-          <Ionicons name="alert-circle-outline" size={48} color={colors.error} />
-          <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>{t('Accès restreint')}</Text>
-          <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-            {t('Votre contrat intérimaire est terminé ou inactif. Vous n\'avez plus accès à cet espace.')}
-          </Text>
-          <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-            {t('Veuillez contacter l\'administration pour plus d\'informations.')}
-          </Text>
-        </View>
-      ) : interimEditMode ? (
-        // Formulaire d'édition du profil Intérimaire
-        <View style={styles.editContainer}>
-          {/* Nom complet et Email de l'utilisateur principal (non modifiables ici) */}
-
-          <View style={styles.inputGroup}>
-            <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Nom Complet')}</Text>
-            <View style={[styles.disabledInput, { backgroundColor: colors.background, borderColor: colors.border }]}>
-              <Text style={[styles.disabledText, { color: colors.textSecondary }]}>{user?.name}</Text>
-              <Ionicons name="lock-closed" size={18} color={colors.textSecondary} />
-            </View>
-          </View>
-          <View style={styles.inputGroup}>
-            <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Email')}</Text>
-            <View style={[styles.disabledInput, { backgroundColor: colors.background, borderColor: colors.border }]}>
-              <Text style={[styles.disabledText, { color: colors.textSecondary }]}>{user?.email}</Text>
-              <Ionicons name="lock-closed" size={18} color={colors.textSecondary} />
-            </View>
-          </View>
-
-          {/* CHAMPS NON MODIFIABLES (Matricule, Statut agent, Diplôme, Taux retenue/remboursement) */}
-          <View style={styles.inputGroup}>
-            <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Matricule')}</Text>
-            <View style={[styles.disabledInput, { backgroundColor: colors.background, borderColor: colors.border }]}>
-              <Text style={[styles.disabledText, { color: colors.textSecondary }]}>EMP-{interimProfile?.matricule}</Text>
-              <Ionicons name="lock-closed" size={18} color={colors.textSecondary} />
-            </View>
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Diplôme')}</Text>
-            <TextInput
-              style={[styles.input, styles.disabledInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
-              value={editableInterimProfile?.diplome || ''}
-              placeholder={t("Ex: Licence en Informatique")}
-              placeholderTextColor={colors.textSecondary}
-              editable={false}
-            />
-          </View>
 
 
-          {/* CHAMPS MODIFIABLES */}
-          <View style={styles.inputGroup}>
-            <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Sexe')}</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
-              value={getSexeLabel(parseInt(editableInterimProfile?.sexe))}
-              onChangeText={(text) => setEditableInterimProfile(prev => ({ ...prev!, sexe: text as any }))} // Cast temporaire
-              placeholder={t("Homme, Femme")}
-              placeholderTextColor={colors.textSecondary}
-              editable={false}
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Situation matrimoniale')}</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
-              value={getSituationMat(parseInt(editableInterimProfile?.matrimoniale))} // Utilise le label
-              onChangeText={(text) => setEditableInterimProfile(prev => ({ ...prev!, matrimoniale: text as any }))} // Cast temporaire
-              placeholder={t("Célibataire, Marié(e)...")}
-              placeholderTextColor={colors.textSecondary}
-              editable={false}
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Nationalité')}</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
-              value={editableInterimProfile?.nationalite || ''}
-              onChangeText={(text) => setEditableInterimProfile(prev => ({ ...prev!, nationalite: text }))}
-              placeholder={t("Nationalité")}
-              placeholderTextColor={colors.textSecondary}
-              editable={false}
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Téléphone (Agent)')}</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
-              value={editableInterimProfile?.phone || ''}
-              onChangeText={(text) => setEditableInterimProfile(prev => ({ ...prev!, phone: text }))}
-              placeholder={t("Numéro de téléphone de l'agent")}
-              placeholderTextColor={colors.textSecondary}
-              keyboardType="phone-pad"
-            />
-          </View>
-
-          {/* <View style={styles.inputGroup}>
-            <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Date de naissance (Agent)')}</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
-              value={editableInterimProfile?.date_naissance || ''}
-              onChangeText={(text) => setEditableInterimProfile(prev => ({ ...prev!, date_naissance: text }))}
-              placeholder={t("AAAA-MM-JJ")}
-              placeholderTextColor={colors.textSecondary}
-            />
-          </View> */}
-
-          <View style={styles.inputGroup}>
-            <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
-              {t('Date de naissance (AAAA-MM-JJ)')}
-            </Text>
-
-            <TouchableOpacity
-              style={[
-                styles.input,
-                {
-                  backgroundColor: colors.background,
-                  borderColor: colors.border,
-                  justifyContent: 'center',
-                  paddingVertical: 12,
-                }
-              ]}
-              onPress={() => setDatePickerOpen(true)}
-            >
-              <Text
-                style={{
-                  color: editableInterimProfile?.date_naissance
-                    ? colors.textPrimary
-                    : colors.textSecondary,
-                  fontSize: 16,
-                }}
-              >
-                {editableInterimProfile?.date_naissance || t("AAAA-MM-JJ")}
-              </Text>
-            </TouchableOpacity>
-
-            <DatePicker
-              modal
-              open={datePickerOpen}
-              date={parseStringToDate(editableInterimProfile?.date_naissance)}
-              mode="date"
-              onConfirm={(selectedDate) => {
-                setDatePickerOpen(false);
-                const formattedDate = formatDateToString(selectedDate);
-                setEditableInterimProfile(prev => ({
-                  ...prev!,
-                  date_naissance: formattedDate
-                }));
-              }}
-              onCancel={() => {
-                setDatePickerOpen(false);
-              }}
-              title={t('Sélectionner la date de naissance')}
-              confirmText={t('Confirmer')}
-              cancelText={t('Annuler')}
-            />
-          </View>
-
-
-          <View style={styles.inputGroup}>
-            <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Lieu de naissance (Agent)')}</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
-              value={editableInterimProfile?.lieu_naissance || ''}
-              onChangeText={(text) => setEditableInterimProfile(prev => ({ ...prev!, lieu_naissance: text }))}
-              placeholder={t("Lieu de naissance de l'agent")}
-              placeholderTextColor={colors.textSecondary}
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Numéro CNI')}</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
-              value={editableInterimProfile?.cni || ''}
-              onChangeText={(text) => setEditableInterimProfile(prev => ({ ...prev!, cni: text }))}
-              placeholder={t("Numéro de carte d'identité")}
-              placeholderTextColor={colors.textSecondary}
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Adresse (Agent)')}</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
-              value={editableInterimProfile?.adresse || ''}
-              onChangeText={(text) => setEditableInterimProfile(prev => ({ ...prev!, adresse: text }))}
-              placeholder={t("Adresse de l'agent")}
-              placeholderTextColor={colors.textSecondary}
-            />
-          </View>
-
-          {/* <View style={styles.inputGroup}>
-            <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('Chemin photo de profil')}</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
-              value={editableInterimProfile?.profile_photo_path || ''}
-              onChangeText={(text) => setEditableInterimProfile(prev => ({ ...prev!, profile_photo_path: text }))}
-              placeholder={t("URL ou chemin de la photo")}
-              placeholderTextColor={colors.textSecondary}
-            />
-          </View> */}
-
-          {interimUpdateError && (
-            <View style={[styles.errorContainer, { backgroundColor: colors.error + '10' }]}>
-              <Ionicons name="alert-circle" size={18} color={colors.error} />
-              <Text style={[styles.errorText, { color: colors.error }]}>{interimUpdateError}</Text>
-            </View>
-          )}
-
-          <View style={styles.actionButtons}>
-            <TouchableOpacity
-              style={[styles.secondaryButton, { backgroundColor: colors.settingIconBg, borderColor: colors.border }]}
-              onPress={() => {
-                setInterimEditMode(false);
-                loadInterimProfile();
-                setInterimUpdateError(null);
-              }}
-            >
-              <Text style={{ color: colors.textSecondary, fontWeight: '700', fontSize: 16 }}>{t('Annuler')}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.primaryButton, { backgroundColor: colors.secondary }]}
-              onPress={handleInterimProfileSave}
-            >
-              <Text style={styles.primaryButtonText}>{t('Sauvegarder')}</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      ) : (
-        // Mode affichage du profil Intérimaire
-        <View style={styles.infoContainer}>
-          {user?.role !== 'interimaire' || interimProfile?.is_contract_active !== true ? (
-            <View style={styles.emptyState}>
-              <Ionicons name="alert-circle-outline" size={48} color={colors.error} />
-              <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>{t('Accès restreint')}</Text>
-              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-                {t('Votre contrat intérimaire est terminé ou inactif. Vous n\'avez plus accès à cet espace.')}
-              </Text>
-              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-                {t('Veuillez contacter l\'administration pour plus d\'informations.')}
-              </Text>
-            </View>
-          ) : (
-            <>
-              {/* <View style={styles.infoItem}>
-                <View style={styles.infoIcon}>
-                  <Ionicons name="person" size={18} color={colors.secondary} />
-                </View>
-                <View style={styles.infoContent}>
-                  <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Nom complet')}</Text>
-                  <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{user?.name || t('Non renseigné')}</Text>
-                </View>
-              </View>
-              <View style={styles.infoItem}>
-                <View style={styles.infoIcon}>
-                  <Ionicons name="mail" size={18} color={colors.secondary} />
-                </View>
-                <View style={styles.infoContent}>
-                  <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Email')}</Text>
-                  <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{user?.email || t('Non renseigné')}</Text>
-                </View>
-              </View> */}
-              <View style={styles.infoItem}>
-                <View style={styles.infoIcon}>
-                  <Ionicons name="finger-print" size={18} color={colors.secondary} />
-                </View>
-                <View style={styles.infoContent}>
-                  <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Matricule')}</Text>
-                  <Text style={[styles.infoValue, { color: colors.textPrimary }]}>EMP-{interimProfile?.matricule || t('Non renseigné')}</Text>
-                </View>
-              </View>
-              {/* <View style={styles.infoItem}>
-                <View style={styles.infoIcon}>
-                  <Ionicons name="transgender" size={18} color={colors.secondary} />
-                </View>
-                <View style={styles.infoContent}>
-                  <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Sexe')}</Text>
-                  <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.sexe_label || t('Non renseigné')}</Text>
-                </View>
-              </View> */}
-              <View style={styles.infoItem}>
-                <View style={styles.infoIcon}>
-                  <Ionicons name="heart" size={18} color={colors.secondary} />
-                </View>
-                <View style={styles.infoContent}>
-                  <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Situation matrimoniale')}</Text>
-                  <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.situation_matrimoniale_label || t('Non renseigné')}</Text>
-                </View>
-              </View>
-              <View style={styles.infoItem}>
-                <View style={styles.infoIcon}>
-                  <Ionicons name="flag" size={18} color={colors.secondary} />
-                </View>
-                <View style={styles.infoContent}>
-                  <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Nationalité')}</Text>
-                  <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.nationalite || t('Non renseigné')}</Text>
-                </View>
-              </View>
-              <View style={styles.infoItem}>
-                <View style={styles.infoIcon}>
-                  <Ionicons name="call" size={18} color={colors.secondary} />
-                </View>
-                <View style={styles.infoContent}>
-                  <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Téléphone')}</Text>
-                  <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.phone || t('Non renseigné')}</Text>
-                </View>
-              </View>
-              <View style={styles.infoItem}>
-                <View style={styles.infoIcon}>
-                  <Ionicons name="calendar" size={18} color={colors.secondary} />
-                </View>
-                <View style={styles.infoContent}>
-                  <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Date de naissance')}</Text>
-                  <Text style={[styles.infoValue, { color: colors.textPrimary }]}>
-                    {interimProfile?.date_naissance
-                      ? (() => {
-                        const date = new Date(interimProfile.date_naissance);
-                        if (isNaN(date.getTime())) return t('Non renseignée');
-                        const day = date.getDate().toString().padStart(2, '0');
-                        const month = date.toLocaleString('fr-FR', { month: 'short' });
-                        const year = date.getFullYear();
-                        return `${day} ${month.charAt(0).toUpperCase() + month.slice(1)}. ${year}`;
-                      })()
-                      : t('Non renseignée')}
-                  </Text>
-                </View>
-              </View>
-              <View style={styles.infoItem}>
-                <View style={styles.infoIcon}>
-                  <Ionicons name="map" size={18} color={colors.secondary} />
-                </View>
-                <View style={styles.infoContent}>
-                  <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Lieu de naissance')}</Text>
-                  <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.lieu_naissance || t('Non renseigné')}</Text>
-                </View>
-              </View>
-              <View style={styles.infoItem}>
-                <View style={styles.infoIcon}>
-                  <Ionicons name="id-card" size={18} color={colors.secondary} />
-                </View>
-                <View style={styles.infoContent}>
-                  <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Numéro CNI')}</Text>
-                  <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.cni || t('Non renseigné')}</Text>
-                </View>
-              </View>
-              <View style={styles.infoItem}>
-                <View style={styles.infoIcon}>
-                  <Ionicons name="home" size={18} color={colors.secondary} />
-                </View>
-                <View style={styles.infoContent}>
-                  <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Adresse ')}</Text>
-                  <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.adresse || t('Non renseigné')}</Text>
-                </View>
-              </View>
-              {/* <View style={styles.infoItem}>
-                <View style={styles.infoIcon}>
-                  <Ionicons name="image" size={18} color={colors.textSecondary} />
-                </View>
-                <View style={styles.infoContent}>
-                  <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Chemin photo de profil')}</Text>
-                  <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.profile_photo_path || t('Non renseigné')}</Text>
-                </View>
-              </View> */}
-              <View style={styles.infoItem}>
-                <View style={styles.infoIcon}>
-                  <Ionicons name="briefcase" size={18} color={colors.secondary} />
-                </View>
-                <View style={styles.infoContent}>
-                  <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Statut de l\'agent')}</Text>
-                  <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.statut_agent_label || t('Non renseigné')}</Text>
-                </View>
-              </View>
-              <View style={styles.infoItem}>
-                <View style={styles.infoIcon}>
-                  <Ionicons name="school" size={18} color={colors.secondary} />
-                </View>
-                <View style={styles.infoContent}>
-                  <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Diplôme')}</Text>
-                  <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.diplome || t('Non renseigné')}</Text>
-                </View>
-              </View>
-              <View style={styles.infoItem}>
-                <View style={styles.infoIcon}>
-                  <Ionicons name="wallet" size={18} color={colors.secondary} />
-                </View>
-                <View style={styles.infoContent}>
-                  <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Taux de retenue (%)')}</Text>
-                  <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.taux_retenu_label || t('Non renseigné')}</Text>
-                </View>
-              </View>
-              <View style={styles.infoItem}>
-                <View style={styles.infoIcon}>
-                  <Ionicons name="receipt" size={18} color={colors.secondary} />
-                </View>
-                <View style={styles.infoContent}>
-                  <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('Taux de remboursement (%)')}</Text>
-                  <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{interimProfile?.taux_remboursse_label || t('Non renseigné')}</Text>
-                </View>
-              </View>
-            </>
-          )}
-        </View>
-      )}
-      {!interimProfile && !loadingInterimProfile && (
-        <View style={styles.emptyState}>
-          <Ionicons name="business-outline" size={48} color={colors.textSecondary} />
-          <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>{t('Pas de profil intérimaire')}</Text>
-          <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-            {t('Créez votre profil intérimaire pour gérer les offres et les candidats.')}
-          </Text>
-          <TouchableOpacity style={[styles.primaryButton, { backgroundColor: colors.secondary }]} onPress={() => setInterimEditMode(true)}>
-            <Text style={styles.primaryButtonText}>{t('Créer mon profil intérimaire')}</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-    </View>
-  );
-
-  const renderTabContent = () => {
-    if (user?.role === 'user') {
-      if (activeTab === 'personal') return renderPersonalInfo();
-      if (activeTab === 'cv') return renderCvSection();
-    }
-
-    if (user?.role === 'interimaire') {
-      if (activeTab === 'cv') return renderCvSection(); // L'onglet 'Candidat' pour l'intérimaire
-      if (activeTab === 'interimaire') return renderInterimSection(); // L'onglet 'Intérimaire' pour l'intérimaire
-    }
-
-    return null;
-  };
 
   // Calculer la progression du profil
   const calculateProfileCompletion = () => {
@@ -3229,18 +2729,20 @@ export default function ProfileDetailsScreen() {
       const percentage = Math.round((completed / total) * 100);
       return { percentage, completed, total };
     }
-    
-    // Pour les intérimaires
-    if (interimProfile) {
+
+    // Pour les intérimaires (utiliser candidatProfile comme pour les users)
+    if (user?.role === 'interimaire' && candidatProfile) {
       let completed = 0;
-      const total = 4; // Nombre total de sections importantes pour intérimaires
-      
-      // Vérifier les champs essentiels pour intérimaires
-      if (interimProfile.telephone && interimProfile.date_naissance) completed++;
-      if (interimProfile.disponibilite) completed++;
-      if (interimProfile.status) completed++;
-      if (user?.name) completed++; // Informations de base
-      
+      const total = 6; // Même calcul que pour les candidats
+
+      // Vérifier les champs essentiels
+      if (candidatProfile.telephone && candidatProfile.date_naissance) completed++;
+      if (candidatProfile.titreProfil) completed++;
+      if (candidatProfile.competences && candidatProfile.competences.length > 0) completed++;
+      if (candidatProfile.experiences && candidatProfile.experiences.length > 0) completed++;
+      if (candidatProfile.formations && candidatProfile.formations.length > 0) completed++;
+      if (parsedCv?.full_name || candidatProfile.cv_file) completed++;
+
       const percentage = Math.round((completed / total) * 100);
       return { percentage, completed, total };
     }
@@ -3341,7 +2843,6 @@ export default function ProfileDetailsScreen() {
         // showBackButton={true}
         onAvatarPress={handleAvatarPress}
       />
-      {renderTabBar()}
       {renderProfileProgress()}
       <ScrollView
         style={[styles.scrollView, { backgroundColor: colors.background }]}
@@ -3349,7 +2850,63 @@ export default function ProfileDetailsScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {renderTabContent()}
+        {renderPersonalInfo()}
+        {renderCvSection()}
+        
+        {/* Zone de Danger - Simplifiée */}
+        <View style={{
+          marginTop: 24,
+          marginHorizontal: 16,
+          padding: 20,
+          backgroundColor: colors.cardBackground,
+          borderRadius: 16,
+          borderWidth: 1,
+          borderColor: '#FCA5A5',
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.1,
+          shadowRadius: 8,
+          elevation: 2,
+        }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+            <Ionicons name="warning" size={20} color={colors.error} style={{ marginRight: 8 }} />
+            <Text style={{
+              fontSize: 18,
+              fontWeight: '600',
+              color: colors.textPrimary
+            }}>{t('Zone de danger')}</Text>
+          </View>
+
+          <Text style={{
+            fontSize: 14,
+            marginBottom: 16,
+            color: colors.textSecondary,
+            lineHeight: 20
+          }}>
+            {t('La suppression de votre compte est définitive et irréversible. Toutes vos données seront perdues.')}
+          </Text>
+
+          <TouchableOpacity
+            style={{
+              flexDirection: 'row',
+              paddingVertical: 12,
+              paddingHorizontal: 20,
+              borderRadius: 12,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: colors.error,
+            }}
+            onPress={handleDeleteAccount}
+            disabled={authLoading || deletingAccount}
+          >
+            <Ionicons name="trash-outline" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
+            <Text style={{
+              color: '#FFFFFF',
+              fontSize: 16,
+              fontWeight: '600',
+            }}>{t('Supprimer mon compte')}</Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
       <Modal
         visible={showCompletionModal}
@@ -3425,6 +2982,141 @@ export default function ProfileDetailsScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Modal de confirmation de suppression de compte */}
+      <Modal
+        visible={showDeleteModal}
+        animationType="fade"
+        transparent
+        onRequestClose={handleCancelDelete}
+      >
+        <View style={{
+          flex: 1,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          justifyContent: 'center',
+          alignItems: 'center',
+          padding: 20,
+        }}>
+          <View style={{
+            backgroundColor: colors.cardBackground,
+            borderRadius: 20,
+            padding: 24,
+            width: '100%',
+            maxWidth: 400,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.3,
+            shadowRadius: 10,
+            elevation: 8,
+          }}>
+            {/* Header */}
+            <View style={{ alignItems: 'center', marginBottom: 20 }}>
+              <View style={{
+                width: 60,
+                height: 60,
+                borderRadius: 30,
+                backgroundColor: colors.error + '20',
+                justifyContent: 'center',
+                alignItems: 'center',
+                marginBottom: 12,
+              }}>
+                <Ionicons name="warning" size={32} color={colors.error} />
+              </View>
+              <Text style={{
+                fontSize: 20,
+                fontWeight: '700',
+                color: colors.textPrimary,
+                textAlign: 'center',
+              }}>{t('Supprimer le compte')}</Text>
+            </View>
+
+            {/* Message d'avertissement */}
+            <Text style={{
+              fontSize: 16,
+              color: colors.textSecondary,
+              textAlign: 'center',
+              marginBottom: 20,
+              lineHeight: 22,
+            }}>
+              {t('Cette action est irréversible. Pour confirmer, veuillez saisir votre mot de passe.')}
+            </Text>
+
+            {/* Champ mot de passe */}
+            <View style={{ marginBottom: 24 }}>
+              <Text style={{
+                fontSize: 14,
+                fontWeight: '600',
+                color: colors.textPrimary,
+                marginBottom: 8,
+              }}>{t('Mot de passe')}</Text>
+              <TextInput
+                style={{
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  borderRadius: 12,
+                  paddingHorizontal: 16,
+                  paddingVertical: 12,
+                  fontSize: 16,
+                  backgroundColor: colors.background,
+                  color: colors.textPrimary,
+                }}
+                placeholder={t('Saisissez votre mot de passe')}
+                placeholderTextColor={colors.textSecondary}
+                secureTextEntry
+                value={deletePassword}
+                onChangeText={setDeletePassword}
+                autoFocus
+              />
+            </View>
+
+            {/* Boutons */}
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  paddingVertical: 12,
+                  paddingHorizontal: 20,
+                  borderRadius: 12,
+                  backgroundColor: colors.border,
+                  alignItems: 'center',
+                }}
+                onPress={handleCancelDelete}
+                disabled={deletingAccount}
+              >
+                <Text style={{
+                  fontSize: 16,
+                  fontWeight: '600',
+                  color: colors.textSecondary,
+                }}>{t('Annuler')}</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  paddingVertical: 12,
+                  paddingHorizontal: 20,
+                  borderRadius: 12,
+                  backgroundColor: colors.error,
+                  alignItems: 'center',
+                  opacity: deletingAccount ? 0.7 : 1,
+                }}
+                onPress={handleConfirmDeleteAccount}
+                disabled={deletingAccount}
+              >
+                {deletingAccount ? (
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                ) : (
+                  <Text style={{
+                    fontSize: 16,
+                    fontWeight: '600',
+                    color: '#FFFFFF',
+                  }}>{t('Supprimer')}</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -3456,47 +3148,6 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
   },
 
-  // Tab Bar Styles - Modernisés
-  tabBarContainer: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-  },
-  tabBar: {
-    flexDirection: 'row',
-    borderRadius: 14,
-    padding: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.12,
-    shadowRadius: 10,
-    elevation: 5,
-  },
-  tab: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 18,
-    borderRadius: 10,
-    gap: 6,
-  },
-  activeTab: {
-    // backgroundColor est géré par le style inline
-  },
-  tabIconContainer: {
-    marginRight: 8,
-  },
-  activeTabIconContainer: {
-    marginRight: 8,
-  },
-  tabText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  activeTabText: {
-    // color est géré par le style inline
-  },
 
   // Section Styles
   section: {
@@ -3628,12 +3279,9 @@ const styles = StyleSheet.create({
   statusTextInactive: {
     // color est géré par le style inline
   },
-
-
   profilePhotoContainer: {
     alignItems: 'center',
   },
-
   profilePhotoButton: {
     width: 120,
     height: 120,
@@ -4206,18 +3854,30 @@ const additionalStyles = StyleSheet.create({
     marginTop: 8,
   },
   chip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    borderWidth: 1,
-    margin: 2,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    margin: 3,
+    minHeight: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
   chipSelected: {
-    // Styles appliqués dynamiquement via backgroundColor et borderColor
+    transform: [{ scale: 1.05 }],
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    elevation: 3,
   },
   chipText: {
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: '600',
+    textAlign: 'center',
   },
   
   // Styles pour l'affichage des informations

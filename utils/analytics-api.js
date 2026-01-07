@@ -8,19 +8,35 @@ import api from './api';
 // Obtenir les statistiques générales du dashboard
 export const getDashboardStats = async (period = 'month', year = null, showAll = true) => {
   try {
-    const params = { 
+    // Vérifier si un token existe avant de faire l'appel
+    const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+    const token = await AsyncStorage.getItem('user_token');
+    if (!token) {
+      console.log('getDashboardStats: Pas de token disponible, appel ignoré');
+      return { success: false, message: 'No token available' };
+    }
+
+    const params = {
       period,
       show_all: showAll // Par défaut, afficher toutes les données historiques pour le dashboard
     };
     if (year) {
       params.year = year;
     }
-    
+
     const response = await api.get('/interim/analytics/dashboard', {
       params
     });
     return response.data;
   } catch (error) {
+    // Ne pas logguer l'erreur si c'est un 401 et qu'on n'a plus de token
+    const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+    const token = await AsyncStorage.getItem('user_token');
+    if (error.response?.status === 401 && !token) {
+      console.log('getDashboardStats: 401 sans token, probablement après déconnexion - ignoré');
+      return { success: false, message: 'Unauthenticated after logout' };
+    }
+
     console.error("Échec de l'appel API getDashboardStats:", error.response?.data || error.message);
     throw error;
   }
@@ -102,6 +118,95 @@ export const getMonthlyPerformance = async (year = null) => {
   }
 };
 
+// ============================================================================
+// NOUVELLES FONCTIONS POUR LES LISTES DÉTAILLÉES
+// ============================================================================
+
+// Obtenir la liste des consultations avec détails
+export const getConsultationsList = async (year = null, month = null) => {
+  try {
+    const params = {};
+    if (year) params.year = year;
+    if (month) params.month = month;
+    
+    const response = await api.get('/interim/analytics/consultations-list', {
+      params
+    });
+    return response.data;
+  } catch (error) {
+    console.error("Échec de l'appel API getConsultationsList:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+// Obtenir la liste des examens avec détails
+export const getExamensList = async (year = null, month = null) => {
+  try {
+    const params = {};
+    if (year) params.year = year;
+    if (month) params.month = month;
+    
+    const response = await api.get('/interim/analytics/examens-list', {
+      params
+    });
+    return response.data;
+  } catch (error) {
+    console.error("Échec de l'appel API getExamensList:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+// Obtenir la liste des soins avec détails
+export const getSoinsList = async (year = null, month = null) => {
+  try {
+    const params = {};
+    if (year) params.year = year;
+    if (month) params.month = month;
+    
+    const response = await api.get('/interim/analytics/soins-list', {
+      params
+    });
+    return response.data;
+  } catch (error) {
+    console.error("Échec de l'appel API getSoinsList:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+// Obtenir la liste des médicaments avec détails
+export const getMedicamentsList = async (year = null, month = null) => {
+  try {
+    const params = {};
+    if (year) params.year = year;
+    if (month) params.month = month;
+    
+    const response = await api.get('/interim/analytics/medicaments-list', {
+      params
+    });
+    return response.data;
+  } catch (error) {
+    console.error("Échec de l'appel API getMedicamentsList:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+// Obtenir la liste des prothèses avec détails
+export const getProthesesList = async (year = null, month = null) => {
+  try {
+    const params = {};
+    if (year) params.year = year;
+    if (month) params.month = month;
+    
+    const response = await api.get('/interim/analytics/protheses-list', {
+      params
+    });
+    return response.data;
+  } catch (error) {
+    console.error("Échec de l'appel API getProthesesList:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
 // Générer et télécharger un rapport PDF
 export const generateAnalyticsReport = async (reportType, params = {}) => {
   try {
@@ -132,10 +237,34 @@ export const downloadReport = async (reportId) => {
 // Obtenir l'historique des rapports générés
 export const getReportsHistory = async () => {
   try {
+    console.log('getReportsHistory: Début de l\'appel API...');
     const response = await api.get('/interim/analytics/reports');
+    console.log('getReportsHistory: Réponse reçue:', response.status, response.data);
     return response.data;
   } catch (error) {
-    console.error("Échec de l'appel API getReportsHistory:", error.response?.data || error.message);
+    console.error("getReportsHistory: Erreur complète:", error);
+    console.error("getReportsHistory: Status:", error.response?.status);
+    console.error("getReportsHistory: Data:", error.response?.data);
+    console.error("getReportsHistory: Message:", error.message);
+
+    // Retourner une structure par défaut pour éviter les plantages
+    return {
+      success: false,
+      message: error.response?.data?.message || error.message || 'Erreur de connexion',
+      data: {
+        reports: []
+      }
+    };
+  }
+};
+
+// Supprimer un rapport généré
+export const deleteReport = async (reportId) => {
+  try {
+    const response = await api.delete(`/interim/analytics/reports/${reportId}`);
+    return response.data;
+  } catch (error) {
+    console.error("Échec de l'appel API deleteReport:", error.response?.data || error.message);
     throw error;
   }
 };
@@ -218,8 +347,8 @@ export const REPORT_TYPES = [
   },
   {
     id: 'work_activity',
-    label: 'Activité de travail',
-    description: 'Contrats, heures travaillées, structures',
+    label: 'Rapport contractuel',
+    description: 'Contrats, heures travaillées, sociétés employeurs',
     icon: 'briefcase'
   },
   {

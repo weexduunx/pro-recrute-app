@@ -65,7 +65,7 @@ export default function ActualitesScreen() {
     setError(null);
     try {
       const fetchedNews = await getActualites();
-      setNews(fetchedNews);
+      setNews(fetchedNews || []);
     } catch (err: any) {
       console.error("Erreur de chargement des actualités:", err);
       setError(err.message || "Impossible de charger les actualités.");
@@ -244,7 +244,7 @@ export default function ActualitesScreen() {
               <FlatList
                 data={news}
                 renderItem={renderNewsCard}
-                keyExtractor={(item) => item.id.toString()}
+                keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
                 contentContainerStyle={styles.listContainer}
                 refreshControl={
                   <RefreshControl

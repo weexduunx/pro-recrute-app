@@ -21,11 +21,24 @@ export default function EntretiensHistoriqueScreen() {
       setLoading(true);
       try {
         const fetchedEntretiens = await getCandidatEntretiens();
+        console.log('🔍 historique.tsx: Réponse API:', fetchedEntretiens);
+
+        let entretiensData = [];
+        if (fetchedEntretiens && fetchedEntretiens.entretiens) {
+          console.log('🔍 historique.tsx: Format API avec .entretiens, length:', fetchedEntretiens.entretiens.length);
+          entretiensData = fetchedEntretiens.entretiens;
+        } else if (Array.isArray(fetchedEntretiens)) {
+          console.log('🔍 historique.tsx: Format API direct array, length:', fetchedEntretiens.length);
+          entretiensData = fetchedEntretiens;
+        }
+
         // Filtrer seulement les entretiens passés
-        const entretiensPassés = fetchedEntretiens.filter((e: any) => {
+        const entretiensPassés = entretiensData.filter((e: any) => {
           const entretienDate = new Date(`${e.date_entretien}T${e.heure_entretien}`);
           return entretienDate < new Date();
         });
+
+        console.log('🔍 historique.tsx: Entretiens passés trouvés:', entretiensPassés.length);
         setEntretiens(entretiensPassés);
       } catch (error: any) {
         console.error("Erreur de chargement de l'historique:", error);
@@ -84,6 +97,8 @@ export default function EntretiensHistoriqueScreen() {
   };
 
   const getFilteredEntretiens = () => {
+    if (!entretiens || !Array.isArray(entretiens)) return [];
+
     switch (filter) {
       case 'accepte':
         return entretiens.filter(e => e.decision === 3);
@@ -97,14 +112,18 @@ export default function EntretiensHistoriqueScreen() {
   };
 
   const getStatsHistorique = () => {
+    if (!entretiens || !Array.isArray(entretiens)) {
+      return { total: 0, accepte: 0, refuse: 0, enAttente: 0, passe: 0, tauxReussite: 0 };
+    }
+
     const total = entretiens.length;
     const accepte = entretiens.filter(e => e.decision === 3).length;
     const refuse = entretiens.filter(e => e.decision === 2).length;
     const enAttente = entretiens.filter(e => e.decision === 0).length;
     const passe = entretiens.filter(e => e.decision === 1).length;
-    
+
     const tauxReussite = total > 0 ? Math.round(((accepte + passe) / total) * 100) : 0;
-    
+
     return { total, accepte, refuse, enAttente, passe, tauxReussite };
   };
 

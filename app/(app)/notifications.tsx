@@ -8,7 +8,8 @@ import {
   RefreshControl,
   Alert,
   ActivityIndicator,
-  AppState
+  AppState,
+  StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -54,14 +55,29 @@ export default function NotificationsScreen() {
       }
 
       const response = await getCandidatNotifications(pageNum, 20);
-      
+
       if (response.success) {
         const newNotifications = response.notifications;
-        
+
         if (isRefresh || pageNum === 1) {
           setNotifications(newNotifications);
         } else {
-          setNotifications(prev => [...prev, ...newNotifications]);
+          setNotifications(prev => {
+            const combined = [...prev, ...newNotifications];
+            // Dédupliquer basé sur l'ID ou sur created_at + type si pas d'ID
+            const unique = combined.filter((notification, index, arr) => {
+              if (notification.id) {
+                return arr.findIndex(n => n.id === notification.id) === index;
+              } else {
+                return arr.findIndex(n =>
+                  n.created_at === notification.created_at &&
+                  n.type === notification.type &&
+                  n.title === notification.title
+                ) === index;
+              }
+            });
+            return unique;
+          });
         }
         
         setHasMore(newNotifications.length === 20);
@@ -121,7 +137,7 @@ export default function NotificationsScreen() {
       console.error('Erreur marquage notification:', error);
       // Revenir en arrière en cas d'erreur
       setNotifications(prev => prev.map(n => 
-        n.id === notification.id ? { ...n, read_at: null } : n
+        n.id === notification.id ? { ...n, read_at: undefined } : n
       ));
       refreshUnreadCount();
     }
@@ -145,7 +161,7 @@ export default function NotificationsScreen() {
       // Revenir en arrière
       setNotifications(prev => prev.map(n => {
         const wasUnread = unreadNotifications.find(un => un.id === n.id);
-        return wasUnread ? { ...n, read_at: null } : n;
+        return wasUnread ? { ...n, read_at: undefined } : n;
       }));
       refreshUnreadCount();
       Alert.alert('Erreur', 'Impossible de marquer les notifications comme lues');
@@ -251,7 +267,105 @@ export default function NotificationsScreen() {
 
   const renderNotification = ({ item }: { item: CandidatNotification }) => {
     const isUnread = !item.read_at;
-    
+
+    // Extraire le titre du poste depuis les données d'entretien si disponible
+    const getJobTitleFromData = (data: any) => {
+      if (!data) return null;
+
+      // Structure réelle des données : les infos sont directement dans data
+      return data.offre_titre ||
+             data.titre_offre ||
+             data.titre_poste ||
+             data.job_title ||
+             data.poste_titre ||
+             null;
+    };
+
+    // Construire le titre avec le nom du poste si c'est une notification d'entretien
+    const getDisplayTitle = () => {
+      if (item.type.includes('entretien') && item.data) {
+        const jobTitle = getJobTitleFromData(item.data);
+        if (jobTitle) {
+          return `${item.title} - ${jobTitle}`;
+        }
+      }
+      return item.title;
+    };
+
+    // Construire le message avec plus de détails pour les entretiens
+    const getDisplayMessage = () => {
+      if (item.type.includes('entretien') && item.data) {
+        const data = item.data;
+        const entreprise = data.entreprise || data.entreprise_nom || '';
+        const date = data.date || data.date_entretien || '';
+        const heure = data.heure || data.heure_entretien || '';
+        const lieu = data.lieu || data.lieux_entretien || '';
+        const jobTitle = getJobTitleFromData(item.data);
+
+        // Pour les rappels d'entretien, créer un message personnalisé
+        if (item.type === 'entretien_reminder') {
+          let message = `Rappel : Votre entretien`;
+
+          if (jobTitle) {
+            message += ` pour le poste "${jobTitle}"`;
+          }
+
+          if (entreprise) {
+            message += ` chez ${entreprise}`;
+          }
+
+          if (heure) {
+            const heureFormatee = heure.substring(0, 5);
+            message += ` est aujourd'hui à ${heureFormatee}`;
+          } else {
+            message += ` est aujourd'hui`;
+          }
+
+          if (lieu) {
+            message += `. 📍 ${lieu}`;
+          }
+
+          message += `. Bonne chance !`;
+          return message;
+        }
+
+        // Pour les autres types d'entretien, améliorer le message existant
+        let enhancedMessage = item.message;
+
+        if (date && heure) {
+          const heureFormatee = heure.substring(0, 5);
+          const today = new Date().toISOString().split('T')[0];
+          const isToday = date === today;
+
+          if (isToday) {
+            enhancedMessage = enhancedMessage.replace(/le \d{4}-\d{2}-\d{2}/, 'aujourd\'hui');
+            enhancedMessage += ` à ${heureFormatee}`;
+          }
+        }
+
+        if (entreprise && !enhancedMessage.includes(entreprise)) {
+          enhancedMessage += ` chez ${entreprise}`;
+        }
+
+        if (lieu && !enhancedMessage.includes(lieu)) {
+          enhancedMessage += ` 📍 ${lieu}`;
+        }
+
+        return enhancedMessage;
+      }
+      return item.message;
+    };
+
+    // Debug pour voir la structure des données
+    if (item.type.includes('entretien')) {
+      console.log('🔍 DEBUG NOTIFICATION ENTRETIEN:', {
+        type: item.type,
+        title: item.title,
+        data: item.data,
+        jobTitle: getJobTitleFromData(item.data)
+      });
+    }
+
     return (
       <TouchableOpacity
         style={[styles.notificationItem, isUnread ? styles.unreadItem : styles.readItem]}
@@ -262,16 +376,16 @@ export default function NotificationsScreen() {
           <View style={[styles.iconContainer, isUnread && styles.unreadIconContainer]}>
             {getNotificationIcon(item.type, item.priority)}
           </View>
-          
+
           <View style={styles.textContainer}>
             <View style={styles.titleRow}>
               <Text style={[styles.title, isUnread && styles.unreadTitle]} numberOfLines={1}>
-                {item.title}
+                {getDisplayTitle()}
               </Text>
               {isUnread && <View style={styles.unreadDot} />}
             </View>
-            <Text style={[styles.message, isUnread && styles.unreadMessage]} numberOfLines={2}>
-              {item.message}
+            <Text style={[styles.message, isUnread && styles.unreadMessage]} numberOfLines={3}>
+              {getDisplayMessage()}
             </Text>
             <View style={styles.metaRow}>
               <Text style={styles.time}>
@@ -323,6 +437,8 @@ export default function NotificationsScreen() {
   const unreadCount = notifications.filter(n => !n.read_at).length;
 
   return (
+    <>
+    <StatusBar barStyle="light-content" backgroundColor="#091e60" />
     <SafeAreaView style={styles.container}>
       <CustomHeader 
         title="Notifications" 
@@ -351,9 +467,16 @@ export default function NotificationsScreen() {
         <FlatList
           data={notifications}
           renderItem={renderNotification}
-          keyExtractor={item => item.id.toString()}
+          keyExtractor={(item, index) => {
+            if (item.id) {
+              return `notif-${item.id}`;
+            }
+            // Si pas d'ID, créer une clé unique basée sur plusieurs propriétés
+            return `notif-${index}-${item.created_at || 'no-date'}-${item.type || 'no-type'}-${item.title?.substring(0, 10) || 'no-title'}`;
+          }}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={['#0f8e35']}
+              tintColor="#0f8e35" />
           }
           onEndReached={handleLoadMore}
           onEndReachedThreshold={0.5}
@@ -363,6 +486,7 @@ export default function NotificationsScreen() {
         />
       )}
     </SafeAreaView>
+    </>
   );
 }
 

@@ -1,0 +1,145 @@
+@startuml C4_Code_Diagram_Auth
+!define C4PlantUML https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master
+!includeurl C4PlantUML/C4_Component.puml
+
+title Diagramme de Code C4 - Système d'Authentification (Niveau Implementation)
+
+System_Boundary(auth_system, "Système d'Authentification - Implémentation") {
+    
+    ' Classes et Composants principaux
+    System_Boundary(react_components, "Composants React") {
+        Component(login_screen, "LoginScreen.tsx", "React FC", "Écran connexion principale")
+        Component(register_screen, "RegisterScreen.tsx", "React FC", "Écran inscription utilisateur")
+        Component(otp_screen, "OTPScreen.tsx", "React FC", "Vérification code OTP")
+        Component(biometric_button, "BiometricButton.tsx", "React FC", "Bouton auth biométrique")
+        Component(oauth_buttons, "OAuthButtons.tsx", "React FC", "Boutons Google/LinkedIn")
+    }
+    
+    ' Context et Providers
+    System_Boundary(context_layer, "Context & State Management") {
+        Component(auth_context, "AuthContext.tsx", "React Context", "export const AuthContext = createContext<AuthContextType>")
+        Component(auth_provider, "AuthProvider.tsx", "React Provider", "Fournisseur d'état global auth")
+        Component(auth_types, "authTypes.ts", "TypeScript", "Interfaces: User, AuthState, LoginRequest")
+    }
+    
+    ' Custom Hooks
+    System_Boundary(hooks_layer, "Custom Hooks") {
+        Component(use_auth, "useAuth.ts", "Custom Hook", "const useAuth = () => useContext(AuthContext)")
+        Component(use_biometric, "useBiometricAuth.tsx", "Custom Hook", "Hook authentification biométrique")
+        Component(use_oauth, "useOAuth.ts", "Custom Hook", "Hook OAuth Google/LinkedIn")
+    }
+    
+    ' Services et APIs
+    System_Boundary(services_layer, "Services & APIs") {
+        Component(auth_service, "authService.ts", "Service Class", "class AuthService { login, register, refresh }")
+        Component(google_auth, "googleAuth.ts", "OAuth Service", "GoogleSignin configuration & methods")
+        Component(linkedin_auth, "linkedinAuth.ts", "OAuth Service", "LinkedIn OAuth implementation")
+        Component(jwt_manager, "jwtManager.ts", "Utility Class", "JWT token validation & refresh")
+        Component(biometric_service, "biometricService.ts", "Native Service", "Expo LocalAuthentication wrapper")
+    }
+    
+    ' Storage et Persistence
+    System_Boundary(storage_layer, "Storage & Persistence") {
+        Component(secure_storage, "secureStorage.ts", "Storage Utility", "Expo SecureStore wrapper")
+        Component(auth_storage, "authStorage.ts", "Storage Service", "Auth-specific storage operations")
+    }
+    
+    ' Utilitaires et Helpers
+    System_Boundary(utils_layer, "Utilities & Helpers") {
+        Component(auth_validators, "authValidators.ts", "Validation", "Yup schemas: loginSchema, registerSchema")
+        Component(auth_constants, "authConstants.ts", "Constants", "AUTH_ENDPOINTS, STORAGE_KEYS")
+        Component(crypto_utils, "cryptoUtils.ts", "Crypto Utility", "Encryption/decryption helpers")
+        Component(security_utils, "securityUtils.ts", "Security", "Certificate pinning, security headers")
+    }
+    
+    ' Types et Interfaces
+    System_Boundary(types_layer, "Types & Interfaces") {
+        Component(user_types, "userTypes.ts", "Types", "interface User, UserRole, UserProfile")
+        Component(api_types, "apiTypes.ts", "Types", "interface LoginResponse, RegisterRequest")
+        Component(error_types, "errorTypes.ts", "Types", "interface AuthError, ValidationError")
+    }
+}
+
+' Relations principales - UI Layer
+Rel(login_screen, auth_provider, "useAuth()", "Hook pour état auth")
+Rel(login_screen, use_biometric, "useBiometricAuth()", "Auth biométrique")
+Rel(register_screen, auth_validators, "validate", "Validation formulaire")
+Rel(biometric_button, biometric_service, "authenticate()", "Appel service natif")
+Rel(oauth_buttons, google_auth, "signIn()", "OAuth Google")
+Rel(oauth_buttons, linkedin_auth, "authorize()", "OAuth LinkedIn")
+
+' Relations Context Layer
+Rel(auth_provider, auth_context, "provides", "Fournit contexte")
+Rel(use_auth, auth_context, "consumes", "Utilise contexte")
+Rel(auth_provider, auth_service, "calls", "Appels API auth")
+
+' Relations Services Layer
+Rel(auth_service, jwt_manager, "uses", "Gestion tokens JWT")
+Rel(auth_service, auth_storage, "stores", "Stockage persistant")
+Rel(jwt_manager, secure_storage, "secureSet/Get", "Stockage sécurisé tokens")
+Rel(biometric_service, secure_storage, "store", "Tokens biométriques")
+
+' Relations Storage & Security
+Rel(auth_storage, secure_storage, "uses", "Interface stockage sécurisé")
+Rel(secure_storage, crypto_utils, "encrypt/decrypt", "Chiffrement données")
+Rel(auth_service, security_utils, "validates", "Sécurité requêtes")
+
+' Relations Types & Validation
+Rel(auth_validators, user_types, "validates", "Types utilisateur")
+Rel(auth_service, api_types, "implements", "Types API")
+Rel(auth_provider, error_types, "handles", "Gestion erreurs")
+
+' Code Examples (en commentaires dans les relations)
+note right of login_screen
+  ```typescript
+  const LoginScreen: React.FC = () => {
+    const { login, isLoading } = useAuth();
+    const { authenticate } = useBiometricAuth();
+    
+    const handleLogin = async (data: LoginRequest) => {
+      try {
+        await login(data);
+      } catch (error) {
+        handleAuthError(error);
+      }
+    };
+  }
+  ```
+end note
+
+note right of auth_service
+  ```typescript
+  class AuthService {
+    async login(credentials: LoginRequest): Promise<LoginResponse> {
+      const response = await apiClient.post('/auth/login', credentials);
+      await this.storeTokens(response.data);
+      return response.data;
+    }
+    
+    async refreshToken(): Promise<string> {
+      const refreshToken = await secureStorage.getItem('refresh_token');
+      // ... refresh logic
+    }
+  }
+  ```
+end note
+
+note right of use_biometric
+  ```typescript
+  export const useBiometricAuth = () => {
+    const authenticateWithBiometry = async (): Promise<AuthResult> => {
+      const hasHardware = await LocalAuthentication.hasHardwareAsync();
+      if (!hasHardware) return { success: false };
+      
+      const result = await LocalAuthentication.authenticateAsync({
+        promptMessage: 'Authentifiez-vous',
+        cancelLabel: 'Annuler',
+      });
+      
+      return result;
+    };
+  };
+  ```
+end note
+
+@enduml

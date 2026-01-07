@@ -25,7 +25,7 @@ export default function EntretiensDetailsScreen() {
     setLoading(true);
     try {
       const entretiens = await getCandidatEntretiens();
-      const foundEntretien = entretiens.find((e: any) => e.id.toString() === id);
+      const foundEntretien = entretiens.entretiens?.find((e: any) => e.id.toString() === id);
       setEntretien(foundEntretien || null);
     } catch (error) {
       console.error("Erreur de chargement des détails:", error);

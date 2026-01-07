@@ -1,0 +1,118 @@
+@startuml C4_Component_Diagram_Mobile
+!define C4PlantUML https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master
+!includeurl C4PlantUML/C4_Component.puml
+
+title Diagramme de Composants C4 - Application Mobile React Native
+
+Person(user, "Utilisateur", "Candidat, Intérimaire, Recruteur")
+
+System_Boundary(mobile_app, "Application Mobile Pro-Recrute") {
+    
+    ' Couche Présentation (UI Components)
+    System_Boundary(presentation_layer, "Couche Présentation") {
+        Component(auth_screens, "Écrans Auth", "React Native", "Login, Register, OTP, Biométrie")
+        Component(dashboard_screen, "Dashboard", "React Native", "Tableau de bord personnalisé")
+        Component(job_screens, "Écrans Emplois", "React Native", "Liste, détails, recherche, favoris")
+        Component(chat_screens, "Écrans Chat", "React Native", "Messages, conversations")
+        Component(skills_screens, "Écrans Tests", "React Native", "Évaluations, résultats")
+        Component(profile_screens, "Écrans Profil", "React Native", "Profil candidat, CV")
+        Component(interim_screens, "Écrans Intérim", "React Native", "Missions, planning, docs")
+        Component(video_screens, "Écrans Vidéo", "React Native", "Entretiens, salles")
+    }
+    
+    ' Couche Logique Métier (Hooks & Context)
+    System_Boundary(business_layer, "Couche Logique Métier") {
+        Component(auth_provider, "AuthProvider", "React Context", "État global authentification")
+        Component(theme_provider, "ThemeProvider", "React Context", "Gestion thèmes clair/sombre")
+        Component(language_provider, "LanguageProvider", "React Context", "Internationalisation i18n")
+        Component(biometric_hook, "useBiometricAuth", "Custom Hook", "Authentification biométrique")
+        Component(job_search_hook, "useJobSearch", "Custom Hook", "Recherche et filtres emplois")
+        Component(location_hook, "useLocationJobs", "Custom Hook", "Géolocalisation offres")
+        Component(notifications_hook, "useNotifications", "Custom Hook", "Notifications push")
+        Component(offline_hook, "useOfflineSync", "Custom Hook", "Synchronisation hors-ligne")
+    }
+    
+    ' Couche Services (APIs & Utilities)
+    System_Boundary(services_layer, "Couche Services") {
+        Component(api_client, "API Client", "Axios", "Client HTTP avec intercepteurs")
+        Component(auth_service, "Auth Service", "JavaScript", "JWT, OAuth, sessions")
+        Component(jobs_api, "Jobs API", "JavaScript", "CRUD offres, candidatures")
+        Component(messaging_api, "Messaging API", "Socket.IO", "Chat temps réel")
+        Component(skills_api, "Skills API", "JavaScript", "Tests et évaluations")
+        Component(ai_api, "AI API", "JavaScript", "Recommandations IA")
+        Component(file_service, "File Service", "Expo", "Upload, parsing CV")
+        Component(analytics_service, "Analytics", "JavaScript", "Tracking comportement")
+    }
+    
+    ' Couche Données (Storage & Cache)
+    System_Boundary(data_layer, "Couche Données") {
+        Component(secure_store, "Secure Store", "Expo SecureStore", "Tokens, credentials")
+        Component(async_storage, "Async Storage", "AsyncStorage", "Cache application")
+        Component(sqlite_db, "SQLite DB", "SQLite", "Base locale hors-ligne")
+        Component(websocket_client, "WebSocket Client", "Socket.IO Client", "Connexions temps réel")
+        Component(offline_manager, "Offline Manager", "JavaScript", "Queue actions, sync")
+    }
+    
+    ' Couche Native (Expo & React Native)
+    System_Boundary(native_layer, "Couche Native") {
+        Component(expo_auth, "Expo Auth", "Expo LocalAuthentication", "Face ID, Touch ID")
+        Component(expo_location, "Expo Location", "Expo Location", "GPS, géolocalisation")
+        Component(expo_camera, "Expo Camera", "Expo Camera", "Photo, scan QR")
+        Component(expo_notifications, "Expo Notifications", "Expo Notifications", "Push notifications")
+        Component(expo_file_system, "Expo FileSystem", "Expo FileSystem", "Gestion fichiers")
+        Component(rn_navigation, "Navigation", "React Navigation", "Routing, deep linking")
+    }
+}
+
+' Systèmes externes
+System_Ext(backend_api, "Backend API", "Services backend Pro-Recrute")
+System_Ext(oauth_providers, "OAuth Providers", "Google, LinkedIn")
+System_Ext(push_service, "Push Service", "Expo Push Notifications")
+
+' Relations Utilisateur -> UI
+Rel(user, auth_screens, "Interagit", "Login, inscription")
+Rel(user, dashboard_screen, "Consulte", "Vue d'ensemble")
+Rel(user, job_screens, "Navigue", "Recherche emplois")
+Rel(user, chat_screens, "Communique", "Messages")
+Rel(user, skills_screens, "Évalue", "Tests compétences")
+
+' Relations UI -> Business Logic
+Rel(auth_screens, auth_provider, "Utilise", "État auth global")
+Rel(auth_screens, biometric_hook, "Appelle", "Auth biométrique")
+Rel(dashboard_screen, theme_provider, "Utilise", "Thème actuel")
+Rel(job_screens, job_search_hook, "Utilise", "Recherche emplois")
+Rel(job_screens, location_hook, "Utilise", "Géolocalisation")
+Rel(chat_screens, notifications_hook, "Utilise", "Notifications chat")
+
+' Relations Business Logic -> Services
+Rel(auth_provider, auth_service, "Appelle", "APIs authentification")
+Rel(job_search_hook, jobs_api, "Requête", "Offres d'emploi")
+Rel(job_search_hook, ai_api, "Requête", "Recommandations")
+Rel(biometric_hook, auth_service, "Valide", "Tokens biométriques")
+Rel(notifications_hook, analytics_service, "Envoie", "Événements")
+
+' Relations Services -> Data
+Rel(auth_service, secure_store, "Stocke", "JWT tokens")
+Rel(jobs_api, async_storage, "Cache", "Offres favorites")
+Rel(messaging_api, websocket_client, "Utilise", "Connexion temps réel")
+Rel(skills_api, sqlite_db, "Sauvegarde", "Résultats tests")
+Rel(offline_manager, async_storage, "Gère", "Actions en attente")
+
+' Relations Data -> Native
+Rel(secure_store, expo_auth, "Utilise", "Stockage sécurisé")
+Rel(websocket_client, expo_notifications, "Déclenche", "Notifications")
+Rel(location_hook, expo_location, "Accède", "Position GPS")
+Rel(file_service, expo_camera, "Utilise", "Capture photo")
+Rel(file_service, expo_file_system, "Gère", "Fichiers locaux")
+
+' Relations vers externes
+Rel(api_client, backend_api, "Communique", "HTTPS REST")
+Rel(auth_service, oauth_providers, "Authentifie", "OAuth 2.0")
+Rel(expo_notifications, push_service, "Reçoit", "Push notifications")
+
+' Navigation
+Rel(rn_navigation, auth_screens, "Route", "Navigation auth")
+Rel(rn_navigation, dashboard_screen, "Route", "Navigation principale")
+Rel(rn_navigation, job_screens, "Route", "Navigation jobs")
+
+@enduml

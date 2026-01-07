@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { Alert, Linking } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useLanguage } from './LanguageContext';
 
 export type PermissionStatus = 'granted' | 'denied' | 'undetermined';
 
@@ -34,6 +35,7 @@ interface SimplePermissionsProviderProps {
 }
 
 export const SimplePermissionsProvider = ({ children }: SimplePermissionsProviderProps) => {
+  const { t } = useLanguage();
   const [notificationPermission, setNotificationPermission] = useState<PermissionStatus>('undetermined');
   const [hasRequestedNotifications, setHasRequestedNotifications] = useState(false);
 
@@ -48,7 +50,7 @@ export const SimplePermissionsProvider = ({ children }: SimplePermissionsProvide
       const requested = await AsyncStorage.getItem(STORAGE_KEY);
       setHasRequestedNotifications(requested === 'true');
     } catch (error) {
-      console.error('Erreur lors de la vérification du statut des notifications:', error);
+      console.error(t('Erreur lors de la vérification du statut des notifications:'), error);
     }
   };
 
@@ -57,7 +59,7 @@ export const SimplePermissionsProvider = ({ children }: SimplePermissionsProvide
       const { status } = await Notifications.getPermissionsAsync();
       setNotificationPermission(status as PermissionStatus);
     } catch (error) {
-      console.error('Erreur lors de la vérification des permissions notifications:', error);
+      console.error(t('Erreur lors de la vérification des permissions notifications:'), error);
     }
   };
 
@@ -81,7 +83,7 @@ export const SimplePermissionsProvider = ({ children }: SimplePermissionsProvide
         }
       }
     } catch (error) {
-      console.error('Erreur synchronisation avec settings:', error);
+      console.error(t('Erreur synchronisation avec settings:'), error);
     }
   };
 
@@ -93,24 +95,36 @@ export const SimplePermissionsProvider = ({ children }: SimplePermissionsProvide
 
       const { status } = await Notifications.requestPermissionsAsync();
       setNotificationPermission(status as PermissionStatus);
-      
+
       // Synchroniser avec settings.tsx
       await AsyncStorage.setItem(ENABLED_STORAGE_KEY, (status === 'granted').toString());
+
+      // Si les permissions sont accordées, déclencher l'enregistrement du token push après un délai
+      if (status === 'granted') {
+        console.log(t('🔔 SimplePermissionsManager: Permissions accordées, déclenchement des notifications push'));
+        // Utiliser un événement personnalisé pour notifier l'app
+        setTimeout(() => {
+          // Déclencher un événement global pour que settings.tsx puisse l'écouter
+          if (global.triggerPushNotificationRegistration) {
+            global.triggerPushNotificationRegistration();
+          }
+        }, 500);
+      }
       
       if (status === 'denied') {
         Alert.alert(
-          'Permission notifications',
-          'Vous pouvez activer les notifications dans les paramètres de votre appareil pour recevoir des alertes importantes.',
+          t('Permission notifications'),
+          t('Vous pouvez activer les notifications dans les paramètres de votre appareil pour recevoir des alertes importantes.'),
           [
-            { text: 'Plus tard', style: 'cancel' },
-            { text: 'Ouvrir paramètres', onPress: () => Linking.openSettings() },
+            { text: t('Plus tard'), style: 'cancel' },
+            { text: t('Ouvrir paramètres'), onPress: () => Linking.openSettings() },
           ]
         );
       }
       
       return status as PermissionStatus;
     } catch (error) {
-      console.error('Erreur demande permission notifications:', error);
+      console.error(t('Erreur demande permission notifications:'), error);
       await AsyncStorage.setItem(ENABLED_STORAGE_KEY, 'false');
       return 'denied';
     }

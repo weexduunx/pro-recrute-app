@@ -1,0 +1,55 @@
+@startuml UseCase_Auth_Simple
+title Cas d'Utilisation - Authentification Pro-Recrute
+
+left to right direction
+
+actor Candidat
+actor Recruteur  
+actor Intérimaire
+actor "Système Biométrique" as Bio
+actor "OAuth Provider" as OAuth
+
+rectangle "Système d'Authentification" {
+  usecase "S'inscrire" as UC1
+  usecase "Se connecter" as UC2
+  usecase "Auth Biométrique" as UC3
+  usecase "Connexion OAuth" as UC4
+  usecase "Vérifier OTP" as UC5
+  usecase "Réinitialiser MDP" as UC6
+  usecase "Gérer Session" as UC7
+}
+
+Candidat --> UC1
+Candidat --> UC2
+Candidat --> UC3
+Candidat --> UC4
+
+Recruteur --> UC2
+Recruteur --> UC3
+Recruteur --> UC7
+
+Intérimaire --> UC1
+Intérimaire --> UC2
+Intérimaire --> UC3
+
+Bio --> UC3 : "Fournir données biométriques"
+OAuth --> UC4 : "Authentifier via Google/LinkedIn"
+
+UC1 ..> UC5 : "<<include>>"
+UC6 ..> UC5 : "<<include>>"
+UC2 ..> UC3 : "<<extend>>"
+UC2 ..> UC4 : "<<extend>>"
+
+note right of UC3
+  Face ID / Touch ID
+  Empreinte digitale
+  Authentification native
+end note
+
+note right of UC5
+  Code par Email
+  Code par SMS
+  Validation temporaire
+end note
+
+@enduml

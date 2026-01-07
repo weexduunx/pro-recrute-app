@@ -1,0 +1,148 @@
+@startuml Sequence_Chat_Temps_Reel
+title Diagramme de Séquence - Chat Temps Réel avec WebSocket
+
+actor "Candidat" as candidat
+actor "Recruteur" as recruteur
+participant "App Candidat" as app_c
+participant "App Recruteur" as app_r
+participant "WebSocket Client" as ws_c
+participant "WebSocket Client" as ws_r
+participant "Socket.IO Server" as socket_server
+participant "Message API" as msg_api
+participant "Notification Service" as notif
+participant "Database" as db
+
+== Connexion et Authentification ==
+candidat -> app_c: Ouvrir chat
+app_c -> ws_c: connect(token)
+ws_c -> socket_server: authenticate(jwt_token)
+socket_server -> socket_server: validateToken()
+socket_server -> socket_server: joinUserRoom(userId)
+socket_server --> ws_c: connection_success
+
+recruteur -> app_r: Ouvrir chat
+app_r -> ws_r: connect(token)  
+ws_r -> socket_server: authenticate(jwt_token)
+socket_server -> socket_server: validateToken()
+socket_server -> socket_server: joinUserRoom(userId)
+socket_server --> ws_r: connection_success
+
+== Démarrage Conversation ==
+candidat -> app_c: Cliquer "Nouveau message"
+app_c -> msg_api: GET /users/search?q=recruteur
+msg_api --> app_c: users[]
+candidat -> app_c: Sélectionner recruteur
+
+app_c -> msg_api: POST /conversations
+note right: {
+  participants: [candidat_id, recruteur_id],
+  type: 'job_inquiry'
+}
+msg_api -> db: createConversation()
+db --> msg_api: conversation
+msg_api --> app_c: {conversationId, ...}
+
+app_c -> ws_c: joinRoom(conversationId)
+ws_c -> socket_server: join_conversation(conversationId)
+
+== Envoi Message ==
+candidat -> app_c: Taper message
+app_c -> app_c: showTypingIndicator()
+app_c -> ws_c: typing_start(conversationId)
+ws_c -> socket_server: broadcast_typing(conversationId, candidat_id)
+socket_server -> ws_r: user_typing(candidat_id)
+ws_r -> app_r: showTypingIndicator(candidat)
+
+candidat -> app_c: Envoyer "Bonjour, intéressé par le poste"
+app_c -> ws_c: send_message({
+note right: {
+  conversationId,
+  content: "Bonjour, intéressé par le poste",
+  type: 'text',
+  tempId: 'temp_123'
+}
+
+== Traitement Message Serveur ==
+ws_c -> socket_server: receive_message(message_data)
+socket_server -> msg_api: POST /messages
+msg_api -> db: saveMessage()
+db --> msg_api: saved_message
+msg_api -> msg_api: encryptMessage()
+msg_api --> socket_server: {messageId, timestamp, ...}
+
+== Diffusion Temps Réel ==
+socket_server -> socket_server: broadcastToRoom(conversationId)
+socket_server -> ws_c: message_sent({
+note right: {
+  tempId: 'temp_123',
+  messageId: 'msg_456',
+  status: 'sent'
+}
+socket_server -> ws_r: new_message({
+note right: {
+  messageId: 'msg_456',
+  senderId: candidat_id,
+  content: "Bonjour, intéressé par le poste",
+  timestamp: "2024-01-15T10:30:00Z"
+}
+
+app_c -> app_c: updateMessageStatus(sent)
+app_r -> app_r: displayNewMessage()
+
+== Notification Push ==
+socket_server -> notif: sendPushNotification({
+note right: {
+  userId: recruteur_id,
+  title: "Nouveau message",
+  body: "Bonjour, intéressé par le poste",
+  data: {conversationId}
+}
+
+notif -> notif: checkUserOnlineStatus()
+alt Utilisateur hors-ligne
+    notif -> notif: sendPushToDevice()
+else Utilisateur en ligne
+    notif -> notif: skipPushNotification()
+end
+
+== Accusé de Réception ==
+recruteur -> app_r: Voir message
+app_r -> ws_r: message_read(messageId)
+ws_r -> socket_server: mark_as_read(messageId, recruteur_id)
+socket_server -> msg_api: PUT /messages/{messageId}/read
+msg_api -> db: updateReadStatus()
+
+socket_server -> ws_c: message_read({messageId, readBy: recruteur_id})
+app_c -> app_c: showReadIndicator()
+
+== Gestion Hors-ligne ==
+alt Candidat perd connexion
+    ws_c -> ws_c: connection_lost
+    app_c -> app_c: showOfflineIndicator()
+    app_c -> app_c: queuePendingMessages()
+    
+    ws_c -> socket_server: reconnect()
+    socket_server -> ws_c: connection_restored
+    app_c -> ws_c: sendQueuedMessages()
+end
+
+== Partage Fichier ==
+candidat -> app_c: Partager CV
+app_c -> msg_api: POST /upload
+note right: Multipart upload
+msg_api -> msg_api: validateFile()
+msg_api -> msg_api: scanForMalware()
+msg_api --> app_c: {fileUrl, fileId}
+
+app_c -> ws_c: send_message({
+note right: {
+  type: 'file',
+  fileUrl: 'https://...',
+  fileName: 'CV_candidat.pdf',
+  fileSize: 256000
+}
+
+socket_server -> ws_r: new_message(file_message)
+app_r -> app_r: displayFileMessage()
+
+@enduml

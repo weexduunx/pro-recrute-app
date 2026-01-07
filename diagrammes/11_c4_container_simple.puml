@@ -1,0 +1,46 @@
+@startuml C4_Container_Simple
+title Diagramme de Conteneurs - Architecture Pro-Recrute
+
+!define Person(alias, label) rectangle "==label" as alias
+!define Container(alias, label, tech, descr) rectangle "==label\n--tech--\n\n descr" as alias
+!define Database(alias, label, tech, descr) database "==label\n--tech--\n\n descr" as alias
+!define System_Ext(alias, label, descr) rectangle "==label\n\n descr" <<External>> as alias
+
+Person(user, "Utilisateur Mobile")
+
+package "Application Mobile" {
+    Container(app, "React Native App", "React Native + Expo", "Interface mobile cross-platform")
+    Container(storage, "Stockage Local", "SQLite + AsyncStorage", "Cache et données hors-ligne")
+}
+
+package "Services Backend" {
+    Container(api, "API Gateway", "Node.js", "Point d'entrée unifié")
+    Container(auth, "Service Auth", "JWT + OAuth", "Authentification")
+    Container(jobs, "Service Emplois", "Node.js", "Gestion offres")
+    Container(messaging, "Service Messages", "Socket.IO", "Chat temps réel")
+    Container(ai, "Service IA", "Python + ML", "Recommandations")
+}
+
+package "Données" {
+    Database(userdb, "Base Utilisateurs", "PostgreSQL", "Profils et comptes")
+    Database(jobsdb, "Base Emplois", "MongoDB", "Offres et candidatures")  
+    Database(msgdb, "Base Messages", "Redis", "Chat et notifications")
+}
+
+System_Ext(oauth, "OAuth Providers", "Google, LinkedIn")
+System_Ext(push, "Push Service", "Expo Notifications")
+
+user --> app
+app --> storage
+app --> api
+api --> auth
+api --> jobs  
+api --> messaging
+api --> ai
+auth --> userdb
+jobs --> jobsdb
+messaging --> msgdb
+auth --> oauth
+messaging --> push
+
+@enduml

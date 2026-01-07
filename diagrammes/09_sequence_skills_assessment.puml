@@ -1,0 +1,170 @@
+@startuml Sequence_Skills_Assessment
+title Diagramme de Séquence - Évaluation de Compétences Interactive
+
+actor "Candidat" as user
+participant "Assessment UI" as ui
+participant "Test Engine" as engine
+participant "Timer Service" as timer
+participant "Skills API" as api
+participant "Scoring Engine" as scoring
+participant "Analytics" as analytics
+participant "Certificate Service" as cert
+participant "Profile Service" as profile
+
+== Sélection et Démarrage Test ==
+user -> ui: Consulter catalogue tests
+ui -> api: GET /assessments/categories
+api --> ui: categories[]
+
+user -> ui: Choisir "React Developer Assessment"
+ui -> api: GET /assessments/{id}/details
+api --> ui: {questions_count: 25, duration: 45min, difficulty: 'intermediate'}
+
+user -> ui: Cliquer "Commencer le test"
+ui -> api: POST /assessments/{id}/sessions
+api -> api: generateQuestionSet(difficulty, randomization)
+api -> api: createSession()
+api --> ui: {sessionId, questions[], timeLimit}
+
+== Configuration Test ==
+ui -> engine: initializeTest(session_data)
+engine -> timer: startTimer(45min)
+timer -> ui: displayCountdown()
+
+engine -> ui: displayQuestion(1/25)
+ui -> ui: renderQuestion({
+note right: {
+  type: 'multiple_choice',
+  question: 'Quelle est la différence entre...',
+  options: ['A', 'B', 'C', 'D'],
+  code_snippet: '...'
+}
+
+== Réponse Questions ==
+loop Pour chaque question (1 à 25)
+    user -> ui: Sélectionner réponse
+    ui -> engine: recordAnswer(questionId, selectedOption)
+    engine -> api: PUT /sessions/{sessionId}/answers
+    note right: Auto-save avec debouncing
+    
+    alt Temps restant > 0
+        user -> ui: "Question suivante"
+        engine -> ui: displayQuestion(n+1)
+    else Temps écoulé
+        timer -> engine: timeExpired()
+        engine -> ui: showTimeUpDialog()
+        break
+    end
+end
+
+== Soumission et Scoring ==
+user -> ui: "Terminer le test"
+ui -> engine: finalizeSession()
+engine -> api: POST /sessions/{sessionId}/submit
+
+api -> scoring: calculateScore({
+note right: {
+  answers: user_answers[],
+  correct_answers: correct_answers[],
+  question_weights: weights[],
+  time_taken: actual_duration
+}
+
+scoring -> scoring: calculateRawScore()
+scoring -> scoring: applyTimePenalty()
+scoring -> scoring: calculatePercentile()
+scoring -> api: {
+note right: {
+  raw_score: 18/25,
+  weighted_score: 85.2,
+  percentile: 78,
+  time_efficiency: 0.85
+}
+
+== Analyse Détaillée ==
+api -> analytics: analyzePerformance({
+note right: {
+  session_data,
+  user_profile,
+  question_difficulty,
+  response_patterns
+}
+
+analytics -> analytics: identifyStrongAreas()
+analytics -> analytics: identifyWeaknesses()  
+analytics -> analytics: generateRecommendations()
+analytics --> api: detailed_analysis
+
+== Génération Résultats ==
+api -> ui: displayResults({
+note right: {
+  overall_score: 85.2/100,
+  level: 'Proficient',
+  breakdown: {
+    'React Hooks': 90,
+    'State Management': 75,
+    'Performance': 88
+  },
+  recommendations: [...],
+  time_spent: '38min'
+}
+
+== Certification et Badges ==
+alt Score > 80%
+    api -> cert: generateCertificate({
+    note right: {
+      userId,
+      assessment_id,
+      score: 85.2,
+      level: 'Proficient',
+      valid_until: '2025-01-15'
+    }
+    
+    cert -> cert: createDigitalBadge()
+    cert -> cert: generatePDF()
+    cert --> api: {certificate_id, badge_url, pdf_url}
+    
+    api -> ui: showCertificationDialog()
+    user -> ui: "Ajouter au profil"
+    
+else Score < 80%
+    api -> ui: showRetryOption()
+    ui -> ui: displayStudyResources()
+end
+
+== Mise à Jour Profil ==
+ui -> profile: updateSkills({
+note right: {
+  skill: 'React Development',
+  level: 'Proficient',
+  score: 85.2,
+  verified: true,
+  certificate_id: 'cert_123'
+}
+
+profile -> profile: recalculateProfileScore()
+profile -> profile: updateRecommendations()
+profile --> ui: profile_updated
+
+== Analytics et Amélioration ==
+api -> analytics: recordCompletion({
+note right: {
+  user_demographics,
+  completion_time,
+  score_distribution,
+  question_difficulty_feedback
+}
+
+analytics -> analytics: updateQuestionDifficulty()
+analytics -> analytics: improveAlgorithms()
+
+note over scoring
+  Algorithmes de scoring:
+  - Item Response Theory
+  - Weighted scoring par difficulté
+  - Time-based adjustments
+  - Peer comparison (percentiles)
+  - Domain-specific weighting
+end note
+
+@enduml

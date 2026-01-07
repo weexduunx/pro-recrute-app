@@ -5,13 +5,14 @@ import { FontAwesome5, Ionicons } from '@expo/vector-icons';
 import { useNavigation, DrawerActions } from '@react-navigation/native';
 import { router } from 'expo-router';
 import { useAuth } from './AuthProvider';
+import { useLanguage } from './LanguageContext';
 import { useNotifications } from '../hooks/useNotifications';
 import { StatusBar } from 'expo-status-bar';
 // @ts-ignore
 import UserAvatar from 'react-native-user-avatar';
 
 // Configuration de l'URL de base (doit correspondre à utils/api.js)
-const API_BASE_URL = 'http://192.168.1.144:8000';
+const API_BASE_URL = 'http://192.168.1.47:8000';
 
 /**
  * Composant CustomHeader:
@@ -27,12 +28,14 @@ export interface CustomHeaderProps {
   onBackPress?: () => void; // Action personnalisée pour le bouton retour
   rightComponent?: React.ReactNode; // Composant personnalisé à droite
   showNotificationIcon?: boolean; // Afficher l'icône de notification pour les intérimaires
+  hideMenuButton?: boolean; // Masquer complètement le bouton menu/retour
 }
 
 
-export default function CustomHeader({ title, user: propUser, showBackButton = false, onBackPress, rightComponent, showNotificationIcon = false }: CustomHeaderProps) {
+export default function CustomHeader({ title, user: propUser, showBackButton = false, onBackPress, rightComponent, showNotificationIcon = false, hideMenuButton = false }: CustomHeaderProps) {
   const navigation = useNavigation();
   const { logout, user: contextUser } = useAuth();
+  const { t } = useLanguage();
   const { unreadCount } = useNotifications();
   const [isAvatarDropdownVisible, setAvatarDropdownVisible] = useState(false);
   
@@ -81,11 +84,11 @@ export default function CustomHeader({ title, user: propUser, showBackButton = f
 const handleDropdownLogout = () => {
   closeAvatarDropdown();
   Alert.alert(
-    "Déconnexion",
-    "Êtes-vous sûr de vouloir vous déconnecter ?",
+    t("Confirmation"),
+    t("Êtes-vous sûr de vouloir vous déconnecter ?"),
     [
-      { text: "Annuler", style: "cancel" },
-      { text: "Oui", onPress: () => {
+      { text: t("Annuler"), style: "cancel" },
+      { text: t("Confirmer"), onPress: () => {
         setTimeout(() => {
           logout();
         }, 200); // petit délai aussi ici
@@ -100,14 +103,16 @@ const handleDropdownLogout = () => {
       <StatusBar style="light" />
       <View style={styles.headerContainer}>
         {/* Bouton du menu Hamburger ou Retour */}
-        {showBackButton ? (
-          <TouchableOpacity onPress={handleBackPress} style={styles.menuButton}>
-            <FontAwesome5 name="arrow-left" size={22} color="#FFFFFF" />
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity onPress={handleMenuPress} style={styles.menuButton}>
-            <FontAwesome5 name="bars" size={22} color="#FFFFFF" />
-          </TouchableOpacity>
+        {!hideMenuButton && (
+          showBackButton ? (
+            <TouchableOpacity onPress={handleBackPress} style={styles.menuButton}>
+              <FontAwesome5 name="arrow-left" size={22} color="#FFFFFF" />
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity onPress={handleMenuPress} style={styles.menuButton}>
+              <FontAwesome5 name="bars" size={22} color="#FFFFFF" />
+            </TouchableOpacity>
+          )
         )}
 
         {/* Section titre avec icône notification optionnelle */}
@@ -174,14 +179,14 @@ const handleDropdownLogout = () => {
               <TouchableOpacity style={styles.dropdownItem} onPress={handleDropdownProfile}>
                 <View style={styles.dropdownItemContent}>
                   <Ionicons name="person-outline" size={22} color="#091e60" />
-                  <Text style={styles.dropdownItemText}>Voir le profil</Text>
+                  <Text style={styles.dropdownItemText}>{t("Mon Profil")}</Text>
                 </View>
               </TouchableOpacity>
 
               <TouchableOpacity style={styles.dropdownItem} onPress={handleDropdownLogout}>
                 <View style={styles.dropdownItemContent}>
                   <Ionicons name="log-out-outline" size={22} color="#ef4444" />
-                  <Text style={styles.dropdownItemTextDecon}>Déconnexion</Text>
+                  <Text style={styles.dropdownItemTextDecon}>{t("Déconnexion")}</Text>
                 </View>
               </TouchableOpacity>
 

@@ -32,7 +32,7 @@ export default function AppDrawerLayout() {
         },
       }}
       drawerContent={(props) => <CustomDrawerContent {...props} />}
-    >
+      >
       {allowedRoutes.map((route) => (
         <Drawer.Screen
           key={route}
@@ -43,17 +43,13 @@ export default function AppDrawerLayout() {
               drawerIcons[route] ? drawerIcons[route](color, size) : null,
           }}
         />
-        
       ))}
     </Drawer>
-
-
-
   );
 }
 
 
-// Traductions personnalisées si besoin
+// Clés de traduction pour les routes du drawer
 function getDrawerLabel(route: string): string {
   const labels: Record<string, string> = {
     home: 'Accueil',
@@ -63,7 +59,7 @@ function getDrawerLabel(route: string): string {
     actualites: 'Actualités',
     dashboard: 'Tableau de bord',
     settings: 'Paramètres',
-    '(interimaire)': 'Espace Intérimaire',
+    '(interimaire)': 'Accueil',
     entretiens: 'Mes entretiens',
     messages: 'Messages',
     'video-interview': 'Entretiens vidéo',

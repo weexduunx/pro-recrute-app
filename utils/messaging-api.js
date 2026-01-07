@@ -12,7 +12,7 @@ export const initializeSocketConnection = (userId) => {
   }
 
   // Utiliser la même base URL que l'API
-  const API_URL = 'http://192.168.1.129:8000' || process.env.EXPO_PUBLIC_API_URL?.replace('/api', '');
+  const API_URL = 'http://192.168.1.47:8000' || process.env.EXPO_PUBLIC_API_URL?.replace('/api', '');
   
   socket = io(API_URL, {
     transports: ['websocket'],

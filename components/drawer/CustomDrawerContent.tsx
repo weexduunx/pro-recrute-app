@@ -1,16 +1,28 @@
 
 import React from 'react';
-import { View, Text, Image, StyleSheet } from 'react-native';
+import { View, Text, Image, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { DrawerContentScrollView, DrawerItemList } from '@react-navigation/drawer';
+import { Feather } from '@expo/vector-icons';
 import { useAuth } from '../AuthProvider';
 import { useTheme } from '../ThemeContext';
 import { useLanguage } from '../LanguageContext';
 import { allowedDrawerRoutesByRole, defaultRoutes } from './drawerRoutes';
 
 export default function CustomDrawerContent(props: any) {
-  const { user } = useAuth();
+  const { user, logout, loading: authLoading } = useAuth();
   const { colors } = useTheme();
   const { t } = useLanguage();
+
+  const confirmLogout = () => {
+    Alert.alert(
+      t('Confirmation'),
+      t('Êtes-vous sûr de vouloir vous déconnecter ?'),
+      [
+        { text: t('Annuler'), style: "cancel" },
+        { text: t('Déconnexion'), style: "destructive", onPress: logout }
+      ]
+    );
+  };
 
   const allowedRoutes = allowedDrawerRoutesByRole[user?.role || ''] || defaultRoutes;
 
@@ -34,6 +46,18 @@ export default function CustomDrawerContent(props: any) {
           </Text>
         </View>
         <DrawerItemList {...props} state={filteredState} />
+        
+        {/* Bouton de déconnexion */}
+        <TouchableOpacity
+          style={[styles.logoutButton, { backgroundColor: colors.error }]}
+          onPress={confirmLogout}
+          disabled={authLoading}
+        >
+          <Feather name="log-out" size={20} color="#FFFFFF" style={styles.logoutIcon} />
+          <Text style={styles.logoutButtonText}>
+            {authLoading ? t("Déconnexion...") : t("Se déconnecter")}
+          </Text>
+        </TouchableOpacity>
       </DrawerContentScrollView>
 
       <View style={[styles.footerContainer, { borderTopColor: colors.border }]}>
@@ -59,6 +83,24 @@ export default function CustomDrawerContent(props: any) {
 const styles = StyleSheet.create({
   drawerContainer: { flex: 1 },
   scrollContent: { flexGrow: 1 },
+  logoutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginHorizontal: 16,
+    marginTop: 20,
+    borderRadius: 8,
+    justifyContent: 'center',
+  },
+  logoutIcon: {
+    marginRight: 8,
+  },
+  logoutButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
   footerContainer: {
     alignItems: 'center',
     paddingVertical: 20,

@@ -1,0 +1,142 @@
+import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
+import { Platform } from 'react-native';
+
+// Configuration des IDs client Google - doit correspondre au projet dans google-services.json
+const GOOGLE_WEB_CLIENT_ID = '259055828314-tsskg52hvujjphttin0t4fh6d5ri8tvf.apps.googleusercontent.com';
+
+export class GoogleAuthService {
+  private static instance: GoogleAuthService;
+  private initialized = false;
+
+  public static getInstance(): GoogleAuthService {
+    if (!GoogleAuthService.instance) {
+      GoogleAuthService.instance = new GoogleAuthService();
+    }
+    return GoogleAuthService.instance;
+  }
+
+  async initialize(): Promise<void> {
+    if (this.initialized) return;
+
+    try {
+      console.log('🔧 Configuration Google Sign-In avec webClientId:', GOOGLE_WEB_CLIENT_ID);
+      await GoogleSignin.configure({
+        webClientId: GOOGLE_WEB_CLIENT_ID,
+        offlineAccess: true,
+        hostedDomain: '',
+        forceCodeForRefreshToken: true,
+      });
+      
+      this.initialized = true;
+      console.log('✅ Google Sign-In configuré avec succès');
+    } catch (error) {
+      console.error('❌ Erreur lors de la configuration Google Sign-In:', error);
+      throw error;
+    }
+  }
+
+  async signIn(): Promise<{
+    idToken: string;
+    accessToken: string;
+    user: {
+      id: string;
+      name: string;
+      email: string;
+      photo?: string;
+    };
+  }> {
+    try {
+      // S'assurer que Google Sign-In est initialisé
+      console.log('🔧 Initialisation Google Sign-In...');
+      await this.initialize();
+
+      // Vérifier si Google Play Services est disponible (Android uniquement)
+      console.log('🔧 Vérification Google Play Services...');
+      const playServicesResult = await GoogleSignin.hasPlayServices();
+      console.log('✅ Google Play Services disponible:', playServicesResult);
+
+      // Effectuer la connexion
+      const userInfo = await GoogleSignin.signIn();
+      
+      console.log('✅ Données Google reçues:', JSON.stringify(userInfo, null, 2));
+      
+      // Vérifier la structure des données (les données sont dans userInfo.data)
+      const userData = userInfo.data || userInfo;
+      if (!userData || !('user' in userData)) {
+        throw new Error('Données utilisateur Google invalides');
+      }
+
+      console.log('✅ Connexion Google réussie:', {
+        id: userData.user.id,
+        name: userData.user.name,
+        email: userData.user.email
+      });
+
+      // Obtenir les tokens
+      const tokens = await GoogleSignin.getTokens();
+
+      return {
+        idToken: userData.idToken!,
+        accessToken: tokens.accessToken,
+        user: {
+          id: userData.user.id,
+          name: userData.user.name!,
+          email: userData.user.email,
+          photo: userData.user.photo || undefined
+        }
+      };
+
+    } catch (error: any) {
+      console.error('❌ Erreur lors de la connexion Google:', error);
+      console.error('❌ Code d\'erreur:', error.code);
+      console.error('❌ Message:', error.message);
+      
+      if (error.code === statusCodes.SIGN_IN_CANCELLED) {
+        throw new Error('Connexion Google annulée par l\'utilisateur');
+      } else if (error.code === statusCodes.IN_PROGRESS) {
+        throw new Error('Connexion Google déjà en cours');
+      } else if (error.message?.includes('DEVELOPER_ERROR')) {
+        console.error('❌ DEVELOPER_ERROR détecté. Problèmes possibles:');
+        console.error('1. SHA-1 fingerprint non configuré dans Firebase Console');
+        console.error('2. Package name incorrect dans google-services.json');  
+        console.error('3. Client ID Web manquant ou incorrect');
+        console.error('4. Build avec un certificat différent');
+        throw new Error('Erreur de configuration Google Sign-In. Vérifiez la console Firebase.');
+      } else if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+        throw new Error('Google Play Services non disponible');
+      } else {
+        throw new Error('Erreur lors de la connexion Google: ' + error.message);
+      }
+    }
+  }
+
+  async signOut(): Promise<void> {
+    try {
+      await GoogleSignin.signOut();
+      console.log('✅ Déconnexion Google réussie');
+    } catch (error) {
+      console.error('❌ Erreur lors de la déconnexion Google:', error);
+      throw error;
+    }
+  }
+
+  async isSignedIn(): Promise<boolean> {
+    try {
+      return await GoogleSignin.isSignedIn();
+    } catch (error) {
+      console.error('❌ Erreur lors de la vérification du statut Google:', error);
+      return false;
+    }
+  }
+
+  async getCurrentUser(): Promise<any> {
+    try {
+      return await GoogleSignin.getCurrentUser();
+    } catch (error) {
+      console.error('❌ Erreur lors de la récupération de l\'utilisateur Google:', error);
+      return null;
+    }
+  }
+}
+
+export const googleAuth = GoogleAuthService.getInstance();

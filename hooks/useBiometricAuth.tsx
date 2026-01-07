@@ -32,6 +32,15 @@ export const useBiometricAuth = () => {
 
   // Vérifier la disponibilité et les paramètres de l'authentification biométrique
   const checkBiometricStatus = async () => {
+    // Skip biometric check on web
+    if (Platform.OS === 'web') {
+      return {
+        isAvailable: false,
+        isEnabled: false,
+        hasStoredCredentials: false,
+      };
+    }
+    
     if (isChecking) return state; // Éviter les appels multiples simultanés
     setIsChecking(true);
     
@@ -84,6 +93,12 @@ export const useBiometricAuth = () => {
 
   // Authentifier avec biométrie et récupérer les credentials
   const authenticateWithBiometrics = async (): Promise<StoredCredentials | null> => {
+    // Skip biometric auth on web
+    if (Platform.OS === 'web') {
+      console.warn('Biometric authentication not supported on web');
+      return null;
+    }
+    
     try {
       const result = await LocalAuthentication.authenticateAsync({
         promptMessage: Platform.OS === 'ios' 
@@ -126,6 +141,12 @@ export const useBiometricAuth = () => {
 
   // Stocker les credentials de façon sécurisée (après connexion réussie)
   const storeCredentials = async (email: string, password: string): Promise<void> => {
+    // Skip credential storage on web
+    if (Platform.OS === 'web') {
+      console.warn('Credential storage not supported on web for security reasons');
+      return;
+    }
+
     try {
       // Vérifier d'abord si l'authentification biométrique est activée
       const biometricEnabled = await AsyncStorage.getItem(BIOMETRIC_STORAGE_KEY);
@@ -136,10 +157,10 @@ export const useBiometricAuth = () => {
           Crypto.CryptoDigestAlgorithm.SHA256,
           password + email.toLowerCase() // Salt avec l'email
         );
-        
+
         // Essayer le stockage sécurisé d'abord avec le mot de passe original
         const secureStoreSuccess = await secureStoreBiometricCredentials(email, password);
-        
+
         if (!secureStoreSuccess) {
           // Fallback vers AsyncStorage si SecureStore n'est pas disponible
           console.warn('SecureStore indisponible, utilisation du fallback AsyncStorage');
@@ -155,12 +176,93 @@ export const useBiometricAuth = () => {
           // Supprimer l'ancien stockage non sécurisé si le stockage sécurisé a réussi
           await AsyncStorage.removeItem(CREDENTIALS_STORAGE_KEY);
         }
-        
+
         // Mettre à jour l'état
         setState(prev => ({ ...prev, hasStoredCredentials: true }));
       }
     } catch (error) {
       console.error('Erreur lors du stockage sécurisé des credentials:', error);
+    }
+  };
+
+  // Activer l'authentification biométrique (à appeler depuis les paramètres)
+  const enableBiometricAuth = async (): Promise<boolean> => {
+    // Skip biometric enable on web
+    if (Platform.OS === 'web') {
+      console.warn('Biometric authentication not supported on web');
+      return false;
+    }
+
+    try {
+      // Vérifier la disponibilité
+      const compatible = await LocalAuthentication.hasHardwareAsync();
+      const enrolled = await LocalAuthentication.isEnrolledAsync();
+
+      if (!compatible || !enrolled) {
+        console.warn('Authentification biométrique non disponible ou non configurée');
+        return false;
+      }
+
+      // Activer l'authentification biométrique
+      await AsyncStorage.setItem(BIOMETRIC_STORAGE_KEY, 'true');
+
+      // Mettre à jour l'état
+      setState(prev => ({
+        ...prev,
+        isEnabled: true
+      }));
+
+      console.log('Authentification biométrique activée');
+      return true;
+    } catch (error) {
+      console.error('Erreur lors de l\'activation de l\'authentification biométrique:', error);
+      return false;
+    }
+  };
+
+  // Configurer l'authentification biométrique avec demande des credentials actuels
+  const setupBiometricWithCredentials = async (email: string, password: string): Promise<boolean> => {
+    // Skip biometric setup on web
+    if (Platform.OS === 'web') {
+      console.warn('Biometric setup not supported on web');
+      return false;
+    }
+
+    try {
+      // D'abord, activer l'authentification biométrique
+      const enabled = await enableBiometricAuth();
+      if (!enabled) {
+        return false;
+      }
+
+      // Ensuite, tenter l'authentification biométrique pour valider
+      const authResult = await LocalAuthentication.authenticateAsync({
+        promptMessage: Platform.OS === 'ios'
+          ? 'Configurez votre authentification biométrique'
+          : 'Configurez votre empreinte digitale',
+        fallbackLabel: 'Annuler',
+        cancelLabel: 'Annuler',
+        disableDeviceFallback: false,
+      });
+
+      if (authResult.success) {
+        // Si l'authentification réussit, stocker les credentials
+        await storeCredentials(email, password);
+        console.log('Authentification biométrique configurée avec succès');
+        return true;
+      } else {
+        // Si l'authentification échoue, désactiver
+        await AsyncStorage.removeItem(BIOMETRIC_STORAGE_KEY);
+        setState(prev => ({ ...prev, isEnabled: false }));
+        console.warn('Configuration biométrique annulée par l\'utilisateur');
+        return false;
+      }
+    } catch (error) {
+      console.error('Erreur lors de la configuration de l\'authentification biométrique:', error);
+      // Nettoyer en cas d'erreur
+      await AsyncStorage.removeItem(BIOMETRIC_STORAGE_KEY);
+      setState(prev => ({ ...prev, isEnabled: false }));
+      return false;
     }
   };
 
@@ -183,6 +285,11 @@ export const useBiometricAuth = () => {
 
   // Vérifier le type d'authentification biométrique disponible
   const getBiometricType = async (): Promise<string> => {
+    // Return default type for web
+    if (Platform.OS === 'web') {
+      return 'Authentification biométrique';
+    }
+    
     try {
       const types = await LocalAuthentication.supportedAuthenticationTypesAsync();
       
@@ -213,6 +320,8 @@ export const useBiometricAuth = () => {
     checkBiometricStatus,
     authenticateWithBiometrics,
     storeCredentials,
+    enableBiometricAuth,
+    setupBiometricWithCredentials,
     clearStoredCredentials,
     getBiometricType,
   };

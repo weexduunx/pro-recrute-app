@@ -29,7 +29,18 @@ export default function EntretiensCalendrierScreen() {
       setLoading(true);
       try {
         const fetchedEntretiens = await getCandidatEntretiensCalendrier();
-        setEntretiens(fetchedEntretiens);
+        console.log('🔍 calendrier.tsx: Réponse API:', fetchedEntretiens);
+
+        if (fetchedEntretiens && fetchedEntretiens.entretiens) {
+          console.log('🔍 calendrier.tsx: Format API avec .entretiens, length:', fetchedEntretiens.entretiens.length);
+          setEntretiens(fetchedEntretiens.entretiens);
+        } else if (Array.isArray(fetchedEntretiens)) {
+          console.log('🔍 calendrier.tsx: Format API direct array, length:', fetchedEntretiens.length);
+          setEntretiens(fetchedEntretiens);
+        } else {
+          console.log('🔍 calendrier.tsx: Format API inattendu, utilisation tableau vide');
+          setEntretiens([]);
+        }
       } catch (error: any) {
         console.error("Erreur de chargement des entretiens:", error);
         setEntretiens([]);
@@ -67,12 +78,14 @@ export default function EntretiensCalendrierScreen() {
   };
 
   const getEntretiensForDate = (date: Date) => {
+    if (!entretiens || !Array.isArray(entretiens)) return [];
+
     // Utiliser une fonction qui évite les problèmes de fuseau horaire
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
     const dateStr = `${year}-${month}-${day}`;
-    
+
     // Support des deux formats d'API
     const matches = entretiens.filter(e => (e.date_entretien || e.date) === dateStr);
     return matches;

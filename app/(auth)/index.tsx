@@ -3,8 +3,9 @@ import { View, Text, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator,
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useAuth } from '../../components/AuthProvider';
+import { useLanguage } from '../../components/LanguageContext';
 import { FontAwesome5, Feather, MaterialIcons } from '@expo/vector-icons';
-import * as Device from 'expo-device';
+import { Platform } from 'react-native';
 import { useBiometricAuth } from '../../hooks/useBiometricAuth';
 
 export default function LoginScreen() {
@@ -17,12 +18,14 @@ export default function LoginScreen() {
   const [biometricType, setBiometricType] = useState<string>('Empreinte digitale');
 
   const { login, socialLogin, error: authError, clearError } = useAuth();
+  const { t } = useLanguage();
   const {
     isAvailable: biometricAvailable,
     isEnabled: biometricEnabled,
     hasStoredCredentials,
     authenticateWithBiometrics,
     storeCredentials,
+    setupBiometricWithCredentials,
     getBiometricType,
     checkBiometricStatus,
   } = useBiometricAuth();
@@ -62,7 +65,7 @@ export default function LoginScreen() {
     }
 
     try {
-      const deviceName = Device.deviceName || 'UnknownDevice';
+      const deviceName = Platform.OS === 'web' ? 'WebBrowser' : 'UnknownDevice';
       // La fonction login dans AuthProvider gère maintenant la redirection OTP
       await login(email, password, deviceName); 
       
@@ -83,7 +86,7 @@ export default function LoginScreen() {
       const credentials = await authenticateWithBiometrics();
       
       if (credentials) {
-        const deviceName = Device.deviceName || 'UnknownDevice';
+        const deviceName = Platform.OS === 'web' ? 'WebBrowser' : 'UnknownDevice';
         await login(credentials.email, credentials.password, deviceName);
       } else {
         setError('Authentification biométrique échouée.');
@@ -113,7 +116,7 @@ export default function LoginScreen() {
         {/* Section Header */}
         <View style={styles.headerSection}>
           <Image
-            source={require('../../assets/images/logo.png')} // Assurez-vous que le chemin est correct
+            source={require('../../assets/images/logogbg.png')} // Assurez-vous que le chemin est correct
             style={styles.logo}
             resizeMode="contain"
           />
@@ -132,7 +135,7 @@ export default function LoginScreen() {
           <View style={styles.inputContainer}>
             <TextInput
               style={styles.input}
-              placeholder="Adresse email"
+              placeholder={t("Adresse email")}
               placeholderTextColor="#9CA3AF"
               value={email}
               onChangeText={setEmail}
@@ -147,7 +150,7 @@ export default function LoginScreen() {
           {/* <View style={styles.inputContainer}>
             <TextInput
               style={styles.input}
-              placeholder="Mot de passe"
+              placeholder={t("Mot de passe")}
               placeholderTextColor="#9CA3AF"
               value={password}
               onChangeText={setPassword}
@@ -211,15 +214,49 @@ export default function LoginScreen() {
             <TouchableOpacity
               style={[styles.biometricButton, biometricLoading && styles.buttonDisabled]}
               onPress={
-                biometricEnabled && hasStoredCredentials 
-                  ? handleBiometricLogin 
-                  : () => Alert.alert(
-                      'Authentification biométrique',
-                      biometricEnabled 
-                        ? 'Connectez-vous d\'abord avec votre email et mot de passe pour activer la connexion biométrique.'
-                        : 'Activez d\'abord l\'authentification biométrique dans les paramètres, puis connectez-vous une première fois.',
-                      [{ text: 'Compris' }]
-                    )
+                biometricEnabled && hasStoredCredentials
+                  ? handleBiometricLogin
+                  : () => {
+                      if (!biometricEnabled && email && password) {
+                        // Si l'utilisateur a saisi ses credentials, proposer de configurer la biométrie
+                        Alert.alert(
+                          'Configurer l\'authentification biométrique',
+                          'Souhaitez-vous configurer l\'authentification biométrique avec ces identifiants ?',
+                          [
+                            { text: 'Plus tard', style: 'cancel' },
+                            {
+                              text: 'Configurer',
+                              onPress: async () => {
+                                setBiometricLoading(true);
+                                try {
+                                  const success = await setupBiometricWithCredentials(email, password);
+                                  if (success) {
+                                    Alert.alert(t('Succès'), t('Authentification biométrique configurée avec succès !'));
+                                    await checkBiometricStatus(); // Rafraîchir le statut
+                                  } else {
+                                    Alert.alert(t('Erreur'), t('Échec de la configuration de l\'authentification biométrique.'));
+                                  }
+                                } catch (error: any) {
+                                  Alert.alert(t('Erreur'), error.message || t('Erreur lors de la configuration.'));
+                                } finally {
+                                  setBiometricLoading(false);
+                                }
+                              }
+                            }
+                          ]
+                        );
+                      } else {
+                        Alert.alert(
+                          'Authentification biométrique',
+                          biometricEnabled
+                            ? 'Connectez-vous d\'abord avec votre email et mot de passe pour activer la connexion biométrique.'
+                            : email && password
+                              ? 'Configurez l\'authentification biométrique en appuyant sur "Configurer".'
+                              : 'Saisissez vos identifiants puis appuyez sur ce bouton pour configurer l\'authentification biométrique.',
+                          [{ text: 'Compris' }]
+                        );
+                      }
+                    }
               }
               disabled={loading || biometricLoading}
             >
@@ -229,11 +266,13 @@ export default function LoginScreen() {
                 <View style={styles.biometricButtonContent}>
                   <MaterialIcons name="fingerprint" size={24} color="#3B82F6" />
                   <Text style={styles.biometricButtonText}>
-                    {biometricEnabled && hasStoredCredentials 
+                    {biometricEnabled && hasStoredCredentials
                       ? `Connexion avec ${biometricType}`
-                      : biometricEnabled 
+                      : !biometricEnabled && email && password
                         ? `Configurer ${biometricType}`
-                        : `Activer ${biometricType}`
+                        : biometricEnabled
+                          ? `Configurer ${biometricType}`
+                          : `Activer ${biometricType}`
                     }
                   </Text>
                 </View>
@@ -243,7 +282,7 @@ export default function LoginScreen() {
 
           <TouchableOpacity
             style={styles.linkButton}
-            onPress={() => Alert.alert("Mot de passe oublié", "Fonctionnalité à implémenter.")}
+            onPress={() => router.push('/(auth)/forgot-password')}
             disabled={loading}
           >
             <Text style={styles.linkText}>Mot de passe oublié ?</Text>
@@ -293,12 +332,12 @@ const styles = StyleSheet.create({
   // Section Header
   headerSection: {
     alignItems: "center",
-    marginBottom: 32,
-    paddingTop: 12,
+    marginBottom: 30,
+    paddingTop: 10,
   },
   logo: {
-    width: 80,
-    height: 80,
+    width: 100,
+    height: 100,
     marginBottom: 16,
   },
   title: {

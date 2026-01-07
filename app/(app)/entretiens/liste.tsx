@@ -18,12 +18,33 @@ export default function EntretiensListeScreen() {
   const [showEntretienModal, setShowEntretienModal] = useState(false);
   const [filter, setFilter] = useState<'tous' | 'futurs' | 'passes' | 'en_attente'>('tous');
 
+  const getStatusColor = (statut: string) => {
+    switch (statut) {
+      case 'Retenu': return '#10B981';
+      case 'Non retenu': return '#EF4444';
+      case 'Stand By': return '#8B5CF6';
+      case 'Préselectionné': return '#6366F1';
+      default: return '#6B7280';
+    }
+  };
+
   const loadEntretiens = useCallback(async () => {
     if (user) {
       setLoading(true);
       try {
         const fetchedEntretiens = await getCandidatEntretiens();
-        setEntretiens(fetchedEntretiens);
+        console.log('🔍 liste.tsx: Réponse API:', fetchedEntretiens);
+
+        if (fetchedEntretiens && fetchedEntretiens.entretiens) {
+          console.log('🔍 liste.tsx: Format API avec .entretiens, length:', fetchedEntretiens.entretiens.length);
+          setEntretiens(fetchedEntretiens.entretiens);
+        } else if (Array.isArray(fetchedEntretiens)) {
+          console.log('🔍 liste.tsx: Format API direct array, length:', fetchedEntretiens.length);
+          setEntretiens(fetchedEntretiens);
+        } else {
+          console.log('🔍 liste.tsx: Format API inattendu, utilisation tableau vide');
+          setEntretiens([]);
+        }
       } catch (error: any) {
         console.error("Erreur de chargement des entretiens:", error);
         setEntretiens([]);
@@ -101,8 +122,10 @@ export default function EntretiensListeScreen() {
   };
 
   const getFilteredEntretiens = () => {
+    if (!entretiens || !Array.isArray(entretiens)) return [];
+
     const now = new Date();
-    
+
     switch (filter) {
       case 'futurs':
         return entretiens.filter(e => !isEntretienExpired(e.date_entretien, e.heure_entretien));
@@ -230,25 +253,36 @@ export default function EntretiensListeScreen() {
             </View>
           </View>
 
-          {/* Actions rapides */}
-          <View style={styles.actionsQuickContainer}>
-            {entretien.lien && !isExpired && (
+          {/* Actions rapides - Affichées seulement si en attente */}
+          {entretien.candidature_statut === 'En attente' && (
+            <View style={styles.actionsQuickContainer}>
+              {entretien.lien && !isExpired && (
+                <TouchableOpacity
+                  style={styles.actionQuickButton}
+                  onPress={() => handleLinkPress(entretien.lien)}
+                >
+                  <FontAwesome5 name="video" size={14} color="#0f8e35" />
+                  <Text style={styles.actionQuickText}>Rejoindre</Text>
+                </TouchableOpacity>
+              )}
               <TouchableOpacity
                 style={styles.actionQuickButton}
-                onPress={() => handleLinkPress(entretien.lien)}
+                onPress={() => router.push('/(app)/entretiens/preparation')}
               >
-                <FontAwesome5 name="video" size={14} color="#0f8e35" />
-                <Text style={styles.actionQuickText}>Rejoindre</Text>
+                <FontAwesome5 name="book-open" size={14} color="#8B5CF6" />
+                <Text style={styles.actionQuickText}>Préparer</Text>
               </TouchableOpacity>
-            )}
-            <TouchableOpacity
-              style={styles.actionQuickButton}
-              onPress={() => router.push('/(app)/entretiens/preparation')}
-            >
-              <FontAwesome5 name="book-open" size={14} color="#8B5CF6" />
-              <Text style={styles.actionQuickText}>Préparer</Text>
-            </TouchableOpacity>
-          </View>
+            </View>
+          )}
+          
+          {/* Afficher le statut si ce n'est pas "en attente" */}
+          {entretien.candidature_statut && entretien.candidature_statut !== 'En attente' && (
+            <View style={styles.statusContainer}>
+              <Text style={[styles.statusText, { color: getStatusColor(entretien.candidature_statut) }]}>
+                {entretien.candidature_statut}
+              </Text>
+            </View>
+          )}
         </View>
 
         <View style={styles.chevronContainer}>
@@ -274,10 +308,10 @@ export default function EntretiensListeScreen() {
 
         <View style={styles.filtersContainer}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filtersScroll}>
-            {renderFilterButton('tous', 'Tous', entretiens.length)}
-            {renderFilterButton('futurs', 'À venir', entretiens.filter(e => !isEntretienExpired(e.date_entretien, e.heure_entretien)).length)}
-            {renderFilterButton('passes', 'Passés', entretiens.filter(e => isEntretienExpired(e.date_entretien, e.heure_entretien)).length)}
-            {renderFilterButton('en_attente', 'En attente', entretiens.filter(e => e.decision === 0).length)}
+            {renderFilterButton('tous', 'Tous', Array.isArray(entretiens) ? entretiens.length : 0)}
+            {renderFilterButton('futurs', 'À venir', Array.isArray(entretiens) ? entretiens.filter(e => !isEntretienExpired(e.date_entretien, e.heure_entretien)).length : 0)}
+            {renderFilterButton('passes', 'Passés', Array.isArray(entretiens) ? entretiens.filter(e => isEntretienExpired(e.date_entretien, e.heure_entretien)).length : 0)}
+            {renderFilterButton('en_attente', 'En attente', Array.isArray(entretiens) ? entretiens.filter(e => e.decision === 0).length : 0)}
           </ScrollView>
         </View>
 
@@ -576,6 +610,20 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     color: '#FFFFFF',
+  },
+
+  // Statut
+  statusContainer: {
+    marginTop: 8,
+    alignItems: 'flex-start',
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: '600',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: 'rgba(0,0,0,0.05)',
   },
 
   // Actions rapides

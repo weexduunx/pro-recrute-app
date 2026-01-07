@@ -2,11 +2,13 @@ import { useEffect, useRef } from 'react';
 import { Alert } from 'react-native';
 import { useAuth } from './AuthProvider';
 import { useSimplePermissions } from './SimplePermissionsManager';
+import { useLanguage } from './LanguageContext';
 
 /**
  * Hook simplifié qui demande seulement les notifications après l'authentification
  */
 export const useSimpleAuthPermissions = () => {
+  const { t } = useLanguage();
   const { isAuthenticated, user, isAppReady } = useAuth();
   const { hasRequestedNotifications, requestNotificationPermission } = useSimplePermissions();
   
@@ -31,12 +33,12 @@ export const useSimpleAuthPermissions = () => {
       
       const timer = setTimeout(() => {
         Alert.alert(
-          'Notifications',
-          'Souhaitez-vous recevoir des notifications pour les nouvelles opportunités d\'emploi ?',
+          t('Notifications'),
+          t('Souhaitez-vous recevoir des notifications pour les nouvelles opportunités d\'emploi ?'),
           [
-            { text: 'Plus tard', style: 'cancel' },
-            { 
-              text: 'Autoriser', 
+            { text: t('Plus tard'), style: 'cancel' },
+            {
+              text: t('Autoriser'),
               onPress: () => requestNotificationPermission()
             },
           ]

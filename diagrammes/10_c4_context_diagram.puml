@@ -1,0 +1,50 @@
+@startuml C4_Context_Diagram
+!define ICONURL https://raw.githubusercontent.com/tupadr3/plantuml-icon-font-sprites/v2.4.0
+!includeurl ICONURL/common.puml
+!define C4PlantUML https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master
+!includeurl C4PlantUML/C4_Context.puml
+
+title Diagramme de Contexte C4 - Système Pro-Recrute Mobile
+
+' Acteurs externes
+Person(candidat, "Candidat", "Chercheur d'emploi utilisant l'application mobile pour trouver des opportunités")
+Person(interimaire, "Intérimaire", "Travailleur temporaire gérant ses missions et documents")
+Person(recruteur, "Recruteur", "Professionnel RH publiant des offres et évaluant des candidats")
+Person(admin, "Administrateur", "Gestionnaire système supervisant la plateforme")
+
+' Système principal
+System(pro_recrute_mobile, "Pro-Recrute Mobile", "Application mobile React Native offrant services de recrutement avec IA")
+
+' Systèmes externes
+System_Ext(oauth_providers, "OAuth Providers", "Google, LinkedIn - Services d'authentification sociale")
+System_Ext(notification_service, "Service de Notifications", "Expo Push Notifications - Notifications push mobiles")
+System_Ext(maps_service, "Service de Cartes", "Google Maps API - Géolocalisation et calcul distances")
+System_Ext(video_service, "Service Vidéo", "WebRTC/Agora - Infrastructure entretiens vidéo")
+System_Ext(ml_platform, "Plateforme ML", "TensorFlow/PyTorch - Moteur d'intelligence artificielle")
+System_Ext(analytics_platform, "Analytics", "Mixpanel/Firebase Analytics - Analyse comportementale")
+System_Ext(cdn, "CDN", "AWS CloudFront - Distribution de contenu statique")
+System_Ext(email_service, "Service Email", "SendGrid/AWS SES - Notifications email et OTP")
+
+' Relations Utilisateurs -> Système
+Rel(candidat, pro_recrute_mobile, "Utilise", "Recherche emplois, passe tests, communique")
+Rel(interimaire, pro_recrute_mobile, "Utilise", "Gère missions, documents, planning")
+Rel(recruteur, pro_recrute_mobile, "Utilise", "Publie offres, évalue candidats, interviews")
+Rel(admin, pro_recrute_mobile, "Administre", "Configuration, monitoring, support")
+
+' Relations Système -> Services Externes
+Rel(pro_recrute_mobile, oauth_providers, "Authentifie", "OAuth 2.0/OpenID Connect")
+Rel(pro_recrute_mobile, notification_service, "Envoie", "Notifications push ciblées")
+Rel(pro_recrute_mobile, maps_service, "Utilise", "APIs géolocalisation et routing")
+Rel(pro_recrute_mobile, video_service, "Connecte", "Sessions WebRTC pour entretiens")
+Rel(pro_recrute_mobile, ml_platform, "Requête", "Recommandations IA et scoring")
+Rel(pro_recrute_mobile, analytics_platform, "Envoie", "Événements et métriques")
+Rel(pro_recrute_mobile, cdn, "Récupère", "Assets statiques et médias")
+Rel(pro_recrute_mobile, email_service, "Envoie", "Emails OTP et notifications")
+
+' Flux de données bidirectionnels
+Rel_Back(notification_service, candidat, "Notifie", "Nouvelles opportunités")
+Rel_Back(notification_service, recruteur, "Alerte", "Nouvelles candidatures")
+Rel_Back(video_service, candidat, "Diffuse", "Stream audio/vidéo")
+Rel_Back(video_service, recruteur, "Diffuse", "Stream audio/vidéo")
+
+@enduml

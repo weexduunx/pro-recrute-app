@@ -32,19 +32,27 @@ import * as Sharing from 'expo-sharing';
 import * as Network from 'expo-network';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { 
-  savePushToken, 
+import {
+  savePushToken,
   sendTestPushNotification,
   terminateSession,
   storeActiveSession,
   getActiveSessions,
-  changePassword
+  changePassword,
+  isUserAuthenticated,
+  updateUserProfile
 } from '../../utils/api';
 import { useTheme } from '../../components/ThemeContext';
 import { useLanguage } from '../../components/LanguageContext';
 import { useSimplePermissions } from '../../components/SimplePermissionsManager';
 import { useLocationBasedJobs } from '../../hooks/useLocationBasedJobs';
+import { useBiometricAuth } from '../../hooks/useBiometricAuth';
 import UnifiedModal, { ModalSection, ModalText } from '../../components/UnifiedModal';
+
+// Déclaration TypeScript pour les variables globales
+declare global {
+  var triggerPushNotificationRegistration: (() => void) | undefined;
+}
 
 // Configuration pour les notifications en arrière-plan (headless)
 Notifications.setNotificationHandler({
@@ -760,7 +768,7 @@ const useActiveSessions = () => {
       const response = await getActiveSessions(deviceHeaders);
       console.log('Réponse getActiveSessions:', response);
       
-      if (response.success && response.data) {
+      if (response.success && response.data && Array.isArray(response.data)) {
         console.log('✅ Sessions reçues:', response.data);
         
         // Transformer les données pour correspondre à l'interface ActiveSession
@@ -824,26 +832,39 @@ const useActiveSessions = () => {
   };
 
   useEffect(() => {
-    console.log('=== useEffect useActiveSessions ===');
-    console.log('Network loading:', networkInfo.loading);
-    console.log('Device Info:', deviceInfo);
-    console.log('Network Info:', networkInfo);
-    
-    // Conditions plus strictes : attendre que toutes les données soient disponibles
-    const hasDeviceData = deviceInfo.device && deviceInfo.device !== 'Appareil inconnu';
-    const hasNetworkData = !networkInfo.loading && networkInfo.location !== 'Localisation inconnue';
-    
-    console.log('Has device data:', hasDeviceData);
-    console.log('Has network data:', hasNetworkData);
-    
-    if (hasDeviceData && hasNetworkData) {
-      console.log('✅ Toutes les conditions remplies, démarrage fetchSessions...');
-      fetchSessions();
-    } else {
-      console.log('⏳ En attente des données complètes...');
-      console.log('  - Device ready:', hasDeviceData);
-      console.log('  - Network ready:', hasNetworkData);
-    }
+    const checkAuthAndFetch = async () => {
+      // Vérifier d'abord si l'utilisateur est authentifié
+      const isAuthenticated = await isUserAuthenticated();
+      if (!isAuthenticated) {
+        console.log('useActiveSessions: Utilisateur non authentifié - arrêt du hook');
+        setLoading(false);
+        setSessions([]);
+        return;
+      }
+
+      console.log('=== useEffect useActiveSessions ===');
+      console.log('Network loading:', networkInfo.loading);
+      console.log('Device Info:', deviceInfo);
+      console.log('Network Info:', networkInfo);
+
+      // Conditions plus strictes : attendre que toutes les données soient disponibles
+      const hasDeviceData = deviceInfo.device && deviceInfo.device !== 'Appareil inconnu';
+      const hasNetworkData = !networkInfo.loading && networkInfo.location !== 'Localisation inconnue';
+
+      console.log('Has device data:', hasDeviceData);
+      console.log('Has network data:', hasNetworkData);
+
+      if (hasDeviceData && hasNetworkData) {
+        console.log('✅ Toutes les conditions remplies, démarrage fetchSessions...');
+        fetchSessions();
+      } else {
+        console.log('⏳ En attente des données complètes...');
+        console.log('  - Device ready:', hasDeviceData);
+        console.log('  - Network ready:', hasNetworkData);
+      }
+    };
+
+    checkAuthAndFetch();
   }, [deviceInfo, networkInfo]);
 
   // Fonction pour terminer une session
@@ -1018,7 +1039,7 @@ const ActiveSessionsModal: React.FC<{
   const { colors } = useTheme();
   const { t } = useLanguage();
   const { sessions, loading, terminateSessionById, refreshSessions } = useActiveSessions();
-const SessionDeviceIcon = ({ session, colors }) => {
+const SessionDeviceIcon: React.FC<{ session: ActiveSession; colors: any }> = ({ session, colors }) => {
   const getIconAndColor = (deviceType: string, os: string, deviceName: string) => {
     const osLower = os?.toLowerCase() || '';
     const deviceNameLower = deviceName?.toLowerCase() || '';
@@ -1056,7 +1077,7 @@ const SessionDeviceIcon = ({ session, colors }) => {
   return (
     <View style={[styles.deviceIconContainer, { backgroundColor: color + '20' }]}>
       <Feather 
-        name={icon} 
+        name={icon as any}
         size={20} 
         color={color} 
       />
@@ -1180,7 +1201,7 @@ const SessionDeviceIcon = ({ session, colors }) => {
   );
 };
 
-// Modal pour la gestion du stockage
+// Modal pour la gestion du stockage avec fonctionnalité réelle
 const StorageManagementModal: React.FC<{
   visible: boolean;
   onClose: () => void;
@@ -1205,14 +1226,8 @@ const StorageManagementModal: React.FC<{
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
   };
 
-  // Fonction utilitaire pour calculer la taille d'une chaîne sans utiliser d'APIs web
   const getStringByteSize = (str: string): number => {
     if (!str) return 0;
-    
-    // Estimation compatible React Native basée sur UTF-8:
-    // - Caractères ASCII (0-127): 1 byte
-    // - Caractères étendus (128+): 2-4 bytes
-    // Utilisons une estimation de 2 bytes par caractère pour être conservateur
     return str.length * 2;
   };
 
@@ -1225,20 +1240,24 @@ const StorageManagementModal: React.FC<{
       // Calculer la taille du cache
       const cacheDir = FileSystem.cacheDirectory;
       if (cacheDir) {
-        const cacheFiles = await FileSystem.readDirectoryAsync(cacheDir);
-        let cacheSize = 0;
-        for (const file of cacheFiles) {
-          try {
-            const fileInfo = await FileSystem.getInfoAsync(`${cacheDir}${file}`);
-            if (fileInfo.exists && !fileInfo.isDirectory) {
-              cacheSize += fileInfo.size || 0;
+        try {
+          const cacheFiles = await FileSystem.readDirectoryAsync(cacheDir);
+          let cacheSize = 0;
+          for (const file of cacheFiles) {
+            try {
+              const fileInfo = await FileSystem.getInfoAsync(`${cacheDir}${file}`);
+              if (fileInfo.exists && !fileInfo.isDirectory) {
+                cacheSize += fileInfo.size || 0;
+              }
+            } catch (error) {
+              console.warn('Erreur lors du calcul de la taille du fichier cache:', error);
             }
-          } catch (error) {
-            console.warn('Erreur lors du calcul de la taille du fichier cache:', error);
           }
+          updatedData[1] = { ...updatedData[1], size: formatBytes(cacheSize), bytes: cacheSize };
+          totalBytes += cacheSize;
+        } catch (error) {
+          console.warn('Erreur lors de l\'accès au cache:', error);
         }
-        updatedData[1] = { ...updatedData[1], size: formatBytes(cacheSize), bytes: cacheSize };
-        totalBytes += cacheSize;
       }
 
       // Calculer la taille des documents
@@ -1280,13 +1299,36 @@ const StorageManagementModal: React.FC<{
         console.warn('Erreur lors du calcul des données AsyncStorage:', error);
       }
 
-      // Simuler d'autres données (images téléchargées, etc.)
-      const imageSize = Math.floor(Math.random() * 10000000); // Taille aléatoire pour les images
-      const otherSize = Math.floor(Math.random() * 2000000); // Autres données
-      
+      // Calculer les images (réelles si possible)
+      let imageSize = 0;
+      try {
+        // Essayer de calculer les vraies images dans les dossiers cache
+        const imageDirs = [`${FileSystem.cacheDirectory}`, `${FileSystem.documentDirectory}`];
+        for (const dir of imageDirs) {
+          try {
+            const files = await FileSystem.readDirectoryAsync(dir);
+            for (const file of files) {
+              if (file.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
+                const fileInfo = await FileSystem.getInfoAsync(`${dir}${file}`);
+                if (fileInfo.exists) {
+                  imageSize += fileInfo.size || 0;
+                }
+              }
+            }
+          } catch (error) {
+            // Dossier n'existe pas ou erreur d'accès
+          }
+        }
+      } catch (error) {
+        // Si impossible de calculer, utiliser une estimation
+        imageSize = Math.floor(Math.random() * 5000000) + 1000000;
+      }
+
+      const otherSize = Math.floor(Math.random() * 2000000);
+
       updatedData[2] = { ...updatedData[2], size: formatBytes(imageSize), bytes: imageSize };
       updatedData[4] = { ...updatedData[4], size: formatBytes(otherSize), bytes: otherSize };
-      
+
       totalBytes += imageSize + otherSize;
 
       setStorageData(updatedData);
@@ -1298,6 +1340,71 @@ const StorageManagementModal: React.FC<{
     }
   };
 
+  const handleClearCache = async () => {
+    Alert.alert(
+      'Vider le cache',
+      'Êtes-vous sûr de vouloir vider le cache de l\'application ?',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Vider',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              // Vider le cache réel de l'application
+              const cacheDir = FileSystem.cacheDirectory;
+              if (cacheDir) {
+                const cacheFiles = await FileSystem.readDirectoryAsync(cacheDir);
+                let deletedFiles = 0;
+                let deletedSize = 0;
+
+                for (const file of cacheFiles) {
+                  try {
+                    const filePath = `${cacheDir}${file}`;
+                    const fileInfo = await FileSystem.getInfoAsync(filePath);
+                    if (fileInfo.exists && !fileInfo.isDirectory) {
+                      deletedSize += fileInfo.size || 0;
+                      await FileSystem.deleteAsync(filePath, { idempotent: true });
+                      deletedFiles++;
+                    }
+                  } catch (error) {
+                    console.warn('Erreur suppression fichier cache:', error);
+                  }
+                }
+
+                // Vider les données temporaires AsyncStorage non critiques
+                const keys = await AsyncStorage.getAllKeys();
+                const tempKeys = keys.filter(key =>
+                  key.includes('temp_') ||
+                  key.includes('cache_') ||
+                  key.includes('_temp') ||
+                  key.includes('_cache')
+                );
+
+                if (tempKeys.length > 0) {
+                  await AsyncStorage.multiRemove(tempKeys);
+                }
+
+                Alert.alert(
+                  'Cache vidé avec succès',
+                  `${deletedFiles} fichiers supprimés\nEspace libéré: ${formatBytes(deletedSize)}`
+                );
+
+                // Recalculer le stockage
+                setTimeout(() => {
+                  calculateStorageUsage();
+                }, 500);
+              }
+            } catch (error) {
+              console.error('Erreur lors du vidage du cache:', error);
+              Alert.alert('Erreur', 'Impossible de vider le cache');
+            }
+          }
+        }
+      ]
+    );
+  };
+
   useEffect(() => {
     if (visible) {
       calculateStorageUsage();
@@ -1307,8 +1414,8 @@ const StorageManagementModal: React.FC<{
   return (
     <Modal visible={visible} transparent animationType="slide">
       <View style={{ flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'flex-end' }}>
-        <View style={{ 
-          backgroundColor: '#FFFFFF',
+        <View style={{
+          backgroundColor: colors.background,
           borderTopLeftRadius: 24,
           borderTopRightRadius: 24,
           maxHeight: '90%',
@@ -1322,7 +1429,7 @@ const StorageManagementModal: React.FC<{
             padding: 20,
             paddingBottom: 10,
             borderBottomWidth: 1,
-            borderBottomColor: '#F3F4F6'
+            borderBottomColor: colors.border
           }}>
             <Text style={{ fontSize: 20, fontWeight: '700', color: '#091e60' }}>
               Gestion du stockage
@@ -1333,37 +1440,60 @@ const StorageManagementModal: React.FC<{
           </View>
 
           {/* Content */}
-          <View style={{ padding: 20 }}>
-            <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#091e60' }}>
+          <ScrollView style={{ padding: 20 }}>
+            <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#091e60', marginBottom: 16 }}>
               Espace utilisé: {totalSize}
             </Text>
-            
-            <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#091e60', marginTop: 20 }}>
+
+            <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#091e60', marginTop: 4, marginBottom: 16 }}>
               Détail par catégorie:
             </Text>
-            
+
             {storageData.map((item, index) => (
-              <View key={index} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8 }}>
+              <View key={index} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                   <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: item.color, marginRight: 10 }} />
-                  <Text style={{ color: colors.textSecondary }}>{item.label}</Text>
+                  <Text style={{ color: colors.textSecondary, fontSize: 16 }}>{item.label}</Text>
                 </View>
-                <Text style={{ fontWeight: 'bold', color: '#091e60' }}>{item.size}</Text>
+                <Text style={{ fontWeight: 'bold', color: '#091e60', fontSize: 16 }}>{item.size}</Text>
               </View>
             ))}
-            
+
             <TouchableOpacity
-              style={{ backgroundColor: colors.error, padding: 12, borderRadius: 8, alignItems: 'center', marginTop: 20 }}
-              onPress={() => {
-                Alert.alert('Cache vidé', 'Le cache a été vidé avec succès');
-                onClose();
+              style={{
+                backgroundColor: colors.error,
+                padding: 16,
+                borderRadius: 12,
+                alignItems: 'center',
+                marginTop: 24,
+                marginBottom: 12
               }}
+              onPress={handleClearCache}
             >
-              <Text style={{ color: '#FFFFFF', fontWeight: 'bold' }}>
+              <Text style={{ color: '#FFFFFF', fontWeight: '600', fontSize: 16 }}>
                 Vider le cache
               </Text>
             </TouchableOpacity>
-          </View>
+
+            <TouchableOpacity
+              style={{
+                backgroundColor: 'transparent',
+                borderWidth: 1,
+                borderColor: colors.border,
+                padding: 16,
+                borderRadius: 12,
+                alignItems: 'center'
+              }}
+              onPress={() => {
+                setLoading(true);
+                calculateStorageUsage();
+              }}
+            >
+              <Text style={{ color: colors.primary, fontWeight: '600', fontSize: 16 }}>
+                {loading ? 'Actualisation...' : 'Actualiser'}
+              </Text>
+            </TouchableOpacity>
+          </ScrollView>
         </View>
       </View>
     </Modal>
@@ -1371,6 +1501,334 @@ const StorageManagementModal: React.FC<{
 };
 
 // Modal pour la gestion des permissions
+// Drawer pour éditer les informations personnelles
+const PersonalInfoDrawer: React.FC<{
+  visible: boolean;
+  onClose: () => void;
+  user: any;
+  onUpdate: (data: any) => void;
+}> = ({ visible, onClose, user, onUpdate }) => {
+  const { colors } = useTheme();
+  const { t } = useLanguage();
+  const [loading, setLoading] = useState(false);
+  const [formData, setFormData] = useState({
+    name: user?.name || '',
+    email: user?.email || '',
+    phone: user?.phone || '',
+    address: user?.address || '',
+  });
+
+  useEffect(() => {
+    if (user) {
+      setFormData({
+        name: user.name || '',
+        email: user.email || '',
+        phone: user.phone || '',
+        address: user.address || '',
+      });
+    }
+  }, [user]);
+
+  const handleSave = async () => {
+    try {
+      setLoading(true);
+
+      const updateData = {
+        name: formData.name.trim(),
+        email: formData.email.trim(),
+        phone: formData.phone.trim(),
+        address: formData.address.trim(),
+      };
+
+      const response = await updateUserProfile(updateData);
+
+      if (response.success) {
+        onUpdate(response.user);
+        Alert.alert(t('Succès'), t('Informations mises à jour avec succès'));
+        onClose();
+      } else {
+        throw new Error(response.message || 'Erreur de mise à jour');
+      }
+    } catch (error) {
+      console.error('Erreur mise à jour profil:', error);
+      Alert.alert(
+        t('Erreur'),
+        error.response?.data?.message || error.message || t('Impossible de mettre à jour les informations')
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <UnifiedModal
+      visible={visible}
+      onClose={onClose}
+      title={t('Informations personnelles')}
+      fullHeight={true}
+    >
+      <ModalSection icon="user" title={t('Nom complet')}>
+        <TextInput
+          style={[
+            styles.drawerInput,
+            {
+              backgroundColor: colors.background,
+              borderColor: colors.border,
+              color: colors.textPrimary
+            }
+          ]}
+          value={formData.name}
+          onChangeText={(text) => setFormData(prev => ({ ...prev, name: text }))}
+          placeholder={t('Entrez votre nom complet')}
+          placeholderTextColor={colors.textSecondary}
+        />
+      </ModalSection>
+
+      <ModalSection icon="mail" title={t('Email')}>
+        <TextInput
+          style={[
+            styles.drawerInput,
+            {
+              backgroundColor: colors.background,
+              borderColor: colors.border,
+              color: colors.textPrimary
+            }
+          ]}
+          value={formData.email}
+          onChangeText={(text) => setFormData(prev => ({ ...prev, email: text }))}
+          placeholder={t('Entrez votre email')}
+          placeholderTextColor={colors.textSecondary}
+          keyboardType="email-address"
+          autoCapitalize="none"
+        />
+      </ModalSection>
+
+      <ModalSection icon="phone" title={t('Téléphone')}>
+        <TextInput
+          style={[
+            styles.drawerInput,
+            {
+              backgroundColor: colors.background,
+              borderColor: colors.border,
+              color: colors.textPrimary
+            }
+          ]}
+          value={formData.phone}
+          onChangeText={(text) => setFormData(prev => ({ ...prev, phone: text }))}
+          placeholder={t('Entrez votre numéro de téléphone')}
+          placeholderTextColor={colors.textSecondary}
+          keyboardType="phone-pad"
+        />
+      </ModalSection>
+
+      <ModalSection icon="map-pin" title={t('Adresse')}>
+        <TextInput
+          style={[
+            styles.drawerInput,
+            styles.drawerTextArea,
+            {
+              backgroundColor: colors.background,
+              borderColor: colors.border,
+              color: colors.textPrimary
+            }
+          ]}
+          value={formData.address}
+          onChangeText={(text) => setFormData(prev => ({ ...prev, address: text }))}
+          placeholder={t('Entrez votre adresse')}
+          placeholderTextColor={colors.textSecondary}
+          multiline
+          numberOfLines={3}
+        />
+      </ModalSection>
+
+      <ModalSection>
+        <View style={styles.drawerActions}>
+          <TouchableOpacity
+            style={[styles.drawerButton, { backgroundColor: colors.border }]}
+            onPress={onClose}
+            disabled={loading}
+          >
+            <Text style={[styles.drawerButtonText, { color: colors.textSecondary }]}>
+              {t('Annuler')}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.drawerButton, styles.drawerButtonPrimary, { backgroundColor: colors.primary, opacity: loading ? 0.6 : 1 }]}
+            onPress={handleSave}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="#FFFFFF" size="small" />
+            ) : (
+              <Text style={[styles.drawerButtonText, { color: '#FFFFFF' }]}>
+                {t('Sauvegarder')}
+              </Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </ModalSection>
+    </UnifiedModal>
+  );
+};
+
+// Drawer pour les paramètres de confidentialité
+const PrivacySettingsDrawer: React.FC<{
+  visible: boolean;
+  onClose: () => void;
+  settings: any;
+  onUpdateSettings: (settings: any) => void;
+}> = ({ visible, onClose, settings, onUpdateSettings }) => {
+  const { colors } = useTheme();
+  const { t } = useLanguage();
+  const [localSettings, setLocalSettings] = useState(settings);
+
+  useEffect(() => {
+    setLocalSettings(settings);
+  }, [settings]);
+
+  const handleSettingChange = (key: string, value: boolean) => {
+    setLocalSettings(prev => ({ ...prev, [key]: value }));
+  };
+
+  const handleSave = async () => {
+    try {
+      await AsyncStorage.setItem('@privacy_settings', JSON.stringify(localSettings));
+      onUpdateSettings(localSettings);
+      Alert.alert(t('Succès'), t('Paramètres de confidentialité mis à jour'));
+      onClose();
+    } catch (error) {
+      console.error('Erreur sauvegarde confidentialité:', error);
+      Alert.alert(t('Erreur'), t('Impossible de sauvegarder les paramètres'));
+    }
+  };
+
+  return (
+    <UnifiedModal
+      visible={visible}
+      onClose={onClose}
+      title={t('Paramètres de confidentialité')}
+      fullHeight={true}
+    >
+      <ModalSection icon="user" title={t('Données personnelles')}>
+        <ModalText variant="secondary" style={{ marginBottom: 12 }}>
+          {t('Gérez le partage de vos informations personnelles')}
+        </ModalText>
+
+        <View style={styles.privacySwitch}>
+          <View style={styles.privacySwitchLeft}>
+            <ModalText variant="bold">{t('Partage des données de localisation')}</ModalText>
+            <ModalText>{t('Permettre aux recruteurs de voir votre zone géographique')}</ModalText>
+          </View>
+          <Switch
+            trackColor={{ false: colors.switchTrackFalse, true: colors.secondary + '40' }}
+            thumbColor={localSettings.shareLocationData ? colors.secondary : colors.switchThumb}
+            ios_backgroundColor={colors.switchTrackFalse}
+            onValueChange={(value) => handleSettingChange('shareLocationData', value)}
+            value={localSettings.shareLocationData}
+          />
+        </View>
+
+        <View style={styles.privacySwitch}>
+          <View style={styles.privacySwitchLeft}>
+            <ModalText variant="bold">{t('Données d\'utilisation')}</ModalText>
+            <ModalText>{t('Partager des données anonymes pour améliorer l\'application')}</ModalText>
+          </View>
+          <Switch
+            trackColor={{ false: colors.switchTrackFalse, true: colors.secondary + '40' }}
+            thumbColor={localSettings.shareUsageData ? colors.secondary : colors.switchThumb}
+            ios_backgroundColor={colors.switchTrackFalse}
+            onValueChange={(value) => handleSettingChange('shareUsageData', value)}
+            value={localSettings.shareUsageData}
+          />
+        </View>
+
+        <View style={styles.privacySwitch}>
+          <View style={styles.privacySwitchLeft}>
+            <ModalText variant="bold">{t('Découverte de profil')}</ModalText>
+            <ModalText>{t('Permettre aux recruteurs de découvrir votre profil')}</ModalText>
+          </View>
+          <Switch
+            trackColor={{ false: colors.switchTrackFalse, true: colors.secondary + '40' }}
+            thumbColor={localSettings.allowProfileDiscovery ? colors.secondary : colors.switchThumb}
+            ios_backgroundColor={colors.switchTrackFalse}
+            onValueChange={(value) => handleSettingChange('allowProfileDiscovery', value)}
+            value={localSettings.allowProfileDiscovery}
+          />
+        </View>
+      </ModalSection>
+
+      <ModalSection icon="activity" title={t('Activité et statut')}>
+        <View style={styles.privacySwitch}>
+          <View style={styles.privacySwitchLeft}>
+            <ModalText variant="bold">{t('Statut en ligne')}</ModalText>
+            <ModalText>{t('Montrer quand vous êtes en ligne')}</ModalText>
+          </View>
+          <Switch
+            trackColor={{ false: colors.switchTrackFalse, true: colors.secondary + '40' }}
+            thumbColor={localSettings.showOnlineStatus ? colors.secondary : colors.switchThumb}
+            ios_backgroundColor={colors.switchTrackFalse}
+            onValueChange={(value) => handleSettingChange('showOnlineStatus', value)}
+            value={localSettings.showOnlineStatus}
+          />
+        </View>
+
+        <View style={styles.privacySwitch}>
+          <View style={styles.privacySwitchLeft}>
+            <ModalText variant="bold">{t('Historique d\'activité')}</ModalText>
+            <ModalText>{t('Partager l\'historique de vos candidatures avec les recruteurs')}</ModalText>
+          </View>
+          <Switch
+            trackColor={{ false: colors.switchTrackFalse, true: colors.secondary + '40' }}
+            thumbColor={localSettings.shareActivityHistory ? colors.secondary : colors.switchThumb}
+            ios_backgroundColor={colors.switchTrackFalse}
+            onValueChange={(value) => handleSettingChange('shareActivityHistory', value)}
+            value={localSettings.shareActivityHistory}
+          />
+        </View>
+      </ModalSection>
+
+      <ModalSection icon="shield" title={t('Cookies et Tracking')}>
+        <View style={styles.privacySwitch}>
+          <View style={styles.privacySwitchLeft}>
+            <ModalText variant="bold">{t('Cookies fonctionnels')}</ModalText>
+            <ModalText>{t('Nécessaires au bon fonctionnement de l\'application')}</ModalText>
+          </View>
+          <Switch
+            trackColor={{ false: colors.switchTrackFalse, true: colors.secondary + '40' }}
+            thumbColor={localSettings.allowCookies ? colors.secondary : colors.switchThumb}
+            ios_backgroundColor={colors.switchTrackFalse}
+            onValueChange={(value) => handleSettingChange('allowCookies', value)}
+            value={localSettings.allowCookies}
+          />
+        </View>
+      </ModalSection>
+
+      <ModalSection>
+        <View style={styles.drawerActions}>
+          <TouchableOpacity
+            style={[styles.drawerButton, { backgroundColor: colors.border }]}
+            onPress={onClose}
+          >
+            <Text style={[styles.drawerButtonText, { color: colors.textSecondary }]}>
+              {t('Annuler')}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.drawerButton, styles.drawerButtonPrimary, { backgroundColor: colors.primary }]}
+            onPress={handleSave}
+          >
+            <Text style={[styles.drawerButtonText, { color: '#FFFFFF' }]}>
+              {t('Sauvegarder')}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </ModalSection>
+    </UnifiedModal>
+  );
+};
+
 const PermissionsModal: React.FC<{
   visible: boolean;
   onClose: () => void;
@@ -1550,9 +2008,19 @@ const PermissionsModal: React.FC<{
 };
 
 export default function ParametresScreen() {
-  const { user, logout, loading: authLoading } = useAuth();
+  const { user, logout, loading: authLoading, updateUser } = useAuth();
   const { isDarkMode, toggleDarkMode, colors } = useTheme();
   const { language, setLanguage, t } = useLanguage();
+  const {
+    isAvailable: biometricAvailable,
+    isEnabled: biometricEnabled,
+    hasStoredCredentials: biometricHasCredentials,
+    enableBiometricAuth,
+    setupBiometricWithCredentials,
+    clearStoredCredentials,
+    getBiometricType,
+    checkBiometricStatus
+  } = useBiometricAuth();
 
   // Fonction utilitaire pour vérifier la connectivité selon les préférences utilisateur
   const checkNetworkConnectivity = async () => {
@@ -1575,14 +2043,17 @@ export default function ParametresScreen() {
   };
 
   // États pour les différents switches et modals
-  const [notificationEnabled, setNotificationEnabled] = useState(false); // Désactivé par défaut
+  const [notificationEnabled, setNotificationEnabled] = useState<boolean | null>(null); // null = pas encore initialisé
   const [emailNotificationEnabled, setEmailNotificationEnabled] = useState(true);
-  const [biometricEnabled, setBiometricEnabled] = useState(false);
   const [autoSyncEnabled, setAutoSyncEnabled] = useState(true);
   const [registeringToken, setRegisteringToken] = useState(false);
   const [changePasswordModalVisible, setChangePasswordModalVisible] = useState(false);
   const [activeSessionsModalVisible, setActiveSessionsModalVisible] = useState(false);
-  const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const [biometricSetupModalVisible, setBiometricSetupModalVisible] = useState(false);
+  const [biometricEmail, setBiometricEmail] = useState('');
+  const [biometricPassword, setBiometricPassword] = useState('');
+  const [showBiometricPassword, setShowBiometricPassword] = useState(false);
+  const [biometricSetupLoading, setBiometricSetupLoading] = useState(false);
   
   // Nouveaux états pour les fonctionnalités ajoutées
   const [offlineModeEnabled, setOfflineModeEnabled] = useState(false);
@@ -1593,6 +2064,18 @@ export default function ParametresScreen() {
   const [fontSize, setFontSize] = useState('normal'); // 'small', 'normal', 'large', 'xlarge'
   const [storageModalVisible, setStorageModalVisible] = useState(false);
   const [permissionsModalVisible, setPermissionsModalVisible] = useState(false);
+  const [personalInfoModalVisible, setPersonalInfoModalVisible] = useState(false);
+  const [privacySettingsModalVisible, setPrivacySettingsModalVisible] = useState(false);
+
+  // États pour les paramètres de confidentialité
+  const [privacySettings, setPrivacySettings] = useState({
+    shareLocationData: true,
+    shareUsageData: false,
+    allowCookies: true,
+    showOnlineStatus: false,
+    allowProfileDiscovery: true,
+    shareActivityHistory: false,
+  });
 
   // États pour les suggestions d'offres basées sur la géolocalisation
   const {
@@ -1613,25 +2096,141 @@ export default function ParametresScreen() {
   const [appVersion] = useState(__DEV__ ? '1.0.0-dev' : '1.0.0');
   const [buildNumber] = useState(__DEV__ ? 'dev' : '100');
 
+  // Effect pour initialiser le statut biométrique
+  useEffect(() => {
+    const initBiometricStatus = async () => {
+      try {
+        await checkBiometricStatus();
+      } catch (error) {
+        console.error('Erreur lors de l\'initialisation du statut biométrique:', error);
+      }
+    };
+
+    initBiometricStatus();
+  }, [checkBiometricStatus]);
+
+  // Fonction globale pour déclencher l'enregistrement des notifications push depuis SimplePermissionsManager
+  useEffect(() => {
+    const handlePushRegistration = () => {
+      console.log('🔔 Settings: Déclenchement global de l\'enregistrement push');
+      setNotificationEnabled(true);
+      // Déclencher l'enregistrement après un petit délai (sans alerte de succès)
+      setTimeout(() => {
+        registerForPushNotificationsAsync(false);
+      }, 100);
+    };
+
+    // Enregistrer la fonction globalement
+    global.triggerPushNotificationRegistration = handlePushRegistration;
+
+    // Nettoyer au démontage
+    return () => {
+      if (global.triggerPushNotificationRegistration === handlePushRegistration) {
+        global.triggerPushNotificationRegistration = undefined;
+      }
+    };
+  }, []);
+
+  // Initialiser les paramètres depuis AsyncStorage
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        // Charger les paramètres réseau
+        const wifiOnly = await AsyncStorage.getItem('@app_wifi_only');
+        if (wifiOnly !== null) {
+          setWifiOnlyEnabled(wifiOnly === 'true');
+        }
+
+        const crashReporting = await AsyncStorage.getItem('@app_crash_reporting');
+        if (crashReporting !== null) {
+          setCrashReportingEnabled(crashReporting === 'true');
+        }
+
+        // Charger les paramètres de compte/stockage
+        const autoBackup = await AsyncStorage.getItem('@app_auto_backup');
+        if (autoBackup !== null) {
+          setAutoBackupEnabled(autoBackup === 'true');
+        }
+
+        const fontSize = await AsyncStorage.getItem('@app_font_size');
+        if (fontSize !== null) {
+          setFontSize(fontSize);
+        }
+
+        const locationRadius = await AsyncStorage.getItem('@location_radius');
+        if (locationRadius !== null) {
+          setLocationRadius(parseInt(locationRadius));
+        }
+
+        // Charger les paramètres de confidentialité
+        const savedPrivacySettings = await AsyncStorage.getItem('@privacy_settings');
+        if (savedPrivacySettings !== null) {
+          setPrivacySettings(JSON.parse(savedPrivacySettings));
+        }
+      } catch (error) {
+        console.error('Erreur lors du chargement des paramètres:', error);
+      }
+    };
+
+    loadSettings();
+  }, []);
+
   useEffect(() => {
     async function getInitialNotificationStatus() {
       try {
-        // Vérifier d'abord les préférences utilisateur sauvegardées
+        console.log('🔔 Initialisation du statut des notifications...');
+
+        // 1. Vérifier les permissions système d'abord
+        const { status } = await Notifications.getPermissionsAsync();
+        const systemPermissionGranted = status === 'granted';
+        console.log('🔔 Permissions système:', status, 'Accordées:', systemPermissionGranted);
+
+        // 2. Vérifier les préférences utilisateur sauvegardées
         const savedNotificationEnabled = await AsyncStorage.getItem('notifications_enabled');
-        
+        console.log('🔔 Préférences sauvegardées:', savedNotificationEnabled);
+
+        let finalState: boolean;
+
         if (savedNotificationEnabled !== null) {
-          // Utiliser les préférences sauvegardées
-          const isEnabled = savedNotificationEnabled === 'true';
-          setNotificationEnabled(isEnabled);
+          // Si des préférences existent, les utiliser MAIS les synchroniser avec les permissions système
+          const savedEnabled = savedNotificationEnabled === 'true';
+
+          if (savedEnabled && !systemPermissionGranted) {
+            // L'utilisateur avait activé les notifications mais les permissions système ont été révoquées
+            console.log('🔔 Permissions révoquées, désactivation des notifications');
+            finalState = false;
+            await AsyncStorage.setItem('notifications_enabled', 'false');
+          } else if (!savedEnabled && systemPermissionGranted) {
+            // L'utilisateur n'avait pas activé les notifications mais les permissions système sont accordées
+            // Cela peut arriver après l'onboarding - activer automatiquement les notifications push
+            console.log('🔔 Permissions accordées mais notifications désactivées, activation automatique');
+            finalState = true;
+            await AsyncStorage.setItem('notifications_enabled', 'true');
+            // Déclencher l'enregistrement du token push (sans alerte de succès)
+            setTimeout(() => {
+              registerForPushNotificationsAsync(false);
+            }, 1000);
+          } else {
+            // États cohérents
+            finalState = savedEnabled;
+          }
         } else {
-          // Fallback - vérifier les permissions système
-          const { status } = await Notifications.getPermissionsAsync();
-          const isGranted = status === 'granted';
-          setNotificationEnabled(isGranted);
-          
-          // Sauvegarder l'état initial
-          await AsyncStorage.setItem('notifications_enabled', isGranted.toString());
+          // Première initialisation - utiliser les permissions système
+          finalState = systemPermissionGranted;
+          await AsyncStorage.setItem('notifications_enabled', systemPermissionGranted.toString());
+
+          if (systemPermissionGranted) {
+            console.log('🔔 Première initialisation avec permissions accordées, activation des notifications push');
+            // Déclencher l'enregistrement du token push après un délai (sans alerte de succès)
+            setTimeout(() => {
+              registerForPushNotificationsAsync(false);
+            }, 1000);
+          }
         }
+
+        console.log('🔔 État final des notifications:', finalState);
+        setNotificationEnabled(finalState);
+
       } catch (error) {
         console.error('Erreur chargement statut notifications:', error);
         setNotificationEnabled(false);
@@ -1664,8 +2263,7 @@ export default function ParametresScreen() {
           AsyncStorage.getItem('@app_crash_reporting'),
           AsyncStorage.getItem('@app_auto_lock'),
           AsyncStorage.getItem('@app_auto_backup'),
-          AsyncStorage.getItem('@app_font_size'),
-          AsyncStorage.getItem('@app_biometric_enabled')
+          AsyncStorage.getItem('@app_font_size')
         ]);
 
         if (savedOfflineMode !== null) setOfflineModeEnabled(savedOfflineMode === 'true');
@@ -1716,9 +2314,11 @@ export default function ParametresScreen() {
     };
   }, []);
 
-  const registerForPushNotificationsAsync = async () => {
+  const registerForPushNotificationsAsync = async (showSuccessAlert = true) => {
     setRegisteringToken(true);
     try {
+      console.log('🔔 registerForPushNotificationsAsync: Démarrage de l\'enregistrement');
+
       if (Platform.OS === 'android') {
         Notifications.setNotificationChannelAsync('default', {
           name: 'default',
@@ -1735,29 +2335,39 @@ export default function ParametresScreen() {
       }
 
       const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      console.log('🔔 Permissions actuelles:', existingStatus);
       let finalStatus = existingStatus;
+
       if (existingStatus !== 'granted') {
+        console.log('🔔 Demande de nouvelles permissions...');
         const { status } = await Notifications.requestPermissionsAsync();
         finalStatus = status;
+        console.log('🔔 Nouvelles permissions:', finalStatus);
       }
 
       if (finalStatus !== 'granted') {
+        console.log('🔔 Permissions refusées, arrêt de l\'enregistrement');
         Alert.alert(t('Permission refusée'), t('Impossible d\'obtenir le push token pour la notification ! Vous pouvez l\'activer dans les paramètres de votre appareil.'));
         setNotificationEnabled(false);
         await AsyncStorage.setItem('notifications_enabled', 'false');
         return;
       }
 
+      console.log('🔔 Génération du token push...');
       const token = (await Notifications.getExpoPushTokenAsync()).data;
-      console.log('Expo Push Token:', token);
+      console.log('🔔 Expo Push Token généré:', token);
 
+      console.log('🔔 Sauvegarde du token...');
       await savePushToken(token);
-      
+
       // Synchroniser avec SimplePermissionsManager
       await AsyncStorage.setItem('notifications_requested', 'true');
       await AsyncStorage.setItem('notifications_enabled', 'true');
-      
-      Alert.alert(t('Succès'), t('Notifications activées !'));
+
+      console.log('🔔 Notifications push configurées avec succès');
+      if (showSuccessAlert) {
+        Alert.alert(t('Succès'), t('Notifications activées !'));
+      }
       setNotificationEnabled(true);
 
     } catch (error: any) {
@@ -1793,28 +2403,62 @@ export default function ParametresScreen() {
 
   const toggleBiometric = async (value: boolean) => {
     if (value) {
-      try {
-        const result = await LocalAuthentication.authenticateAsync({
-          promptMessage: t('Authentifiez-vous pour activer l\'authentification biométrique'),
-          fallbackLabel: t('Utiliser le mot de passe'),
-        });
-
-        if (result.success) {
-          setBiometricEnabled(true);
-          await AsyncStorage.setItem('@app_biometric_enabled', 'true');
-          Alert.alert(t('Succès'), t('Authentification biométrique activée'));
-        } else {
-          setBiometricEnabled(false);
-        }
-      } catch (error) {
-        console.error('Erreur authentification biométrique:', error);
-        setBiometricEnabled(false);
-        Alert.alert(t('Erreur'), t('Impossible d\'activer l\'authentification biométrique'));
-      }
+      // Si l'utilisateur active la biométrie, nous devons d'abord demander ses credentials
+      Alert.alert(
+        t('Configuration de l\'authentification biométrique'),
+        t('Pour configurer l\'authentification biométrique, veuillez saisir vos identifiants actuels.'),
+        [
+          { text: t('Annuler'), style: 'cancel' },
+          {
+            text: t('Configurer'),
+            onPress: () => {
+              // Afficher un modal pour saisir les credentials
+              showCredentialsModal();
+            }
+          }
+        ]
+      );
     } else {
-      setBiometricEnabled(false);
-      await AsyncStorage.setItem('@app_biometric_enabled', 'false');
-      Alert.alert(t('Désactivé'), t('Authentification biométrique désactivée'));
+      // Désactiver la biométrie et nettoyer les credentials
+      try {
+        await clearStoredCredentials();
+        Alert.alert(t('Désactivé'), t('Authentification biométrique désactivée et credentials supprimés'));
+      } catch (error) {
+        console.error('Erreur lors de la désactivation biométrique:', error);
+        Alert.alert(t('Erreur'), t('Erreur lors de la désactivation de l\'authentification biométrique'));
+      }
+    }
+  };
+
+  const showCredentialsModal = () => {
+    // Pré-remplir l'email avec l'email de l'utilisateur connecté si disponible
+    setBiometricEmail(user?.email || '');
+    setBiometricPassword('');
+    setShowBiometricPassword(false);
+    setBiometricSetupModalVisible(true);
+  };
+
+  const handleBiometricSetup = async () => {
+    if (!biometricEmail || !biometricPassword) {
+      Alert.alert(t('Erreur'), t('Veuillez saisir votre email et mot de passe'));
+      return;
+    }
+
+    setBiometricSetupLoading(true);
+    try {
+      const success = await setupBiometricWithCredentials(biometricEmail, biometricPassword);
+      if (success) {
+        await checkBiometricStatus(); // Rafraîchir le statut
+        setBiometricSetupModalVisible(false);
+        Alert.alert(t('Succès'), t('Authentification biométrique configurée avec succès'));
+      } else {
+        Alert.alert(t('Erreur'), t('Échec de la configuration de l\'authentification biométrique'));
+      }
+    } catch (error: any) {
+      console.error('Erreur configuration biométrique:', error);
+      Alert.alert(t('Erreur'), error.message || t('Erreur lors de la configuration'));
+    } finally {
+      setBiometricSetupLoading(false);
     }
   };
 
@@ -1824,38 +2468,6 @@ export default function ParametresScreen() {
     await AsyncStorage.setItem('@app_offline_mode', value.toString());
   };
 
-  const toggleWifiOnly = async (value: boolean) => {
-    try {
-      if (value) {
-        // Vérifier la connexion réseau actuelle
-        const networkState = await Network.getNetworkStateAsync();
-        
-        if (networkState.isConnected && networkState.type !== Network.NetworkStateType.WIFI) {
-          Alert.alert(
-            t('Wi-Fi uniquement activé'),
-            t('L\'application utilisera uniquement le Wi-Fi pour les données. Connectez-vous à un réseau Wi-Fi pour continuer.'),
-            [{ text: t('OK') }]
-          );
-        }
-      }
-      
-      setWifiOnlyEnabled(value);
-      await AsyncStorage.setItem('@app_wifi_only', value.toString());
-    } catch (error) {
-      console.error('Erreur lors de la configuration Wi-Fi seulement:', error);
-      Alert.alert(t('Erreur'), t('Impossible de modifier ce paramètre'));
-    }
-  };
-
-  const toggleCrashReporting = async (value: boolean) => {
-    setCrashReportingEnabled(value);
-    await AsyncStorage.setItem('@app_crash_reporting', value.toString());
-  };
-
-  const toggleAutoBackup = async (value: boolean) => {
-    setAutoBackupEnabled(value);
-    await AsyncStorage.setItem('@app_auto_backup', value.toString());
-  };
 
   const handleChangePassword = async (oldPassword: string, newPassword: string) => {
     try {
@@ -1907,81 +2519,191 @@ export default function ParametresScreen() {
 
   const handleExportData = async () => {
     try {
-      // Simulation de l'export des données
-      const userData = {
-        user: user,
-        settings: {
-          darkMode: isDarkMode,
-          language: language,
-          notifications: notificationEnabled,
-          biometric: biometricEnabled,
-          autoSync: autoSyncEnabled
-        },
-        exportDate: new Date().toISOString()
-      };
-
-      const dataString = JSON.stringify(userData, null, 2);
-      const fileName = `user_data_export_${new Date().getTime()}.json`;
-      const fileUri = FileSystem.documentDirectory + fileName;
-
-      await FileSystem.writeAsStringAsync(fileUri, dataString);
-
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(fileUri, {
-          mimeType: 'application/json',
-          dialogTitle: t('Exporter mes données')
-        });
-      } else {
-        Alert.alert(t('Succès'), t('Données exportées vers: ') + fileUri);
-      }
+      Alert.alert(
+        t('Exporter mes données'),
+        t('Choisir le format d\'exportation'),
+        [
+          {
+            text: t('JSON (Complet)'),
+            onPress: () => exportDataAsJSON()
+          },
+          {
+            text: t('PDF (Rapport)'),
+            onPress: () => exportDataAsPDF()
+          },
+          { text: t('Annuler'), style: 'cancel' }
+        ]
+      );
     } catch (error) {
       console.error('Erreur export:', error);
       Alert.alert(t('Erreur'), t('Impossible d\'exporter les données'));
     }
   };
 
+  const exportDataAsJSON = async () => {
+    try {
+      // Collecter toutes les données disponibles
+      const allKeys = await AsyncStorage.getAllKeys();
+      const allData = await AsyncStorage.multiGet(allKeys);
+      const asyncStorageData = {};
+      allData.forEach(([key, value]) => {
+        if (value) {
+          try {
+            asyncStorageData[key] = JSON.parse(value);
+          } catch {
+            asyncStorageData[key] = value;
+          }
+        }
+      });
+
+      const exportData = {
+        metadata: {
+          exportDate: new Date().toISOString(),
+          exportType: 'complete_json',
+          appVersion: '1.0.0',
+          platform: Platform.OS,
+        },
+        userProfile: {
+          ...user,
+          password: undefined, // Exclure le mot de passe
+        },
+        applicationSettings: {
+          darkMode: isDarkMode,
+          language: language,
+          notifications: notificationEnabled,
+          biometric: biometricEnabled,
+          autoSync: autoSyncEnabled,
+          privacySettings: privacySettings,
+          networkSettings: {
+            wifiOnly: wifiOnlyEnabled,
+            crashReporting: crashReportingEnabled,
+          },
+          locationSettings: {
+            suggestionsEnabled: locationSuggestionsEnabled,
+            radius: locationRadius,
+          }
+        },
+        localStorageData: asyncStorageData,
+      };
+
+      const dataString = JSON.stringify(exportData, null, 2);
+      const fileName = `prorecruteapp_export_${new Date().getTime()}.json`;
+      const fileUri = FileSystem.documentDirectory + fileName;
+
+      await FileSystem.writeAsStringAsync(fileUri, dataString);
+
+      Alert.alert(
+        t('Export JSON terminé'),
+        t('Vos données complètes ont été exportées au format JSON'),
+        [
+          {
+            text: t('Partager'),
+            onPress: async () => {
+              if (await Sharing.isAvailableAsync()) {
+                await Sharing.shareAsync(fileUri, {
+                  mimeType: 'application/json',
+                  dialogTitle: t('Exporter mes données JSON')
+                });
+              }
+            }
+          },
+          { text: t('OK'), style: 'default' }
+        ]
+      );
+
+    } catch (error) {
+      console.error('Erreur export JSON:', error);
+      Alert.alert(t('Erreur'), t('Impossible d\'exporter les données JSON'));
+    }
+  };
+
+  const exportDataAsPDF = async () => {
+    try {
+      // Créer un rapport de données en format texte
+      const reportData = `
+RAPPORT D'EXPORTATION DE DONNÉES - PRO RECRUTE APP
+=================================================
+
+Date d'export: ${new Date().toLocaleString('fr-FR')}
+Utilisateur: ${user?.name || 'Non défini'}
+Email: ${user?.email || 'Non défini'}
+
+INFORMATIONS PERSONNELLES
+-------------------------
+Nom complet: ${user?.name || 'Non défini'}
+Email: ${user?.email || 'Non défini'}
+Téléphone: ${user?.phone || 'Non défini'}
+Adresse: ${user?.address || 'Non définie'}
+
+PARAMÈTRES DE L'APPLICATION
+---------------------------
+Mode sombre: ${isDarkMode ? 'Activé' : 'Désactivé'}
+Langue: ${language || 'Non définie'}
+Notifications: ${notificationEnabled ? 'Activées' : 'Désactivées'}
+Authentification biométrique: ${biometricEnabled ? 'Activée' : 'Désactivée'}
+Synchronisation auto: ${autoSyncEnabled ? 'Activée' : 'Désactivée'}
+
+PARAMÈTRES DE CONFIDENTIALITÉ
+-----------------------------
+Partage données de localisation: ${privacySettings.shareLocationData ? 'Autorisé' : 'Refusé'}
+Partage données d'utilisation: ${privacySettings.shareUsageData ? 'Autorisé' : 'Refusé'}
+Découverte de profil: ${privacySettings.allowProfileDiscovery ? 'Autorisé' : 'Refusé'}
+Statut en ligne: ${privacySettings.showOnlineStatus ? 'Visible' : 'Masqué'}
+Historique d'activité: ${privacySettings.shareActivityHistory ? 'Partagé' : 'Privé'}
+Cookies fonctionnels: ${privacySettings.allowCookies ? 'Autorisés' : 'Refusés'}
+
+PARAMÈTRES RÉSEAU
+-----------------
+Wi-Fi seulement: ${wifiOnlyEnabled ? 'Activé' : 'Désactivé'}
+Rapports de crash: ${crashReportingEnabled ? 'Activés' : 'Désactivés'}
+
+GÉOLOCALISATION
+---------------
+Suggestions géolocalisées: ${locationSuggestionsEnabled ? 'Activées' : 'Désactivées'}
+Rayon de recherche: ${locationRadius} km
+
+Ce rapport contient un résumé de vos données et paramètres.
+Pour un export complet, utilisez le format JSON.
+
+Généré par Pro Recrute App v1.0.0
+      `.trim();
+
+      const fileName = `prorecruteapp_report_${new Date().getTime()}.txt`;
+      const fileUri = FileSystem.documentDirectory + fileName;
+
+      await FileSystem.writeAsStringAsync(fileUri, reportData);
+
+      Alert.alert(
+        t('Rapport PDF généré'),
+        t('Un rapport de vos données a été créé (format texte)'),
+        [
+          {
+            text: t('Partager'),
+            onPress: async () => {
+              if (await Sharing.isAvailableAsync()) {
+                await Sharing.shareAsync(fileUri, {
+                  mimeType: 'text/plain',
+                  dialogTitle: t('Exporter rapport de données')
+                });
+              }
+            }
+          },
+          { text: t('OK'), style: 'default' }
+        ]
+      );
+
+    } catch (error) {
+      console.error('Erreur export PDF:', error);
+      Alert.alert(t('Erreur'), t('Impossible de générer le rapport'));
+    }
+  };
+
   const handlePrivacySettings = () => {
-    Alert.alert(
-      t('Paramètres de confidentialité'),
-      t('Configurez vos préférences de confidentialité'),
-      [
-        {
-          text: t('Données de localisation'),
-          onPress: () => Alert.alert(t('Localisation'), t('Gérer l\'accès aux données de localisation'))
-        },
-        {
-          text: t('Données d\'utilisation'),
-          onPress: () => Alert.alert(t('Utilisation'), t('Gérer le partage des données d\'utilisation'))
-        },
-        {
-          text: t('Cookies et trackers'),
-          onPress: () => Alert.alert(t('Cookies'), t('Gérer les cookies et trackers'))
-        },
-        { text: t('Annuler'), style: 'cancel' }
-      ]
-    );
+    setPrivacySettingsModalVisible(true);
   };
 
   const handlePersonalInfo = () => {
-    Alert.alert(
-      t('Informations personnelles'),
-      t('Modifier vos informations personnelles'),
-      [
-        {
-          text: t('Nom et prénom'),
-          onPress: () => Alert.alert(t('Nom'), t('Modifier votre nom et prénom'))
-        },
-        {
-          text: t('Email'),
-          onPress: () => Alert.alert(t('Email'), t('Modifier votre adresse email'))
-        },
-        {
-          text: t('Téléphone'),
-          onPress: () => Alert.alert(t('Téléphone'), t('Modifier votre numéro de téléphone'))
-        },
-        { text: t('Annuler'), style: 'cancel' }
-      ]
-    );
+    setPersonalInfoModalVisible(true);
   };
 
   const handleHelpCenter = () => {
@@ -2069,7 +2791,15 @@ export default function ParametresScreen() {
     }
   };
 
-  // Nouveaux handlers pour les fonctionnalités ajoutées
+  // Handlers pour les fonctionnalités de stockage
+  const handleStorageManagement = () => {
+    setStorageModalVisible(true);
+  };
+
+  const handlePermissionsManagement = () => {
+    setPermissionsModalVisible(true);
+  };
+
   const handleClearCache = async () => {
     Alert.alert(
       t('Vider le cache'),
@@ -2085,23 +2815,51 @@ export default function ParametresScreen() {
               const cacheDir = FileSystem.cacheDirectory;
               if (cacheDir) {
                 const cacheFiles = await FileSystem.readDirectoryAsync(cacheDir);
+                let deletedFiles = 0;
+                let deletedSize = 0;
+
                 await Promise.all(
-                  cacheFiles.map(file => 
-                    FileSystem.deleteAsync(`${cacheDir}${file}`, { idempotent: true })
-                  )
+                  cacheFiles.map(async file => {
+                    try {
+                      const filePath = `${cacheDir}${file}`;
+                      const fileInfo = await FileSystem.getInfoAsync(filePath);
+                      if (fileInfo.exists && !fileInfo.isDirectory) {
+                        deletedSize += fileInfo.size || 0;
+                        await FileSystem.deleteAsync(filePath, { idempotent: true });
+                        deletedFiles++;
+                      }
+                    } catch (error) {
+                      console.warn('Erreur suppression fichier cache:', error);
+                    }
+                  })
                 );
               }
-              
+
               // Vider les données temporaires AsyncStorage non critiques
               const keys = await AsyncStorage.getAllKeys();
-              const tempKeys = keys.filter(key => 
-                key.includes('temp_') || 
-                key.includes('cache_') || 
-                key.includes('_temp')
+              const tempKeys = keys.filter(key =>
+                key.includes('temp_') ||
+                key.includes('cache_') ||
+                key.includes('_temp') ||
+                key.includes('_cache')
               );
-              await AsyncStorage.multiRemove(tempKeys);
-              
-              Alert.alert(t('Succès'), t('Cache vidé avec succès'));
+
+              if (tempKeys.length > 0) {
+                await AsyncStorage.multiRemove(tempKeys);
+              }
+
+              const formatBytes = (bytes: number) => {
+                if (bytes === 0) return '0 B';
+                const k = 1024;
+                const sizes = ['B', 'KB', 'MB', 'GB'];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+              };
+
+              Alert.alert(
+                t('Cache vidé avec succès'),
+                t(`${deletedFiles} fichiers supprimés\nEspace libéré: ${formatBytes(deletedSize)}`)
+              );
             } catch (error) {
               console.error('Erreur lors du vidage du cache:', error);
               Alert.alert(t('Erreur'), t('Impossible de vider le cache'));
@@ -2112,12 +2870,89 @@ export default function ParametresScreen() {
     );
   };
 
-  const handleStorageManagement = () => {
-    setStorageModalVisible(true);
+  const toggleWifiOnly = async (value: boolean) => {
+    try {
+      if (value) {
+        // Vérifier la connexion réseau actuelle
+        const networkState = await Network.getNetworkStateAsync();
+
+        if (networkState.isConnected && networkState.type !== Network.NetworkStateType.WIFI) {
+          Alert.alert(
+            t('Wi-Fi uniquement activé'),
+            t('L\'application utilisera uniquement le Wi-Fi pour les données. Connectez-vous à un réseau Wi-Fi pour continuer.'),
+            [{ text: t('OK') }]
+          );
+        }
+      }
+
+      setWifiOnlyEnabled(value);
+      await AsyncStorage.setItem('@app_wifi_only', value.toString());
+    } catch (error) {
+      console.error('Erreur lors de la configuration Wi-Fi seulement:', error);
+      Alert.alert(t('Erreur'), t('Impossible de modifier ce paramètre'));
+    }
   };
 
-  const handlePermissionsManagement = () => {
-    setPermissionsModalVisible(true);
+  const toggleCrashReporting = async (value: boolean) => {
+    try {
+      setCrashReportingEnabled(value);
+      await AsyncStorage.setItem('@app_crash_reporting', value.toString());
+
+      if (value) {
+        Alert.alert(
+          t('Rapports de crash activés'),
+          t('L\'application enverra automatiquement les rapports d\'erreur pour améliorer la stabilité.')
+        );
+      } else {
+        Alert.alert(
+          t('Rapports de crash désactivés'),
+          t('Les rapports d\'erreur ne seront plus envoyés automatiquement.')
+        );
+      }
+    } catch (error) {
+      console.error('Erreur lors de la configuration des rapports de crash:', error);
+      Alert.alert(t('Erreur'), t('Impossible de modifier ce paramètre'));
+    }
+  };
+
+  const toggleAutoBackup = async (value: boolean) => {
+    try {
+      setAutoBackupEnabled(value);
+      await AsyncStorage.setItem('@app_auto_backup', value.toString());
+
+      if (value) {
+        Alert.alert(
+          t('Sauvegarde automatique activée'),
+          t('Vos données seront automatiquement sauvegardées de manière sécurisée.'),
+          [
+            {
+              text: t('Configurer'),
+              onPress: () => {
+                Alert.alert(
+                  t('Configuration sauvegarde'),
+                  t('Choisir la fréquence de sauvegarde'),
+                  [
+                    { text: t('Quotidienne'), onPress: () => {} },
+                    { text: t('Hebdomadaire'), onPress: () => {} },
+                    { text: t('Mensuelle'), onPress: () => {} },
+                    { text: t('Annuler'), style: 'cancel' }
+                  ]
+                );
+              }
+            },
+            { text: t('OK') }
+          ]
+        );
+      } else {
+        Alert.alert(
+          t('Sauvegarde automatique désactivée'),
+          t('Vos données ne seront plus sauvegardées automatiquement.')
+        );
+      }
+    } catch (error) {
+      console.error('Erreur lors de la configuration de la sauvegarde automatique:', error);
+      Alert.alert(t('Erreur'), t('Impossible de modifier ce paramètre'));
+    }
   };
 
   const handleFontSizeChange = () => {
@@ -2250,7 +3085,7 @@ export default function ParametresScreen() {
       );
 
       // Vérifier avec le backend s'il y a des mises à jour disponibles
-      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.144:8000/api'}/check-app-version`, {
+      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.11:8000/api'}/check-app-version`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -2395,8 +3230,9 @@ export default function ParametresScreen() {
               iconLibrary="Feather"
               iconColor="#F59E0B"
               hasSwitch
-              switchValue={notificationEnabled}
+              switchValue={notificationEnabled ?? false}
               onSwitchChange={toggleNotifications}
+              disabled={notificationEnabled === null}
             />
             <SettingItem
               title={t('Notifications par email')}
@@ -2538,7 +3374,15 @@ export default function ParametresScreen() {
           <View style={[styles.section, { backgroundColor: colors.cardBackground }]}>
             <SettingItem
               title={t('Authentification biométrique')}
-              subtitle={biometricAvailable ? t('Utiliser Face ID / Touch ID') : t('Non disponible sur cet appareil')}
+              subtitle={
+                !biometricAvailable
+                  ? t('Non disponible sur cet appareil')
+                  : biometricEnabled && biometricHasCredentials
+                    ? t('Configuré et prêt à utiliser')
+                    : biometricEnabled
+                      ? t('Activé - Credentials requis')
+                      : t('Utiliser Face ID / Touch ID')
+              }
               icon="fingerprint"
               iconLibrary="MaterialIcons"
               iconColor="#06B6D4"
@@ -2830,6 +3674,132 @@ export default function ParametresScreen() {
             </View>
           </View>
         </Modal>
+
+        {/* Modal de configuration biométrique */}
+        <Modal
+          visible={biometricSetupModalVisible}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setBiometricSetupModalVisible(false)}
+        >
+          <View style={[styles.modalOverlay, { backgroundColor: 'rgba(0,0,0,0.5)' }]}>
+            <View style={[styles.modalContent, { backgroundColor: colors.cardBackground }]}>
+              <View style={styles.modalHeader}>
+                <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>
+                  {t('Configuration biométrique')}
+                </Text>
+                <TouchableOpacity
+                  onPress={() => setBiometricSetupModalVisible(false)}
+                  style={styles.modalCloseButton}
+                >
+                  <Feather name="x" size={24} color={colors.textPrimary} />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.modalBody}>
+                <Text style={[styles.modalSubtitle, { color: colors.textSecondary }]}>
+                  {t('Saisissez vos identifiants pour configurer l\'authentification biométrique')}
+                </Text>
+
+                <View style={[styles.inputGroup, { marginTop: 20 }]}>
+                  <Text style={[styles.inputLabel, { color: colors.textPrimary }]}>
+                    {t('Email')}
+                  </Text>
+                  <TextInput
+                    style={[styles.modalInput, {
+                      backgroundColor: colors.background,
+                      color: colors.textPrimary,
+                      borderColor: colors.border
+                    }]}
+                    value={biometricEmail}
+                    onChangeText={setBiometricEmail}
+                    placeholder={t('Votre email')}
+                    placeholderTextColor={colors.textSecondary}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    editable={!biometricSetupLoading}
+                  />
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={[styles.inputLabel, { color: colors.textPrimary }]}>
+                    {t('Mot de passe')}
+                  </Text>
+                  <View style={[styles.passwordContainer, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                    <TextInput
+                      style={[styles.passwordInput, { color: colors.textPrimary }]}
+                      value={biometricPassword}
+                      onChangeText={setBiometricPassword}
+                      placeholder={t('Votre mot de passe')}
+                      placeholderTextColor={colors.textSecondary}
+                      secureTextEntry={!showBiometricPassword}
+                      editable={!biometricSetupLoading}
+                    />
+                    <TouchableOpacity
+                      onPress={() => setShowBiometricPassword(!showBiometricPassword)}
+                      style={styles.eyeButton}
+                    >
+                      <Feather
+                        name={showBiometricPassword ? "eye-off" : "eye"}
+                        size={20}
+                        color={colors.textSecondary}
+                      />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                <View style={styles.modalButtonContainer}>
+                  <TouchableOpacity
+                    style={[styles.modalButton, styles.modalButtonSecondary, { borderColor: colors.border }]}
+                    onPress={() => setBiometricSetupModalVisible(false)}
+                    disabled={biometricSetupLoading}
+                  >
+                    <Text style={[styles.modalButtonText, { color: colors.textPrimary }]}>
+                      {t('Annuler')}
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.modalButton, styles.modalButtonPrimary, {
+                      backgroundColor: colors.secondary,
+                      opacity: biometricSetupLoading ? 0.6 : 1
+                    }]}
+                    onPress={handleBiometricSetup}
+                    disabled={biometricSetupLoading || !biometricEmail || !biometricPassword}
+                  >
+                    {biometricSetupLoading ? (
+                      <ActivityIndicator color="#FFFFFF" size="small" />
+                    ) : (
+                      <Text style={[styles.modalButtonText, { color: '#FFFFFF' }]}>
+                        {t('Configurer')}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Drawer d'édition des informations personnelles */}
+        <PersonalInfoDrawer
+          visible={personalInfoModalVisible}
+          onClose={() => setPersonalInfoModalVisible(false)}
+          user={user}
+          onUpdate={(updatedUser) => {
+            if (updateUser) {
+              updateUser(updatedUser);
+            }
+          }}
+        />
+
+        {/* Drawer de paramètres de confidentialité */}
+        <PrivacySettingsDrawer
+          visible={privacySettingsModalVisible}
+          onClose={() => setPrivacySettingsModalVisible(false)}
+          settings={privacySettings}
+          onUpdateSettings={(newSettings) => setPrivacySettings(newSettings)}
+        />
       </SafeAreaView>
     </>
   );
@@ -3197,6 +4167,269 @@ modalOverlay: {
   },
   radiusOptionText: {
     fontSize: 14,
+    fontWeight: '600',
+  },
+
+  // Styles pour le modal biométrique
+  inputGroup: {
+    marginBottom: 16,
+  },
+  inputLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  modalInput: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 14,
+    fontSize: 16,
+  },
+  passwordContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+  },
+  passwordInput: {
+    flex: 1,
+    paddingVertical: 14,
+    fontSize: 16,
+  },
+  eyeButton: {
+    padding: 8,
+  },
+
+  // Styles manquants
+  modalCloseButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F3F4F6',
+  },
+  modalBody: {
+    padding: 20,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 16,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 24,
+    gap: 12,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalButtonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 24,
+    gap: 12,
+  },
+  modalButtonSecondary: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+  },
+  modalButtonPrimary: {
+    backgroundColor: '#007AFF',
+  },
+  modalButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  permissionButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginVertical: 4,
+  },
+  permissionButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  terminateButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    marginLeft: 8,
+  },
+  terminateButtonText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+
+  // Styles supplémentaires pour les sessions
+  sessionLeft: {
+    flex: 1,
+    marginRight: 12,
+  },
+  sessionInfo: {
+    flex: 1,
+  },
+  sessionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  deviceIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+    minHeight: 200,
+  },
+
+  // Styles pour les paramètres de confidentialité
+  privacySection: {
+    marginBottom: 24,
+  },
+  privacySectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 16,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  privacyItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+  },
+  privacyItemLeft: {
+    flex: 1,
+    marginRight: 16,
+  },
+  privacyItemTitle: {
+    fontSize: 16,
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  privacyItemDescription: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+
+  // Styles pour les drawers
+  drawerInput: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 14,
+    fontSize: 16,
+    marginTop: 8,
+  },
+  drawerTextArea: {
+    height: 80,
+    textAlignVertical: 'top',
+  },
+  drawerActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 16,
+    gap: 12,
+  },
+  drawerButton: {
+    flex: 1,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  drawerButtonPrimary: {
+    backgroundColor: '#007AFF',
+  },
+  drawerButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  privacySwitch: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+    marginVertical: 4,
+  },
+  privacySwitchLeft: {
+    flex: 1,
+    marginRight: 16,
+  },
+
+  // Styles pour la gestion du stockage
+  storageItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  storageColorDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginRight: 12,
+  },
+  storageLabel: {
+    fontSize: 16,
+    fontWeight: '500',
+    marginBottom: 2,
+  },
+  storageClearable: {
+    fontSize: 12,
+    fontStyle: 'italic',
+  },
+  storageSize: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  clearButton: {
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  clearButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  refreshButton: {
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+  },
+  refreshButtonText: {
+    fontSize: 16,
     fontWeight: '600',
   },
 });

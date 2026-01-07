@@ -29,6 +29,12 @@ import { decode } from 'html-entities';
 
 const { width } = Dimensions.get("window");
 
+// Fonction helper pour s'assurer qu'on a toujours un tableau
+const ensureArray = (data: any): any[] => {
+  if (Array.isArray(data)) return data;
+  return [];
+};
+
 // Interface pour les actions rapides
 interface QuickAction {
   id: string;
@@ -51,7 +57,7 @@ interface CandidateStats {
  * Composant de slider avec auto-scroll
  */
 type AutoSliderProps<T> = {
-  data: T[];
+  data: T[] | undefined;
   renderItem: (item: T, index: number) => React.ReactNode;
   height?: number;
   showPagination?: boolean;
@@ -68,12 +74,13 @@ const AutoSlider = <T extends { id?: string | number }>({
   const flatListRef = useRef<FlatList<any>>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
 
+
   // Auto-scroll effect
   useEffect(() => {
-    if (data.length <= 1) return;
+    if (ensureArray(data).length <= 1) return;
 
     const interval = setInterval(() => {
-      const nextIndex = (currentIndex + 1) % data.length;
+      const nextIndex = (currentIndex + 1) % ensureArray(data).length;
       flatListRef.current?.scrollToIndex({
         index: nextIndex,
         animated: true,
@@ -82,7 +89,7 @@ const AutoSlider = <T extends { id?: string | number }>({
     }, autoScrollInterval);
 
     return () => clearInterval(interval);
-  }, [currentIndex, data.length, autoScrollInterval]);
+  }, [currentIndex, ensureArray(data).length, autoScrollInterval]);
 
   const onViewableItemsChanged = useRef(
     (info: { viewableItems: { index: number | null }[] }) => {
@@ -104,9 +111,9 @@ const AutoSlider = <T extends { id?: string | number }>({
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
-        data={data}
+        data={ensureArray(data)}
         keyExtractor={(item, index) => item.id?.toString() || index.toString()}
-        renderItem={({ item, index }) => renderItem(item, index)}
+        renderItem={({ item, index }) => renderItem(item, index) as React.ReactElement}
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={viewabilityConfig}
         snapToInterval={width - 32}
@@ -114,9 +121,9 @@ const AutoSlider = <T extends { id?: string | number }>({
         contentContainerStyle={styles.sliderContent}
       />
 
-      {showPagination && data.length > 1 && (
+      {showPagination && ensureArray(data).length > 1 && (
         <View style={styles.paginationContainer}>
-          {data.map((_, index) => (
+          {ensureArray(data).map((_, index) => (
             <View
               key={index}
               style={[
@@ -184,6 +191,22 @@ export default function HomeScreen() {
       route: '/(app)/candidature',
       description: 'Suivre mes candidatures'
     },
+    {
+      id: 'entretiens',
+      title: 'Entretien',
+      icon: 'event',
+      color: '#1F2937',
+      route: '/(app)/entretiens',
+      description: 'Suivre mes entretiens'
+    },
+    {
+      id: 'skills',
+      title: 'Tests',
+      icon: 'assessment',
+      color: '#FF5722',
+      route: '/(app)/skills-assessment',
+      description: 'Tests de compétences'
+    },
 
   ];
 
@@ -207,7 +230,6 @@ export default function HomeScreen() {
 
     try {
       setLoading(true);
-
       const [
         recommendedResponse,
         featuredResponse,
@@ -220,12 +242,17 @@ export default function HomeScreen() {
         loadCandidateStats()
       ]);
 
+      if (recommendedResponse.status === 'fulfilled') {
+        // Les recommandations sont déjà gérées dans fetchRecommendations()
+        console.log('Recommandations chargées via Promise.allSettled');
+      }
+
       if (featuredResponse.status === 'fulfilled') {
-        setFeaturedOffres(featuredResponse.value);
+        setFeaturedOffres(ensureArray(featuredResponse.value));
       }
 
       if (newsResponse.status === 'fulfilled') {
-        setNewsData(newsResponse.value);
+        setNewsData(ensureArray(newsResponse.value));
       }
 
       if (statsResponse.status === 'fulfilled') {
@@ -283,21 +310,23 @@ export default function HomeScreen() {
         console.warn('Erreur chargement candidatures:', error);
       }
 
-      // Statistiques des entretiens - essayer l'API puis fallback
+      // Statistiques des entretiens - nouvelle gestion améliorée
       try {
-        const entretiensList = await getCandidatEntretiens();
-        console.log('Données entretiens brutes:', entretiensList);
-        if (entretiensList && Array.isArray(entretiensList)) {
-          interviews = entretiensList.length;
+        const entretiensResponse = await getCandidatEntretiens();
+        console.log('Données entretiens depuis API:', entretiensResponse);
+
+        if (entretiensResponse.needsProfileCreation) {
+          console.log('Info Home: Profil candidat manquant pour entretiens');
+          interviews = 0; // Pas d'entretiens sans profil candidat
+        } else if (entretiensResponse.entretiens && Array.isArray(entretiensResponse.entretiens)) {
+          interviews = entretiensResponse.entretiens.length;
         } else {
-          throw new Error('Format de réponse incorrect');
+          interviews = 0;
         }
         console.log('Statistiques entretiens depuis API:', interviews);
       } catch (error) {
-        console.warn('API entretiens indisponible, utilisation de fallback:', error);
-        // Fallback simple: au moins 1 entretien si on a des réponses
-        interviews = responses > 0 ? 1 : 0;
-        console.log('Statistiques entretiens fallback:', interviews);
+        console.log('Info: Statistiques entretiens non disponibles');
+        interviews = 0; // Par défaut 0 entretiens
       }
 
       // Calcul du pourcentage de complétude du profil
@@ -308,8 +337,8 @@ export default function HomeScreen() {
           photo_profil: profile.photo_profil,
           profile_photo_path: profile.profile_photo_path,
           profile_photo: profile.profile_photo,
-          user_from_parsed_cv: profile.parsed_cv?.full_name,
-          user_profile_photo: user?.profile_photo,
+          user_from_parsed_cv: profile.parsed_cv?.full_name,  
+          user_profile_photo: user?.profile_photo_url,
           user_photo_profil: user?.photo_profil
         });
         if (profile) {
@@ -327,7 +356,7 @@ export default function HomeScreen() {
             { field: 'experiences', value: profile.experiences && profile.experiences.length > 0 },
             { field: 'formations', value: profile.formations && profile.formations.length > 0 },
             { field: 'parsed_cv', value: profile.parsed_cv && (profile.parsed_cv.full_name || profile.parsed_cv.summary) },
-            { field: 'photo_profil', value: profile.photo_profil || profile.profile_photo_path || profile.profile_photo || user?.profile_photo || user?.photo_profil }
+            { field: 'photo_profil', value: profile.photo_profil || profile.profile_photo_path || profile.profile_photo || user?.profile_photo_url || user?.photo_profil }
           ];
 
           checks.forEach(check => {
@@ -372,7 +401,7 @@ export default function HomeScreen() {
 
     try {
       const candidatData = await getCandidatProfile();
-      const userCompetenceIds = candidatData?.competences?.map(comp => comp.id) || [];
+      const userCompetenceIds = ensureArray(candidatData?.competences).map(comp => comp.id);
 
       if (userCompetenceIds.length === 0) return;
 
@@ -382,7 +411,7 @@ export default function HomeScreen() {
         source: 'candidat_competences'
       });
 
-      const transformedRecommendations = aiResponse.data.recommendations.map((rec: any) => ({
+      const transformedRecommendations = ensureArray(aiResponse.data?.recommendations).map((rec: any) => ({
         id: rec.offre?.id || Math.random().toString(),
         poste: {
           titre_poste: rec.offre?.titre || 'Titre non disponible'
@@ -396,8 +425,11 @@ export default function HomeScreen() {
       }));
 
       setRecommendedOffres(transformedRecommendations);
+      return transformedRecommendations;
     } catch (error) {
       console.error('Erreur recommandations:', error);
+      setRecommendedOffres(ensureArray([]));
+      return ensureArray([]);
     }
   };
 
@@ -594,7 +626,7 @@ export default function HomeScreen() {
             {renderQuickActions()}
 
             {/* Offres recommandées */}
-            {recommendedOffres.length > 0 && (
+            {ensureArray(recommendedOffres).length > 0 && (
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
                   <Text style={styles.sectionTitle}>Recommandé pour vous</Text>
@@ -612,7 +644,7 @@ export default function HomeScreen() {
             )}
 
             {/* Offres en vedette */}
-            {featuredOffres.length > 0 && (
+            {ensureArray(featuredOffres).length > 0 && (
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
                   <Text style={styles.sectionTitle}>Offres en vedette</Text>
@@ -630,7 +662,7 @@ export default function HomeScreen() {
             )}
 
             {/* Actualités */}
-            {newsData.length > 0 && (
+            {ensureArray(newsData).length > 0 && (
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
                   <Text style={styles.sectionTitle}>Conseils emploi</Text>

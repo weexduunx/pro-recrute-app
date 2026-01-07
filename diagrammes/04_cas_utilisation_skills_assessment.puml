@@ -1,0 +1,85 @@
+@startuml Cas_Utilisation_Skills_Assessment
+title Diagramme de Cas d'Utilisation - Évaluations de Compétences
+
+left to right direction
+
+actor "Candidat" as candidat
+actor "Recruteur" as recruteur
+actor "Expert Métier" as expert
+actor "Système de Scoring" as scoring
+actor "Certification Authority" as certif
+
+package "Évaluations et Certifications" {
+  usecase "Consulter catalogue tests" as UC1
+  usecase "Démarrer évaluation" as UC2
+  usecase "Passer test interactif" as UC3
+  usecase "Soumettre réponses" as UC4
+  usecase "Recevoir résultats" as UC5
+  usecase "Obtenir certification" as UC6
+  usecase "Consulter historique" as UC7
+  usecase "Comparer performances" as UC8
+  usecase "Créer test personnalisé" as UC9
+  usecase "Valider compétences" as UC10
+  usecase "Analyser statistiques" as UC11
+  usecase "Générer rapports" as UC12
+  usecase "Mettre à jour profil" as UC13
+  usecase "Recommander formations" as UC14
+}
+
+' Relations Candidat
+candidat --> UC1 : "Explorer évaluations"
+candidat --> UC2 : "Lancer test"
+candidat --> UC3 : "Répondre questions"
+candidat --> UC4 : "Valider réponses"
+candidat --> UC5 : "Voir résultats"
+candidat --> UC6 : "Demander badge"
+candidat --> UC7 : "Consulter historique"
+candidat --> UC8 : "Benchmarking"
+candidat --> UC13 : "Enrichir profil"
+
+' Relations Recruteur
+recruteur --> UC9 : "Concevoir évaluation"
+recruteur --> UC10 : "Vérifier compétences"
+recruteur --> UC11 : "Analyser candidats"
+recruteur --> UC12 : "Exporter données"
+
+' Relations Expert
+expert --> UC9 : "Créer questions"
+expert --> UC10 : "Valider contenu"
+expert --> UC14 : "Conseiller formations"
+
+' Relations Scoring
+scoring --> UC5 : "Calculer scores"
+scoring --> UC8 : "Générer comparaisons"
+scoring --> UC11 : "Fournir métriques"
+
+' Relations Certification
+certif --> UC6 : "Émettre badges"
+certif --> UC10 : "Valider certifications"
+
+' Inclusions et Extensions
+UC2 ..> UC3 : "<<include>>"
+UC3 ..> UC4 : "<<include>>"
+UC4 ..> UC5 : "<<include>>"
+UC5 ..> UC6 : "<<extend>>"
+UC5 ..> UC13 : "<<extend>>"
+UC5 ..> UC14 : "<<extend>>"
+UC7 ..> UC8 : "<<extend>>"
+
+note right of UC3
+  QCM Interactif
+  Tests de Codage
+  Simulations Pratiques
+  Évaluations Logiques
+  Tests Comportementaux
+end note
+
+note bottom of UC5
+  Scoring Pondéré
+  Percentiles Population
+  Analyse Détaillée
+  Recommandations
+  Graphiques Performance
+end note
+
+@enduml

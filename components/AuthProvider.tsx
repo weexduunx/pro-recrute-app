@@ -6,29 +6,34 @@ import React, {
   ReactNode,
   useCallback,
 } from 'react';
-import {Platform,Alert} from 'react-native';
+import {Platform, Alert} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SplashScreenExpo from 'expo-splash-screen';
-import { 
-  loginUser as apiLoginUser, 
-  fetchUserProfile as apiFetchUserProfile, 
-  logoutUser as apiLogoutUser, 
+import { useLanguage } from './LanguageContext';
+import {
+  loginUser as apiLoginUser,
+  fetchUserProfile as apiFetchUserProfile,
+  logoutUser as apiLogoutUser,
   registerUser as apiRegisterUser,
   socialLoginCallback,
   getInterimProfile,
   sendOtp as apiSendOtp,
   verifyOtp as apiVerifyOtp,
+  apiRequest,
 } from '../utils/api';
 import { router, useSegments } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import * as AuthSession from 'expo-auth-session';
+import { googleAuth } from '../services/googleAuth';
+import { linkedinAuth } from '../services/linkedinAuth';
+import { PasswordSetupModal } from './PasswordSetupModal';
 
 // Import conditionnel pour Device
 let Device;
 try {
   Device = require('expo-device');
 } catch (error) {
-  console.warn('expo-device non disponible:', error.message);
+  console.warn('expo-device not available:', (error as Error).message);
   Device = { deviceName: 'UnknownDevice' };
 }
 
@@ -93,27 +98,71 @@ interface AuthContextType {
   verifyOtp: (email: string, otpCode: string, deviceName: string) => Promise<void>;
   clearError: () => void;
   isAppReady: boolean;
+  showPasswordSetupModal: boolean;
+  hidePasswordSetupModal: () => void;
+  showPasswordSetupModalForProvider: (provider: 'google' | 'linkedin', token: string) => void;
+  pendingPasswordSetup: {
+    provider: 'google' | 'linkedin' | null;
+    token: string;
+  } | null;
   fetchUser: () => Promise<void>;
   refreshUserProfile: () => Promise<void>;
   completeOnboarding: () => Promise<void>;
+  // Méthodes internes exposées pour LinkedIn callback
+  setUser: (user: User | null) => void;
+  setToken: (token: string | null) => void;
+  setError: (error: string | null) => void;
+  setLoading: (loading: boolean) => void;
+  handleRedirect: (authenticated: boolean, userRole: string | undefined, isOtpVerified: boolean | undefined, isContractActive: boolean | undefined, emailForOtp?: string, deviceNameForOtp?: string) => void;
 }
 
-// IMPORTANT: Le SCHEME doit correspondre à celui que vous avez dans app.json pour votre application Expo
-const REDIRECT_URI = AuthSession.makeRedirectUri({ scheme: 'prorecruteapp' });
+// IMPORTANT: Utiliser le scheme configuré dans app.json avec le bon path
+const REDIRECT_URI = AuthSession.makeRedirectUri({
+  scheme: 'prorecruteapp',
+  path: 'auth'
+});
 console.log('AuthProvider: Redirect URI généré:', REDIRECT_URI); // Débogage 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // Constants for AsyncStorage keys
 const STORAGE_KEYS = {
   USER_TOKEN: 'user_token',
-  ONBOARDING_COMPLETED: 'onboarding_completed'
+  ONBOARDING_COMPLETED: 'onboarding_completed',
+  PASSWORD_SETUP_COMPLETED: 'password_setup_completed_users'
 } as const;
 
 interface AuthProviderProps {
   children: ReactNode;
 }
 
+// Fonctions utilitaires pour gérer les utilisateurs qui ont configuré leur mot de passe
+export const hasPasswordBeenSetup = async (userEmail: string): Promise<boolean> => {
+  try {
+    const setupUsers = await AsyncStorage.getItem(STORAGE_KEYS.PASSWORD_SETUP_COMPLETED);
+    if (!setupUsers) return false;
+    const users = JSON.parse(setupUsers);
+    return users.includes(userEmail);
+  } catch (error) {
+    console.error('Erreur lors de la vérification du setup mot de passe:', error);
+    return false;
+  }
+};
+
+export const markPasswordAsSetup = async (userEmail: string): Promise<void> => {
+  try {
+    const setupUsers = await AsyncStorage.getItem(STORAGE_KEYS.PASSWORD_SETUP_COMPLETED);
+    let users = setupUsers ? JSON.parse(setupUsers) : [];
+    if (!users.includes(userEmail)) {
+      users.push(userEmail);
+      await AsyncStorage.setItem(STORAGE_KEYS.PASSWORD_SETUP_COMPLETED, JSON.stringify(users));
+    }
+  } catch (error) {
+    console.error('Erreur lors du marquage du setup mot de passe:', error);
+  }
+};
+
 export const AuthProvider = ({ children }: AuthProviderProps) => {
+  const { t } = useLanguage();
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -121,6 +170,11 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [isAppReady, setIsAppReady] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [hasSeenOnboarding, setHasSeenOnboarding] = useState(false);
+  const [showPasswordSetupModal, setShowPasswordSetupModal] = useState(false);
+  const [pendingPasswordSetup, setPendingPasswordSetup] = useState<{
+    provider: 'google' | 'linkedin' | null;
+    token: string;
+  } | null>(null);
 
   const segments = useSegments();
   const inAuthGroup = segments[0] === '(auth)';
@@ -130,17 +184,22 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const fetchUser = useCallback(async () => {
     try {
       const fetchedUser = await apiFetchUserProfile();
-      if (fetchedUser && fetchedUser.role === 'interimaire') { 
-        const interimProfile = await getInterimProfile();
-        if (interimProfile) {
-          fetchedUser.is_contract_active = interimProfile.is_contract_active;
-        } else {
+      if (fetchedUser && fetchedUser.role === 'interimaire') {
+        try {
+          const interimProfile = await getInterimProfile();
+          if (interimProfile) {
+            fetchedUser.is_contract_active = interimProfile.is_contract_active;
+          } else {
+            fetchedUser.is_contract_active = false;
+          }
+        } catch (interimError: any) {
+          console.warn("AuthProvider: Erreur récupération profil intérimaire:", interimError.message);
           fetchedUser.is_contract_active = false;
         }
       }
       setUser(fetchedUser);
       return fetchedUser;
-    } catch (e: any) { 
+    } catch (e: any) {
       if (e.response?.status === 401) {
         console.warn("AuthProvider: Jeton non valide détecté (401), utilisateur sera déconnecté.");
       } else {
@@ -149,7 +208,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       await AsyncStorage.removeItem(STORAGE_KEYS.USER_TOKEN);
       setUser(null);
       setToken(null);
-      throw e; 
+      throw e;
     }
   }, []);
 
@@ -157,11 +216,16 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     try {
       console.log('Rechargement du profil utilisateur avec toutes les relations...');
       const fetchedUser = await apiFetchUserProfile();
-      if (fetchedUser && fetchedUser.role === 'interimaire') { 
-        const interimProfile = await getInterimProfile();
-        if (interimProfile) {
-          fetchedUser.is_contract_active = interimProfile.is_contract_active;
-        } else {
+      if (fetchedUser && fetchedUser.role === 'interimaire') {
+        try {
+          const interimProfile = await getInterimProfile();
+          if (interimProfile) {
+            fetchedUser.is_contract_active = interimProfile.is_contract_active;
+          } else {
+            fetchedUser.is_contract_active = false;
+          }
+        } catch (interimError: any) {
+          console.warn("AuthProvider: Erreur récupération profil intérimaire lors du refresh:", interimError.message);
           fetchedUser.is_contract_active = false;
         }
       }
@@ -174,9 +238,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       });
       setUser(fetchedUser);
       return fetchedUser;
-    } catch (e: any) { 
+    } catch (e: any) {
       console.error("AuthProvider: Échec de refreshUserProfile:", e);
-      throw e; 
+      throw e;
     }
   }, []);
 
@@ -190,7 +254,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   };
 
   const handleRedirect = useCallback((authenticated: boolean, userRole: string | undefined, isOtpVerified: boolean | undefined, isContractActive: boolean | undefined, emailForOtp?: string, deviceNameForOtp?: string) => {
-    if (isLoggingOut) { 
+    if (isLoggingOut || !isAppReady) {
       return;
     }
 
@@ -201,7 +265,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       if (!currentPath.includes('otp_verification')) {
         router.replace({
           pathname: '/(auth)/otp_verification',
-          params: { email: emailForOtp || user?.email, deviceName: deviceNameForOtp || Device?.deviceName || 'UnknownDevice' },
+          params: { email: emailForOtp || user?.email, deviceName: deviceNameForOtp || (Platform.OS === 'web' ? 'WebBrowser' : 'UnknownDevice') },
         });
       }
       return; 
@@ -246,7 +310,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         }
       }
     }
-  }, [inAuthGroup, inAppGroup, inOnboardingGroup, user?.email, isLoggingOut, hasSeenOnboarding]); 
+  }, [inAuthGroup, inAppGroup, inOnboardingGroup, user?.email, isLoggingOut, hasSeenOnboarding, isAppReady]); 
 
   useEffect(() => {
     async function prepareApp() {
@@ -295,13 +359,14 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     if (isAppReady && !isLoggingOut) {
       handleRedirect(!!user, user?.role, user?.is_otp_verified, user?.is_contract_active);
     }
-  }, [isAppReady, user, handleRedirect, hasSeenOnboarding, isLoggingOut]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAppReady, user, hasSeenOnboarding, isLoggingOut]);
 
   const login = async (email: string, password: string, deviceName?: string) => {
     setLoading(true);
     setError(null);
     try {
-      const actualDeviceName = deviceName || Device?.deviceName || 'UnknownDevice';
+      const actualDeviceName = deviceName || (Platform.OS === 'web' ? 'WebBrowser' : 'UnknownDevice');
       const response = await apiLoginUser(email, password, actualDeviceName);
       
       if (response.otp_required) {
@@ -338,7 +403,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     setLoading(true);
     setError(null);
     try {
-      const actualDeviceName = deviceName || Device?.deviceName || 'UnknownDevice';
+      const actualDeviceName = deviceName || (Platform.OS === 'web' ? 'WebBrowser' : 'UnknownDevice');
       const response = await apiRegisterUser(name, email, password, passwordConfirmation, role, actualDeviceName);
       
       const minimalUser: User = { 
@@ -403,63 +468,90 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   };
 
   /**
-    * [NOUVEAU] Gère le processus de connexion sociale via OAuth.
-    * Gère le processus de connexion sociale via OAuth.
+    * Nouvelle méthode de connexion sociale utilisant l'API Google officielle
     * @param {string} provider - Le nom du fournisseur ('google', 'linkedin').
     */
   const socialLogin = async (provider: string) => {
     setLoading(true);
     setError(null);
 
-    // L'URL de redirection vers votre API Laravel pour initier le flux OAuth
-    // Assurez-vous que l'URL de votre API Laravel est correcte
-    const LARAVEL_SOCIAL_REDIRECT_URL = `http://192.168.1.144:8000/api/auth/${provider}/redirect`; // Utiliser l'IP locale pour le dev
-
     try {
-      const result = await WebBrowser.openAuthSessionAsync(
-        LARAVEL_SOCIAL_REDIRECT_URL,
-        REDIRECT_URI
-      );
+      if (provider === 'google') {
+        console.log('🚀 Démarrage de la connexion Google...');
+        
+        // Utiliser le service Google Auth
+        const googleResult = await googleAuth.signIn();
+        
+        console.log('✅ Connexion Google réussie, envoi au backend...');
+        
+        // Envoyer les informations au backend
+        const response = await apiRequest('/auth/google/token', {
+          method: 'POST',
+          body: {
+            idToken: googleResult.idToken,
+            accessToken: googleResult.accessToken,
+            user: googleResult.user
+          }
+        });
 
-      if (result.type === 'success' && result.url) {
-        const url = new URL(result.url);
-        const tokenFromUrl = url.searchParams.get('token');
-        const roleFromUrl = url.searchParams.get('role');
-        const errorFromUrl = url.searchParams.get('error');
-
-        if (errorFromUrl) {
-          setError(decodeURIComponent(errorFromUrl));
-          console.error(`AuthProvider: Erreur OAuth depuis l'API: ${decodeURIComponent(errorFromUrl)}`);
-        } else if (tokenFromUrl) {
-          const userFromApi = await apiFetchUserProfile(); // Récupérer l'utilisateur complet via le token
-
-          // Récupérer le profil intérimaire si nécessaire
+        if (response.success) {
+          const { user: userFromApi, token: tokenFromApi } = response;
+          
+          // D'abord sauvegarder le token et mettre à jour le contexte
+          await AsyncStorage.setItem('user_token', tokenFromApi);
+          setToken(tokenFromApi);
+          
+          // Puis récupérer le profil intérimaire si nécessaire (maintenant avec le token)
           if (userFromApi && userFromApi.role === 'interimaire') {
-            const interimProfile = await getInterimProfile();
-            if (interimProfile) {
-              userFromApi.is_contract_active = interimProfile.is_contract_active;
-            } else {
+            try {
+              const interimProfile = await getInterimProfile();
+              if (interimProfile) {
+                userFromApi.is_contract_active = interimProfile.is_contract_active;
+              } else {
+                userFromApi.is_contract_active = false;
+              }
+            } catch (interimError: any) {
+              console.warn("AuthProvider: Erreur récupération profil intérimaire lors du social login:", interimError.message);
               userFromApi.is_contract_active = false;
             }
           }
 
-          await AsyncStorage.setItem('user_token', tokenFromUrl);
           setUser(userFromApi);
-          setToken(tokenFromUrl);
-          handleRedirect(true, userFromApi?.role, userFromApi?.is_otp_verified, userFromApi?.is_contract_active);
 
+          // Vérifier si l'utilisateur doit configurer son mot de passe
+          // Mais seulement s'il ne l'a pas déjà fait
+          const hasAlreadySetupPassword = await hasPasswordBeenSetup(userFromApi.email);
+          if (response.requires_password_setup && response.token && !hasAlreadySetupPassword) {
+            showPasswordSetupModalForProvider('google', response.token);
+          }
+
+          console.log('✅ Authentification Google complète');
+          handleRedirect(true, userFromApi?.role, userFromApi?.is_otp_verified, userFromApi?.is_contract_active);
         } else {
-          setError('Token manquant dans la réponse OAuth.');
-          console.error('AuthProvider: Token manquant après Social Login.');
+          setError(response.message || 'Erreur lors de l\'authentification Google');
         }
-      } else if (result.type === 'cancel') {
-        setError('Connexion annulée par l\'utilisateur.');
+      } else if (provider === 'linkedin') {
+        console.log('🔗 Démarrage de la connexion LinkedIn...');
+        
+        try {
+          // Utiliser le service LinkedIn Auth pour ouvrir le navigateur
+          const linkedinResult = await linkedinAuth.signIn();
+          
+          console.log('✅ Navigateur LinkedIn fermé, le traitement se poursuivra dans linkedin-callback.tsx');
+          
+          // Le traitement complet sera fait par la page linkedin-callback.tsx
+          // qui gérera l'échange du code et l'authentification
+          
+        } catch (error: any) {
+          // console.error('Erreur LinkedIn Auth:', error);
+          throw error;
+        }
       } else {
-        setError('Échec de la connexion OAuth.');
+        setError(`Fournisseur ${provider} non supporté`);
       }
     } catch (err: any) {
-      console.error(`Échec de la connexion sociale via ${provider}:`, err.response?.data || err.message);
-      setError(err.response?.data?.message || `Échec de la connexion via ${provider}. Veuillez réessayer.`);
+      // console.error(`Échec de la connexion sociale via ${provider}:`, err);
+      setError(err.message || `Échec de la connexion via ${provider}. Veuillez réessayer.`);
     } finally {
       setLoading(false);
     }
@@ -470,10 +562,10 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     setError(null);
     try {
       await apiSendOtp(email);
-      Alert.alert('Succès', 'Un nouveau code OTP a été envoyé à votre email.');
+      Alert.alert(t('Succès'), t('Un nouveau code OTP a été envoyé à votre email.'));
     } catch (err: any) {
       console.error('Send OTP failed:', err.response?.data || err.message);
-      setError(err.response?.data?.message || 'Échec de l\'envoi du code OTP.');
+      setError(err.response?.data?.message || t('Échec de l\'envoi du code OTP.'));
       throw err;
     } finally {
       setLoading(false);
@@ -501,7 +593,18 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     }
   };
   
+
   const clearError = () => setError(null);
+
+  const hidePasswordSetupModal = () => {
+    setShowPasswordSetupModal(false);
+    setPendingPasswordSetup(null);
+  };
+
+  const showPasswordSetupModalForProvider = (provider: 'google' | 'linkedin', token: string) => {
+    setPendingPasswordSetup({ provider, token });
+    setShowPasswordSetupModal(true);
+  };
 
   const authContextValue = {
     user,
@@ -518,9 +621,19 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     verifyOtp,
     clearError,
     isAppReady,
+    showPasswordSetupModal,
+    hidePasswordSetupModal,
+    showPasswordSetupModalForProvider,
+    pendingPasswordSetup,
     fetchUser,
     refreshUserProfile,
     completeOnboarding,
+    // Méthodes internes exposées pour LinkedIn callback
+    setUser,
+    setToken,
+    setError,
+    setLoading,
+    handleRedirect,
   };
 
   return (

@@ -1,0 +1,71 @@
+@startuml C4_Component_Simple
+title Diagramme de Composants - Application Mobile React Native
+
+!define Person(alias, label) rectangle "==label" as alias
+!define Component(alias, label, tech, descr) rectangle "==label\n--tech--\n\n descr" as alias
+!define System_Ext(alias, label) rectangle "==label" <<External>> as alias
+
+Person(user, "Utilisateur")
+
+package "App Mobile Pro-Recrute" {
+    
+    package "Couche UI" {
+        Component(auth_ui, "Écrans Auth", "React Native", "Login, Register, OTP")
+        Component(job_ui, "Écrans Jobs", "React Native", "Liste, détails, recherche")
+        Component(chat_ui, "Écrans Chat", "React Native", "Messages temps réel")
+        Component(profile_ui, "Écrans Profil", "React Native", "Profil candidat")
+    }
+    
+    package "Logique Métier" {
+        Component(auth_ctx, "AuthProvider", "React Context", "État global auth")
+        Component(job_hook, "useJobSearch", "Custom Hook", "Recherche emplois")
+        Component(bio_hook, "useBiometric", "Custom Hook", "Auth biométrique")
+        Component(notif_hook, "useNotifications", "Custom Hook", "Notifications push")
+    }
+    
+    package "Services" {
+        Component(api_client, "API Client", "Axios", "Client HTTP")
+        Component(auth_svc, "Auth Service", "JavaScript", "APIs authentification")
+        Component(jobs_api, "Jobs API", "JavaScript", "CRUD offres")
+        Component(msg_api, "Messaging API", "Socket.IO", "Chat temps réel")
+        Component(ai_api, "AI API", "JavaScript", "Recommandations IA")
+    }
+    
+    package "Stockage" {
+        Component(secure, "Secure Store", "Expo", "Tokens sécurisés")
+        Component(cache, "Cache Local", "AsyncStorage", "Données app")
+        Component(sqlite, "SQLite DB", "SQLite", "Base hors-ligne")
+    }
+    
+    package "Native" {
+        Component(expo_auth, "Expo Auth", "Biométrie", "Face ID, Touch ID")
+        Component(expo_notif, "Expo Notifications", "Push", "Notifications")
+        Component(expo_loc, "Expo Location", "GPS", "Géolocalisation")
+    }
+}
+
+System_Ext(backend, "Backend API")
+
+user --> auth_ui
+user --> job_ui
+user --> chat_ui
+
+auth_ui --> auth_ctx
+job_ui --> job_hook
+chat_ui --> msg_api
+
+auth_ctx --> auth_svc
+job_hook --> jobs_api
+job_hook --> ai_api
+
+auth_svc --> secure
+jobs_api --> cache
+msg_api --> sqlite
+
+bio_hook --> expo_auth
+notif_hook --> expo_notif
+job_hook --> expo_loc
+
+api_client --> backend
+
+@enduml

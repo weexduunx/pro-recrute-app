@@ -1,8 +1,31 @@
 // Learn more https://docs.expo.io/guides/customizing-metro
 const { getDefaultConfig } = require('expo/metro-config');
 
-/** @type {import('expo/metro-config').MetroConfig} */
-const config = getDefaultConfig(__dirname);
+// Configuration compatible avec React Native et Expo
+let config;
+try {
+  // Essayer d'utiliser @react-native/metro-config si disponible
+  const { getDefaultConfig: getRNConfig } = require('@react-native/metro-config');
+  config = getRNConfig(__dirname);
+
+  // Fusionner avec la config Expo
+  const expoConfig = getDefaultConfig(__dirname);
+  config = {
+    ...config,
+    ...expoConfig,
+    resolver: {
+      ...config.resolver,
+      ...expoConfig.resolver,
+    },
+    transformer: {
+      ...config.transformer,
+      ...expoConfig.transformer,
+    },
+  };
+} catch (error) {
+  // Fallback vers la config Expo standard
+  config = getDefaultConfig(__dirname);
+}
 
 // Configuration pour les polyfills React Native et résolution des modules
 config.resolver = {

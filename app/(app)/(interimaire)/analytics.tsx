@@ -18,6 +18,11 @@ import {
   getDashboardStats,
   getFinancialStats,
   getIpmStats,
+  getConsultationsList,
+  getExamensList,
+  getSoinsList,
+  getMedicamentsList,
+  getProthesesList,
   formatCurrency,
   formatNumber,
   formatPercentage,
@@ -82,11 +87,20 @@ export default function AnalyticsScreen() {
   const [dashboardStats, setDashboardStats] = useState(null);
   const [financialStats, setFinancialStats] = useState(null);
   const [ipmStats, setIpmStats] = useState(null);
+  
+  // Données détaillées
+  const [consultationsList, setConsultationsList] = useState([]);
+  const [examensList, setExamensList] = useState([]);
+  const [soinsList, setSoinsList] = useState([]);
+  const [medicamentsList, setMedicamentsList] = useState([]);
+  const [prothesesList, setProthesesList] = useState([]);
+  const [showDetailedView, setShowDetailedView] = useState(false);
 
   const loadAnalyticsData = useCallback(async () => {
     try {
       setLoading(true);
       
+      // Charger les statistiques principales
       const [dashboardRes, financialRes, ipmRes] = await Promise.all([
         getDashboardStats(selectedPeriod).catch(err => {
           console.warn('Erreur dashboard stats:', err);
@@ -99,6 +113,30 @@ export default function AnalyticsScreen() {
         getIpmStats(selectedYear).catch(err => {
           console.warn('Erreur IPM stats:', err);
           return { success: false, error: err };
+        })
+      ]);
+      
+      // Charger les données détaillées en parallèle
+      const [consultationsRes, examensRes, soinsRes, medicamentsRes, prothesesRes] = await Promise.all([
+        getConsultationsList(selectedYear).catch(err => {
+          console.warn('Erreur consultations list:', err);
+          return { success: false, data: [] };
+        }),
+        getExamensList(selectedYear).catch(err => {
+          console.warn('Erreur examens list:', err);
+          return { success: false, data: [] };
+        }),
+        getSoinsList(selectedYear).catch(err => {
+          console.warn('Erreur soins list:', err);
+          return { success: false, data: [] };
+        }),
+        getMedicamentsList(selectedYear).catch(err => {
+          console.warn('Erreur medicaments list:', err);
+          return { success: false, data: [] };
+        }),
+        getProthesesList(selectedYear).catch(err => {
+          console.warn('Erreur protheses list:', err);
+          return { success: false, data: [] };
         })
       ]);
 
@@ -117,6 +155,23 @@ export default function AnalyticsScreen() {
       }
       if (ipmRes.success && ipmRes.data) {
         setIpmStats(ipmRes.data);
+      }
+      
+      // Traiter les données détaillées
+      if (consultationsRes.success && consultationsRes.data) {
+        setConsultationsList(consultationsRes.data);
+      }
+      if (examensRes.success && examensRes.data) {
+        setExamensList(examensRes.data);
+      }
+      if (soinsRes.success && soinsRes.data) {
+        setSoinsList(soinsRes.data);
+      }
+      if (medicamentsRes.success && medicamentsRes.data) {
+        setMedicamentsList(medicamentsRes.data);
+      }
+      if (prothesesRes.success && prothesesRes.data) {
+        setProthesesList(prothesesRes.data);
       }
 
     } catch (error) {
@@ -218,7 +273,7 @@ export default function AnalyticsScreen() {
   };
 
   const renderStatCard = (title, value, change = null, iconName, color = colors.primary) => (
-    <View style={[styles.statCard, { backgroundColor: colors.surface || colors.background }]}>
+    <View style={[styles.statCard, { backgroundColor: colors.cardBackground || colors.background }]}>
       <View style={styles.statHeader}>
         <View style={[styles.statIcon, { backgroundColor: color + '20' }]}>
           <Ionicons name={iconName as any} size={20} color={color} />
@@ -250,38 +305,50 @@ export default function AnalyticsScreen() {
   const renderQuickStats = () => {
     if (!dashboardStats) return null;
 
+    // Calcul des métriques à partir des données détaillées
+    const totalConsultations = consultationsList.length + examensList.length + soinsList.length;
+    const totalOrdonnances = medicamentsList.length + prothesesList.length;
+    const totalExamens = examensList.length;
+    
+    // Calcul du nombre de dérogations (éléments exclus)
+    const allMedicalData = [...consultationsList, ...examensList, ...soinsList, ...medicamentsList, ...prothesesList];
+    const nombreDerogations = allMedicalData.filter(item => {
+      // Vérifier si l'élément est exclu (dérogation)
+      return item.exclu && (item.exclu === '1' || item.exclu === 1 || item.exclu === true);
+    }).length;
+
     return (
       <View style={styles.statsGrid}>
         {renderStatCard(
-          'Heures travaillées',
-          safeFormatNumber(dashboardStats.total_hours),
-          dashboardStats.hours_growth,
-          'time-outline',
-          colors.secondary
-        )}
-        
-        {renderStatCard(
-          'Remboursements bruts',
-          safeFormatCurrency(dashboardStats.total_revenue),
-          dashboardStats.revenue_growth,
-          'cash-outline',
-          colors.success || '#10B981'
-        )}
-        
-        {renderStatCard(
-          'Contrats actifs',
-          safeFormatNumber(dashboardStats.active_contracts),
-          dashboardStats.contracts_growth,
-          'document-text-outline',
+          'Consultations',
+          safeFormatNumber(totalConsultations),
+          null,
+          'medical-outline',
           colors.primary
         )}
         
         {renderStatCard(
-          'Sociétés travaillées',
-          safeFormatNumber(dashboardStats.unique_societies),
+          'Ordonnances',
+          safeFormatNumber(totalOrdonnances),
           null,
-          'business-outline',
+          'receipt-outline',
+          colors.secondary
+        )}
+        
+        {renderStatCard(
+          'Examens',
+          safeFormatNumber(totalExamens),
+          null,
+          'search-outline',
           '#8B5CF6'
+        )}
+        
+        {renderStatCard(
+          'Dérogations',
+          safeFormatNumber(nombreDerogations),
+          null,
+          'warning-outline',
+          colors.error || '#EF4444'
         )}
       </View>
     );
@@ -292,20 +359,20 @@ export default function AnalyticsScreen() {
     if (!dashboardStats) return null;
 
     return (
-      <View style={[styles.section, { backgroundColor: colors.surface || colors.background }]}>
+      <View style={[styles.section, { backgroundColor: colors.background || colors.background }]}>
         <Text style={[styles.sectionTitle, { color: colors.primary }]}>
-          Société actuelle
+          Structure de soin
         </Text>
         <View style={styles.societyInfo}>
           <View style={[styles.societyIcon, { backgroundColor: colors.secondary + '20' }]}>
             <Ionicons name="business" size={24} color={colors.secondary} />
           </View>
           <View style={styles.societyDetails}>
-            <Text style={[styles.societyName, { color: colors.text }]}>
-              {dashboardStats.current_society || 'Aucune société assignée'}
+            <Text style={[styles.societyName, { color: colors.primary }]}>
+              {(dashboardStats as any)?.current_society || 'Aucune structure assignée'}
             </Text>
             <Text style={[styles.societyStats, { color: colors.textSecondary }]}>
-              {safeFormatNumber(dashboardStats.active_contracts)} contrats actifs - {safeFormatNumber(dashboardStats.unique_societies)} sociétés au total
+              {safeFormatNumber((dashboardStats as any)?.active_contracts || 0)} prises en charge - {safeFormatNumber((dashboardStats as any)?.unique_societies || 0)} structures au total
             </Text>
           </View>
         </View>
@@ -314,11 +381,14 @@ export default function AnalyticsScreen() {
   };
 
   const renderFinancialAnalytics = () => {
-    if (!financialStats) {
+    // Calculer les totaux corrects à partir des données réelles
+    const allMedicalData = [...consultationsList, ...soinsList, ...medicamentsList, ...prothesesList, ...examensList];
+    
+    if (allMedicalData.length === 0) {
       return (
-        <View style={[styles.section, { backgroundColor: colors.surface || colors.background }]}>
+        <View style={[styles.section, { backgroundColor: colors.background || colors.background }]}>
           <Text style={[styles.sectionTitle, { color: colors.primary }]}>
-            Analyse des remboursements IPM
+            Analyse financière des soins
           </Text>
           <Text style={[styles.financialLabel, { color: colors.textSecondary, textAlign: 'center' }]}>
             Aucune donnée financière disponible
@@ -327,15 +397,22 @@ export default function AnalyticsScreen() {
       );
     }
 
-    // Debug: Afficher la structure des données en développement
-    if (__DEV__) {
-      console.log('Financial Stats:', financialStats);
-    }
+    // Calcul du total des remboursements (somme de tous les remboursements)
+    const totalRemboursements = allMedicalData.reduce((sum, item) => {
+      return sum + (parseFloat((item as any).remboursement) || 0);
+    }, 0);
 
+    // Calcul du total des retenus (somme de tous les montants * taux_retenu)  
+    const totalRetenus = allMedicalData.reduce((sum, item) => {
+      const montant = parseFloat((item as any).montant) || 0;
+      const tauxRetenu = parseFloat((item as any).retenue) || 0; // Le taux de retenue depuis l'API
+      return sum + tauxRetenu; // retenue est déjà calculée côté serveur
+    }, 0);
+    
     return (
-      <View style={[styles.section, { backgroundColor: colors.surface || colors.background }]}>
+      <View style={[styles.section, { backgroundColor: colors.cardBackground || colors.background }]}>
         <Text style={[styles.sectionTitle, { color: colors.primary }]}>
-          Analyse des remboursements IPM
+          Analyse financière des soins
         </Text>
 
         <View style={styles.financialGrid}>
@@ -344,7 +421,7 @@ export default function AnalyticsScreen() {
               Total remboursements
             </Text>
             <Text style={[styles.financialValue, { color: colors.success || '#10B981' }]}>
-              {safeFormatCurrency(financialStats.total_gross)}
+              {safeFormatCurrency(totalRemboursements)}
             </Text>
           </View>
 
@@ -353,88 +430,149 @@ export default function AnalyticsScreen() {
               Total retenus
             </Text>
             <Text style={[styles.financialValue, { color: colors.error || '#EF4444' }]}>
-              {safeFormatCurrency(financialStats.total_deductions)}
-            </Text>
-          </View>
-
-          <View style={styles.financialItem}>
-            <Text style={[styles.financialLabel, { color: colors.textSecondary }]}>
-              Moyenne mensuelle
-            </Text>
-            <Text style={[styles.financialValue, { color: colors.secondary }]}>
-              {safeFormatCurrency(financialStats.avg_monthly)}
-            </Text>
-          </View>
-
-          <View style={styles.financialItem}>
-            <Text style={[styles.financialLabel, { color: colors.textSecondary }]}>
-              Mois traités
-            </Text>
-            <Text style={[styles.financialValue, { color: colors.primary }]}>
-              {safeFormatNumber(financialStats.monthly_evolution?.length || 0)}
+              {safeFormatCurrency(totalRetenus)}
             </Text>
           </View>
         </View>
 
-        {financialStats.societies_worked ? (
-          <View style={styles.societiesInfo}>
-            <Text style={[styles.subSectionTitle, { color: colors.primary }]}>
-              Informations supplémentaires
-            </Text>
-            <View style={styles.societiesDetails}>
-              <Text style={[styles.societiesText, { color: colors.text }]}>
-                Sociétés travaillées: {safeFormatNumber(financialStats.societies_worked)}
-              </Text>
-              {financialStats.current_society ? (
-                <Text style={[styles.societiesText, { color: colors.textSecondary }]}>
-                  Société actuelle: {financialStats.current_society}
+{(() => {
+          // Calculer les données mensuelles à partir des données réelles
+          const monthlyData = {};
+          const currentYear = selectedYear;
+          
+          allMedicalData.forEach(item => {
+            if ((item as any).date) {
+              const date = new Date((item as any).date);
+              if (date.getFullYear() === currentYear) {
+                const monthKey = date.getMonth();
+                if (!(monthlyData as any)[monthKey]) {
+                  (monthlyData as any)[monthKey] = {
+                    month: monthKey,
+                    month_short: date.toLocaleDateString('fr-FR', { month: 'short' }),
+                    remboursements: 0,
+                    retenues: 0
+                  };
+                }
+                (monthlyData as any)[monthKey].remboursements += parseFloat((item as any).remboursement) || 0;
+                (monthlyData as any)[monthKey].retenues += parseFloat((item as any).retenue) || 0;
+              }
+            }
+          });
+          
+          const monthlyArray = Object.values(monthlyData).sort((a, b) => (a as any).month - (b as any).month);
+          const maxRemboursements = Math.max(...monthlyArray.map(m => (m as any).remboursements), 1);
+          const maxRetenues = Math.max(...monthlyArray.map(m => (m as any).retenues), 1);
+          const maxValue = Math.max(maxRemboursements, maxRetenues);
+          
+          if (monthlyArray.length > 0) {
+            return (
+              <View style={styles.monthlyEvolution}>
+                <Text style={[styles.subSectionTitle, { color: colors.primary }]}>
+                  Évolution mensuelle ({currentYear})
                 </Text>
-              ) : null}
-            </View>
-          </View>
-        ) : null}
-
-        {financialStats.monthly_evolution && financialStats.monthly_evolution.length > 0 ? (
-          <View style={styles.monthlyEvolution}>
-            <Text style={[styles.subSectionTitle, { color: colors.primary }]}>
-              Évolution mensuelle ({financialStats.year || new Date().getFullYear()})
-            </Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <View style={styles.evolutionChart}>
-                {financialStats.monthly_evolution.map((month, index) => (
-                  <View key={index} style={styles.monthColumn}>
-                    <View
-                      style={[
-                        styles.monthBar,
-                        {
-                          height: Math.max(4, (month.amount / (financialStats.max_monthly || 1)) * 80),
-                          backgroundColor: colors.secondary
-                        }
-                      ]}
-                    />
-                    <Text style={[styles.monthLabel, { color: colors.textSecondary }]}>
-                      {month.month_short || ''}
-                    </Text>
-                    <Text style={[styles.monthAmount, { color: colors.text }]}>
-                      {safeFormatCurrency(month.amount)}
-                    </Text>
+                <View style={styles.chartLegend}>
+                  <View style={styles.legendItem}>
+                    <View style={[styles.legendColor, { backgroundColor: colors.success || '#10B981' }]} />
+                    <Text style={[styles.legendText, { color: colors.textSecondary }]}>Remboursements</Text>
                   </View>
-                ))}
+                  <View style={styles.legendItem}>
+                    <View style={[styles.legendColor, { backgroundColor: colors.error || '#EF4444' }]} />
+                    <Text style={[styles.legendText, { color: colors.textSecondary }]}>Retenues</Text>
+                  </View>
+                </View>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  <View style={styles.evolutionChart}>
+                    {monthlyArray.map((month, index) => {
+                      const rembHeight = Math.max(4, ((month as any).remboursements / maxValue) * 80);
+                      const retenueHeight = Math.max(4, ((month as any).retenues / maxValue) * 80);
+                      
+                      return (
+                        <View key={index} style={styles.monthColumn}>
+                          {/* Barre remboursements (vers le haut, vert) */}
+                          <View
+                            style={[
+                              styles.monthBar,
+                              styles.monthBarUp,
+                              {
+                                height: rembHeight,
+                                backgroundColor: colors.success || '#10B981'
+                              }
+                            ]}
+                          />
+                          
+                          {/* Label du mois */}
+                          <Text style={[styles.monthLabel, { color: colors.textSecondary }]}>
+                            {(month as { month_short: string }).month_short}
+                          </Text>
+                          
+                          {/* Barre retenues (vers le bas, rouge) */}
+                          <View
+                            style={[
+                              styles.monthBar,
+                              styles.monthBarDown,
+                              {
+                                height: retenueHeight,
+                                backgroundColor: colors.error || '#EF4444'
+                              }
+                            ]}
+                          />
+                          
+                          {/* Montants */}
+                          <Text style={[styles.monthAmount, { color: colors.success || '#10B981', fontSize: 9 }]}>
+                            +{safeFormatCurrency((month as { remboursements: number }).remboursements)}
+                          </Text>
+                          <Text style={[styles.monthAmount, { color: colors.error || '#EF4444', fontSize: 9 }]}>
+                            -{safeFormatCurrency((month as { retenues: number }).retenues)}
+                          </Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                </ScrollView>
               </View>
-            </ScrollView>
-          </View>
-        ) : null}
+            );
+          }
+          return null;
+        })()}
       </View>
     );
   };
 
   const renderIpmAnalytics = () => {
-    if (!ipmStats) return null;
+    // Calculer les métriques à partir des données réelles
+    const allMedicalData = [...consultationsList, ...examensList, ...soinsList, ...medicamentsList, ...prothesesList];
+    
+    // Calculs des nouvelles métriques
+    const totalActes = allMedicalData.length;
+    const actesRefuses = allMedicalData.filter(item => 
+(item as any).exclu && ((item as any).exclu === '1' || (item as any).exclu === 1 || (item as any).exclu === true)
+    ).length;
+    const actesCouvert = totalActes - actesRefuses;
+    const tauxCouverture = totalActes > 0 ? Math.round((actesCouvert / totalActes) * 100) : 0;
+    
+    // Structures partenaires uniques
+    const structuresUniques = new Set();
+    [...consultationsList, ...examensList, ...soinsList].forEach(item => {
+      if ((item as any).structure && (item as any).structure !== 'Non spécifiée') {
+        structuresUniques.add((item as any).structure);
+      }
+    });
+    const nbStructures = structuresUniques.size;
+    const structuresArray = Array.from(structuresUniques);
+    
+    // Spécialités consultées uniques (à partir du type de consultation)
+    const specialitesUniques = new Set();
+    [...consultationsList, ...examensList, ...soinsList].forEach(item => {
+      if ((item as any).type && (item as any).type !== 'Non spécifié') {
+        specialitesUniques.add((item as any).type);
+      }
+    });
+    const nbSpecialites = specialitesUniques.size;
 
     return (
       <View style={[styles.section, { backgroundColor: colors.background }]}>
         <Text style={[styles.sectionTitle, { color: colors.primary }]}>
-          Couverture IPM
+          Couverture médicale IPM
         </Text>
 
         <View style={styles.ipmGrid}>
@@ -444,56 +582,254 @@ export default function AnalyticsScreen() {
             </View>
             <View style={styles.ipmContent}>
               <Text style={[styles.ipmValue, { color: colors.primary }]}>
-                {safeFormatNumber(ipmStats.total_prise_en_charge || 0)}
+                {safeFormatNumber(actesCouvert)}
               </Text>
               <Text style={[styles.ipmLabel, { color: colors.textSecondary }]}>
-                Prises en charge
+                Actes couverts
               </Text>
             </View>
           </View>
 
           <View style={styles.ipmItem}>
             <View style={[styles.ipmIcon, { backgroundColor: colors.secondary + '20' }]}>
-              <Ionicons name="document-text" size={20} color={colors.secondary} />
+              <Ionicons name="stats-chart" size={20} color={colors.secondary} />
             </View>
             <View style={styles.ipmContent}>
               <Text style={[styles.ipmValue, { color: colors.primary }]}>
-                {safeFormatNumber(ipmStats.total_feuilles_soins || 0)}
+                {tauxCouverture}%
               </Text>
               <Text style={[styles.ipmLabel, { color: colors.textSecondary }]}>
-                Feuilles de soins
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.ipmItem}>
-            <View style={[styles.ipmIcon, { backgroundColor: colors.success + '20' }]}>
-              <Ionicons name="cash" size={20} color={colors.success || '#10B981'} />
-            </View>
-            <View style={styles.ipmContent}>
-              <Text style={[styles.ipmValue, { color: colors.primary }]}>
-                {safeFormatCurrency(ipmStats.total_remboursements || 0)}
-              </Text>
-              <Text style={[styles.ipmLabel, { color: colors.textSecondary }]}>
-                Remboursements
+                Taux de couverture
               </Text>
             </View>
           </View>
 
           <View style={styles.ipmItem}>
             <View style={[styles.ipmIcon, { backgroundColor: '#8B5CF6' + '20' }]}>
-              <Ionicons name="people" size={20} color="#8B5CF6" />
+              <Ionicons name="medical" size={20} color="#8B5CF6" />
             </View>
             <View style={styles.ipmContent}>
               <Text style={[styles.ipmValue, { color: colors.primary }]}>
-                {safeFormatNumber(ipmStats.famille_members_count || 0)}
+                {safeFormatNumber(nbSpecialites)}
               </Text>
               <Text style={[styles.ipmLabel, { color: colors.textSecondary }]}>
-                Ayants droit
+                Spécialités consultées
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.ipmItem}>
+            <View style={[styles.ipmIcon, { backgroundColor: colors.error + '20' }]}>
+              <Ionicons name="close-circle" size={20} color={colors.error || '#EF4444'} />
+            </View>
+            <View style={styles.ipmContent}>
+              <Text style={[styles.ipmValue, { color: colors.primary }]}>
+                {safeFormatNumber(actesRefuses)}
+              </Text>
+              <Text style={[styles.ipmLabel, { color: colors.textSecondary }]}>
+                Actes refusés
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.ipmItem}>
+            <View style={[styles.ipmIcon, { backgroundColor: '#F59E0B' + '20' }]}>
+              <Ionicons name="document-text" size={20} color="#F59E0B" />
+            </View>
+            <View style={styles.ipmContent}>
+              <Text style={[styles.ipmValue, { color: colors.primary }]}>
+                {safeFormatNumber((ipmStats as any)?.total_feuilles_soins || 0)}
+              </Text>
+              <Text style={[styles.ipmLabel, { color: colors.textSecondary }]}>
+                Feuilles de soins
               </Text>
             </View>
           </View>
         </View>
+
+        {/* Liste des structures partenaires */}
+        {structuresArray.length > 0 && (
+          <View style={[styles.structuresListContainer, { marginTop: 16 }]}>
+            <Text style={[styles.subSectionTitle, { color: colors.primary }]}>
+              Structures partenaires ({structuresArray.length})
+            </Text>
+            <View style={styles.structuresGrid}>
+              {structuresArray.map((structure, index) => (
+                <View 
+                  key={index}
+                  style={[styles.structureChip, { 
+                    backgroundColor: colors.background || colors.background,
+                    borderColor: colors.border 
+                  }]}
+                >
+                  <View  style={[styles.ipmIcon, { backgroundColor: colors.success + '20' }]}>
+                    <Ionicons name="business" size={12} color={colors.success} />
+                  </View>
+                  <Text style={[styles.structureText, { color: colors.textSecondary }]}>
+                    {structure as string}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+      </View>
+    );
+  };
+
+  const renderDetailedDataCard = (title: string, data: any[], iconName: string, color: string) => {
+    if (!data || data.length === 0) return null;
+
+    return (
+      <View style={styles.detailedDataCard}>
+        <View style={styles.detailedDataHeader}>
+          <View style={[styles.detailedDataIcon, { backgroundColor: color + '20' }]}>
+            <Ionicons name={iconName as any} size={16} color={color} />
+          </View>
+          <Text style={[styles.detailedDataTitle, { color: colors.textPrimary }]}>
+            {title} ({data.length})
+          </Text>
+        </View>
+        
+        <View style={styles.detailedDataSummary}>
+          <View style={styles.summaryItem}>
+            <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>
+              Total
+            </Text>
+            <Text style={[styles.summaryValue, { color: colors.textPrimary }]}>
+              {safeFormatCurrency(data.reduce((sum, item) => sum + (item.montant || 0), 0))}
+            </Text>
+          </View>
+          
+          <View style={[styles.summaryDivider, { backgroundColor: colors.border || '#e0e0e0' }]} />
+          
+          <View style={styles.summaryItem}>
+            <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>
+              Remboursé
+            </Text>
+            <Text style={[styles.summaryValue, { color: colors.success || '#10B981' }]}>
+              {safeFormatCurrency(data.reduce((sum, item) => sum + (item.remboursement || 0), 0))}
+            </Text>
+          </View>
+          
+          <View style={[styles.summaryDivider, { backgroundColor: colors.border || '#e0e0e0' }]} />
+          
+          <View style={styles.summaryItem}>
+            <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>
+              Retenu
+            </Text>
+            <Text style={[styles.summaryValue, { color: colors.error || '#EF4444' }]}>
+              {safeFormatCurrency(data.reduce((sum, item) => sum + (item.retenue || 0), 0))}
+            </Text>
+          </View>
+        </View>
+      </View>
+    );
+  };
+  
+
+  const renderDetailedData = () => {
+    return (
+      <View style={[styles.section, { backgroundColor: colors.background }]}>
+        <View style={styles.detailedDataTitleContainer}>
+          <Text style={[styles.sectionTitle, { color: colors.primary }]}>
+            Activité médicale ({selectedYear})
+          </Text>
+          <TouchableOpacity
+            style={[styles.toggleButton, { 
+              backgroundColor: showDetailedView ? colors.primary : colors.background,
+              borderColor: colors.primary,
+              borderWidth: 1
+            }]}
+            onPress={() => setShowDetailedView(!showDetailedView)}
+          >
+            <Text style={[styles.toggleButtonText, { 
+              color: showDetailedView ? colors.textTertiary : colors.primary 
+            }]}>
+              {showDetailedView ? 'Masquer' : 'Afficher'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Cartes de résumé */}
+        <View style={styles.detailedDataGrid}>
+          {renderDetailedDataCard('Consultations', consultationsList, 'medical', colors.primary)}
+          {renderDetailedDataCard('Examens', examensList, 'flask', colors.secondary)}
+          {renderDetailedDataCard('Soins', soinsList, 'bed', '#8B5CF6')}
+          {renderDetailedDataCard('Médicaments', medicamentsList, 'medical', colors.success || '#10B981')}
+          {renderDetailedDataCard('Prothèses', prothesesList, 'hardware-chip', '#F59E0B')}
+        </View>
+
+        {showDetailedView && (
+          <View style={styles.detailedDataList}>
+            <Text style={[styles.detailedDataSubtitle, { color: colors.primary }]}>
+              Liste complète
+            </Text>
+            
+            {/* Combine toutes les données pour affichage */}
+            {[
+              ...consultationsList.map(item => ({ ...item, category: 'Consultation', color: colors.primary })),
+              ...examensList.map(item => ({ ...item, category: 'Examen', color: colors.secondary })),
+              ...soinsList.map(item => ({ ...item, category: 'Soin', color: '#8B5CF6' })),
+              ...medicamentsList.map(item => ({ ...item, category: 'Médicament', color: colors.success || '#10B981' })),
+              ...prothesesList.map(item => ({ ...item, category: 'Prothèse', color: '#F59E0B' }))
+            ]
+            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+            .slice(0, 20) // Limiter à 20 éléments pour la performance
+            .map((item, index) => (
+              <View key={`${item.category}-${item.id}`} style={[styles.detailedDataItem, { 
+                backgroundColor: colors.background,
+                borderLeftColor: item.color,
+                borderLeftWidth: 3
+              }]}>
+                <View style={styles.detailedDataItemHeader}>
+                  <Text style={[styles.detailedDataItemDate, { color: colors.textSecondary }]}>
+                    {item.date}
+                  </Text>
+                  <View style={[styles.detailedDataItemCategory, { backgroundColor: item.color + '20' }]}>
+                    <Text style={[styles.detailedDataItemCategoryText, { color: item.color }]}>
+                      {item.category}
+                    </Text>
+                  </View>
+                </View>
+                
+                <Text style={[styles.detailedDataItemType, { color: colors.textPrimary }]}>
+                  {item.type}
+                </Text>
+                
+                <View style={styles.detailedDataItemFooter}>
+                  <View style={styles.detailedDataItemAmounts}>
+                    <Text style={[styles.detailedDataItemAmount, { color: colors.textPrimary }]}>
+                      Montant: {safeFormatCurrency(item.montant)}
+                    </Text>
+                    {!item.exclu && (
+                      <>
+                        <Text style={[styles.detailedDataItemAmount, { color: colors.success || '#10B981' }]}>
+                          Remb.: {safeFormatCurrency(item.remboursement)}
+                        </Text>
+                        <Text style={[styles.detailedDataItemAmount, { color: colors.error || '#EF4444' }]}>
+                          Ret.: {safeFormatCurrency(item.retenue)}
+                        </Text>
+                      </>
+                    )}
+                    {item.exclu && (
+                      <Text style={[styles.detailedDataItemAmount, { color: colors.error || '#EF4444' }]}>
+                        Exclu
+                      </Text>
+                    )}
+                  </View>
+                  <Text style={[styles.detailedDataItemBenef, { color: colors.textSecondary }]}>
+                    {item.beneficiaire}
+                  </Text>
+                </View>
+              </View>
+            ))}
+            
+            <Text style={[styles.detailedDataNote, { color: colors.textSecondary }]}>
+              Affichage limité aux 20 entrées les plus récentes
+            </Text>
+          </View>
+        )}
       </View>
     );
   };
@@ -544,7 +880,7 @@ export default function AnalyticsScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <CustomHeader title="Analytics" showBackButton={true} />
+      <CustomHeader title="Suivi Facturation" showBackButton={true} />
       
       {renderPeriodSelector()}
       {renderYearSelector()}
@@ -561,10 +897,9 @@ export default function AnalyticsScreen() {
         }
       >
         {renderQuickStats()}
-        {renderCurrentSociety()}
         {renderFinancialAnalytics()}
+        {renderDetailedData()}
         {renderIpmAnalytics()}
-        {renderReportActions()}
       </ScrollView>
     </View>
   );
@@ -769,20 +1104,49 @@ const styles = StyleSheet.create({
   monthlyEvolution: {
     marginTop: 16,
   },
+  chartLegend: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginBottom: 12,
+    gap: 20,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  legendColor: {
+    width: 12,
+    height: 12,
+    borderRadius: 2,
+    marginRight: 6,
+  },
+  legendText: {
+    fontSize: 12,
+  },
   evolutionChart: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'center',
     paddingVertical: 12,
+    minHeight: 200,
   },
   monthColumn: {
     alignItems: 'center',
     marginRight: 16,
     minWidth: 50,
+    height: 180,
+    justifyContent: 'center',
   },
   monthBar: {
     width: 24,
     borderRadius: 2,
-    marginBottom: 8,
+  },
+  monthBarUp: {
+    alignSelf: 'flex-end',
+    marginBottom: 4,
+  },
+  monthBarDown: {
+    alignSelf: 'flex-start',
+    marginTop: 4,
   },
   monthLabel: {
     fontSize: 10,
@@ -840,5 +1204,233 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     marginLeft: 8,
+  },
+
+  // Detailed data styles
+  detailedDataCard: {
+    backgroundColor: '#f8f9fa',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 8,
+    width: '100%',
+    alignSelf: 'stretch',
+  },
+  detailedDataHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  detailedDataIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+  },
+  detailedDataTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  detailedDataAmount: {
+    fontSize: 12,
+    fontWeight: '500',
+    textAlign: 'right',
+  },
+  detailedDataTitleContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  toggleButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  toggleButtonText: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  detailedDataGrid: {
+    flexDirection: 'column',
+    gap: 8,
+    marginBottom: 16,
+    width: '100%',
+    alignSelf: 'stretch',
+  },
+  detailedListContainer: {
+    maxHeight: 400,
+  },
+  detailedListItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: '#ffffff',
+    borderRadius: 6,
+    marginBottom: 4,
+    borderLeftWidth: 3,
+  },
+  detailedListLeft: {
+    flex: 1,
+  },
+  detailedListDate: {
+    fontSize: 12,
+    marginBottom: 2,
+  },
+  detailedListType: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  detailedListRight: {
+    alignItems: 'flex-end',
+  },
+  detailedListAmount: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  detailedListRemb: {
+    fontSize: 12,
+  },
+
+  // Structures partenaires styles
+  structuresListContainer: {
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+  },
+  structuresGrid: {
+    flexDirection: 'column',
+    gap: 6,
+    marginTop: 8,
+  },
+  structureChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 8,
+    minHeight: 40,
+    flex: 1,
+    maxWidth: '100%',
+  },
+  structureIcon: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+    flexShrink: 0,
+  },
+  structureText: {
+    fontSize: 13,
+    fontWeight: '500',
+    flex: 1,
+    lineHeight: 18,
+    textAlign: 'left',
+  },
+
+  // Detailed data summary styles
+  detailedDataSummary: {
+    flexDirection: 'row',
+    width: '100%',
+    alignSelf: 'stretch',
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+  },
+  summaryItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  summaryLabel: {
+    fontSize: 11,
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  summaryValue: {
+    fontSize: 13,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  summaryDivider: {
+    width: 1,
+    height: '80%',
+    alignSelf: 'center',
+    marginHorizontal: 8,
+  },
+
+  // Detailed data list styles
+  detailedDataList: {
+    marginTop: 16,
+  },
+  detailedDataSubtitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 12,
+  },
+  detailedDataItem: {
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 8,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  detailedDataItemHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  detailedDataItemDate: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  detailedDataItemCategory: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  detailedDataItemCategoryText: {
+    fontSize: 10,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+  },
+  detailedDataItemType: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  detailedDataItemFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+  },
+  detailedDataItemAmounts: {
+    flex: 1,
+  },
+  detailedDataItemAmount: {
+    fontSize: 12,
+    marginBottom: 2,
+  },
+  detailedDataItemBenef: {
+    fontSize: 11,
+    fontStyle: 'italic',
+    textAlign: 'right',
+    maxWidth: '40%',
+  },
+  detailedDataNote: {
+    fontSize: 11,
+    textAlign: 'center',
+    marginTop: 12,
+    fontStyle: 'italic',
   },
 });

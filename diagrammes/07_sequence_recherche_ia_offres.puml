@@ -1,0 +1,103 @@
+@startuml Sequence_Recherche_IA_Offres
+title Diagramme de Séquence - Recherche IA et Recommandations d'Offres
+
+actor "Candidat" as user
+participant "JobBoard UI" as ui
+participant "Search Hook" as search
+participant "AI Service" as ai
+participant "Cache Layer" as cache
+participant "Job API" as job_api
+participant "Profile API" as profile_api
+participant "ML Engine" as ml
+participant "Analytics" as analytics
+
+== Initialisation Recherche ==
+user -> ui: Ouvrir JobBoard
+ui -> search: useJobSearch()
+search -> cache: getCachedRecommendations(userId)
+
+alt Cache disponible et valide
+    cache --> search: recommendations[]
+    search --> ui: displayJobs(recommendations)
+else Cache expiré ou absent
+    search -> profile_api: GET /profile/{userId}
+    profile_api --> search: userProfile
+    search -> ai: generateRecommendations(userProfile)
+end
+
+== Génération Recommandations IA ==
+ai -> ml: analyzeUserProfile(profile)
+ml -> ml: extractFeatures(skills, experience, preferences)
+ml -> ml: calculateUserVector()
+
+ai -> job_api: GET /jobs/active
+job_api --> ai: availableJobs[]
+
+ai -> ml: calculateJobVectors(jobs)
+ml -> ml: computeSimilarityScores(userVector, jobVectors)
+ml -> ml: rankByCompatibility()
+ml --> ai: rankedJobs[]
+
+ai -> ai: applyBusinessRules(diversity, freshness)
+ai -> cache: storeRecommendations(userId, rankedJobs, ttl: 30min)
+ai --> search: recommendations[]
+
+== Recherche Utilisateur ==
+user -> ui: Saisir "développeur react"
+ui -> search: searchJobs(query, filters)
+
+search -> ai: enhanceQuery(query, userProfile)
+ai -> ml: expandQuery(synonyms, related_terms)
+ml --> ai: enhancedQuery
+
+search -> job_api: POST /jobs/search
+note right: {
+  query: enhancedQuery,
+  filters: {...},
+  userId: for_personalization
+}
+
+job_api -> job_api: performFullTextSearch()
+job_api -> job_api: applyFilters()
+job_api -> ml: personalizeResults(results, userId)
+ml -> ml: reRankBasedOnProfile()
+ml --> job_api: personalizedResults[]
+
+job_api --> search: searchResults[]
+
+== Affichage et Interactions ==
+search --> ui: updateJobList(results)
+ui -> ui: renderJobCards()
+
+user -> ui: Cliquer sur offre
+ui -> analytics: trackJobView(jobId, userId, source: 'search')
+ui -> ui: navigateToJobDetails(jobId)
+
+== Feedback Loop IA ==
+user -> ui: Marquer comme favori
+ui -> job_api: POST /jobs/{jobId}/favorite
+ui -> ai: recordInteraction(userId, jobId, 'favorite')
+ai -> ml: updateUserPreferences(positive_signal)
+ml -> ml: retrainUserModel()
+
+user -> ui: Postuler à l'offre
+ui -> job_api: POST /applications
+ui -> ai: recordInteraction(userId, jobId, 'application')
+ai -> ml: updateUserPreferences(strong_positive_signal)
+
+== Analytics et Apprentissage ==
+analytics -> ml: batchUpdateModels()
+ml -> ml: aggregateUserBehaviors()
+ml -> ml: improveRecommendationAlgorithms()
+ml -> cache: invalidateStaleRecommendations()
+
+note over ml
+  Algorithmes utilisés:
+  - Collaborative Filtering
+  - Content-Based Filtering  
+  - Deep Learning (Neural Networks)
+  - Natural Language Processing
+  - Reinforcement Learning
+end note
+
+@enduml
